@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\Route;
 | Authentication Routes (Public)
 |--------------------------------------------------------------------------
 */
-Route::prefix('auth')->group(function () {
+// Auth routes: strict rate limit (10 req/min) to prevent brute force
+Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
 
@@ -23,8 +24,8 @@ Route::prefix('auth')->group(function () {
     });
 });
 
-// Legacy compat
-Route::post('login', [AuthController::class, 'login']);
+// Legacy compat (also throttled)
+Route::post('login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 Route::middleware('auth:api')->group(function () {
     Route::get('user', [AuthController::class, 'user']);
 });
@@ -34,7 +35,7 @@ Route::middleware('auth:api')->group(function () {
 | Phase 2: Household Members & Roles (Protected Routes)
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth:api')->group(function () {
+Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
 
     // Invitation acceptance (any authenticated user, no household membership required yet)
     Route::post('invitations/{token}/accept', [MembersController::class, 'acceptInvitation']);
