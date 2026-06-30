@@ -1,8 +1,8 @@
 # TODO - Household OS Development Progress
 
 **Last Updated:** June 30, 2026  
-**Current Focus:** Backend Phase 3 - Tasks Management  
-**Overall Progress:** 21% (15/70 backend tasks + 0/45 frontend tasks)
+**Current Focus:** Backend Phase 4 - Renewal Tracking  
+**Overall Progress:** 30% (21/70 backend tasks + 0/45 frontend tasks)
 
 ---
 
@@ -32,14 +32,17 @@
 - [x] Implement MembersController - remove member
 
 ### Phase 3: Tasks Management (8 tasks)
-- [ ] Create tasks table migration
-- [ ] Create TaskAssignment model
-- [ ] Create TaskHistory model for tracking
-- [ ] Implement TasksController - create task
-- [ ] Implement TasksController - update task
-- [ ] Implement TasksController - delete task
-- [ ] Implement TasksController - complete task
-- [ ] Implement recurring task auto-generation logic
+- [x] Create tasks table migration
+- [x] Create task_completions table migration
+- [x] Create Task model with relationships and isRecurring() helper
+- [x] Create TaskCompletion model
+- [x] Implement TasksController - index (list + filters + pagination)
+- [x] Implement TasksController - store (create task)
+- [x] Implement TasksController - show (single task with completion history)
+- [x] Implement TasksController - update
+- [x] Implement TasksController - destroy
+- [x] Implement TasksController - complete (with recurring auto-spawn)
+- [x] Register Phase 3 routes in api.php
 
 ### Phase 4: Renewal Tracking (9 tasks)
 - [ ] Create renewals table migration

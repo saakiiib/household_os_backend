@@ -1,7 +1,7 @@
 # DONE - Completed Tasks
 
-**Total Completed:** 19 tasks  
-**Backend Tasks:** 19/70  
+**Total Completed:** 30 tasks  
+**Backend Tasks:** 30/70  
 **Frontend Tasks:** 0/45  
 **Last Updated:** June 30, 2026
 
@@ -37,7 +37,18 @@
 - [x] Verified all Phase 2 checks pass via tinker script (2026-06-30 14:03)
 
 ### Phase 3: Tasks Management
-*(Tasks will be added here as completed)*
+- [x] Create tasks table migration (2026-06-30 14:09)
+- [x] Create task_completions table migration (2026-06-30 14:09)
+- [x] Create Task model with relationships and isRecurring() helper (2026-06-30 14:09)
+- [x] Create TaskCompletion model (2026-06-30 14:09)
+- [x] Implement TasksController - index with filters + pagination (2026-06-30 14:10)
+- [x] Implement TasksController - store (create task, validates assignee is member) (2026-06-30 14:10)
+- [x] Implement TasksController - show (with completion history) (2026-06-30 14:10)
+- [x] Implement TasksController - update (role/ownership gated) (2026-06-30 14:10)
+- [x] Implement TasksController - destroy (role/ownership gated) (2026-06-30 14:10)
+- [x] Implement TasksController - complete (logs TaskCompletion, auto-spawns next for recurring) (2026-06-30 14:10)
+- [x] Register Phase 3 routes in api.php (2026-06-30 14:10)
+- [x] Verified all 25 Phase 3 checks pass via tinker script (2026-06-30 14:12)
 
 ### Phase 4: Renewal Tracking
 *(Tasks will be added here as completed)*
