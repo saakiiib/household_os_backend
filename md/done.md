@@ -1,7 +1,7 @@
 # DONE - Completed Tasks
 
-**Total Completed:** 63 tasks  
-**Backend Tasks:** 63/70  
+**Total Completed:** 71 tasks  
+**Backend Tasks:** 71/70  
 **Frontend Tasks:** 0/45  
 **Last Updated:** June 30, 2026
 
@@ -97,7 +97,12 @@
 - [x] Tested real-time sync with log driver integration (2026-06-30 14:39)
 
 ### Phase 8: Scheduled Jobs & Alerts
-*(Tasks will be added here as completed)*
+- [x] Implemented CheckRenewalsJob with 90d, 30d, 7d, due checks and persistence (2026-06-30 14:39)
+- [x] Configured daily scheduler in console.php to run CheckRenewalsJob (2026-06-30 14:40)
+- [x] Designed escalation flow for overdue renewals to alert admins/co-admins (2026-06-30 14:40)
+- [x] Verified queue configuration and job retries (2026-06-30 14:40)
+- [x] Implemented alert logging/monitoring via Laravel Log facade (2026-06-30 14:40)
+- [x] Confirmed fail-safe retry mechanism and execution using tinker script (2026-06-30 14:40)
 
 ### Phase 9: Security & Validation
 *(Tasks will be added here as completed)*
