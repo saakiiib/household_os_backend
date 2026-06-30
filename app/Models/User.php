@@ -18,6 +18,20 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected $appends = ['name'];
+
+    public function getNameAttribute(): string
+    {
+        return trim("{$this->first_name} {$this->last_name}");
+    }
+
+    public function households()
+    {
+        return $this->belongsToMany(Household::class, 'household_members')
+                    ->withPivot('role', 'status')
+                    ->withTimestamps();
+    }
+
     protected function casts(): array
     {
         return [

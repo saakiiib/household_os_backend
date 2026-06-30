@@ -1,10 +1,19 @@
 <?php
 
-use App\Http\Controllers\Api\AuthContoller;
+use App\Http\Controllers\Api\AuthController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('login', [AuthContoller::class, 'login']);
+Route::group(['prefix' => 'auth'], function () {
+    Route::post('register', [AuthController::class, 'register']);
+    Route::post('login', [AuthController::class, 'login']);
 
-Route::group(['middleware' => ['auth:api']], function () {
-    Route::get('user', [AuthContoller::class, 'user']);
+    Route::group(['middleware' => 'auth:api'], function () {
+        Route::get('user', [AuthController::class, 'user']);
+        Route::post('logout', [AuthController::class, 'logout']);
+    });
+});
+
+Route::post('login', [AuthController::class, 'login']);
+Route::group(['middleware' => 'auth:api'], function () {
+    Route::get('user', [AuthController::class, 'user']);
 });
