@@ -28,8 +28,16 @@ class User extends Authenticatable
     public function households()
     {
         return $this->belongsToMany(Household::class, 'household_members')
-                    ->withPivot('role', 'status')
+                    ->withPivot('role', 'status', 'joined_at')
                     ->withTimestamps();
+    }
+
+    /**
+     * Get all HouseholdMember pivot records for this user.
+     */
+    public function householdMemberships()
+    {
+        return $this->hasMany(HouseholdMember::class);
     }
 
     protected function casts(): array

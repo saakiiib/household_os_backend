@@ -1,8 +1,8 @@
 # TODO - Household OS Development Progress
 
 **Last Updated:** June 30, 2026  
-**Current Focus:** Backend Phase 1 - Foundation  
-**Overall Progress:** 7% (8/70 backend tasks + 0/45 frontend tasks)
+**Current Focus:** Backend Phase 3 - Tasks Management  
+**Overall Progress:** 21% (15/70 backend tasks + 0/45 frontend tasks)
 
 ---
 
@@ -19,13 +19,17 @@
 - [x] Setup API authentication middleware
 
 ### Phase 2: Household Members & Roles (7 tasks)
-- [ ] Create household_members table migration
-- [ ] Create HouseholdMember model
-- [ ] Implement role-based permissions (Admin, Co-Admin, Member)
-- [ ] Create member invitation system with tokens
-- [ ] Implement MembersController - list members
-- [ ] Implement MembersController - invite member
-- [ ] Implement MembersController - manage roles
+- [x] Create household_members table migration
+- [x] Create invitations table migration
+- [x] Create HouseholdMember model
+- [x] Create Invitation model
+- [x] Implement role-based permissions (HouseholdRole middleware)
+- [x] Create member invitation system with tokens
+- [x] Implement MembersController - list members
+- [x] Implement MembersController - invite member
+- [x] Implement MembersController - accept invitation
+- [x] Implement MembersController - manage roles (updateRole)
+- [x] Implement MembersController - remove member
 
 ### Phase 3: Tasks Management (8 tasks)
 - [ ] Create tasks table migration

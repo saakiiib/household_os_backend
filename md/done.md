@@ -1,7 +1,7 @@
 # DONE - Completed Tasks
 
-**Total Completed:** 8 tasks  
-**Backend Tasks:** 8/70  
+**Total Completed:** 19 tasks  
+**Backend Tasks:** 19/70  
 **Frontend Tasks:** 0/45  
 **Last Updated:** June 30, 2026
 
@@ -20,7 +20,21 @@
 - [x] Setup API authentication middleware (Passport) (2026-06-30 13:42)
 
 ### Phase 2: Household Members & Roles
-*(Tasks will be added here as completed)*
+- [x] Create household_members table migration (2026-06-30 14:00)
+- [x] Create invitations table migration (2026-06-30 14:00)
+- [x] Create HouseholdMember model (2026-06-30 14:00)
+- [x] Create Invitation model (2026-06-30 14:00)
+- [x] Implement role-based permissions - HouseholdRole middleware (2026-06-30 14:01)
+- [x] Register household.role middleware alias in bootstrap/app.php (2026-06-30 14:01)
+- [x] Create member invitation system with tokens (UUID, 7-day expiry) (2026-06-30 14:01)
+- [x] Implement MembersController - list members endpoint (2026-06-30 14:01)
+- [x] Implement MembersController - invite member endpoint (2026-06-30 14:01)
+- [x] Implement MembersController - accept invitation endpoint (2026-06-30 14:01)
+- [x] Implement MembersController - manage roles (updateRole) endpoint (2026-06-30 14:01)
+- [x] Implement MembersController - remove member endpoint (2026-06-30 14:01)
+- [x] Register Phase 2 routes in api.php (2026-06-30 14:02)
+- [x] Add invite_code auto-generation to Household model (2026-06-30 14:02)
+- [x] Verified all Phase 2 checks pass via tinker script (2026-06-30 14:03)
 
 ### Phase 3: Tasks Management
 *(Tasks will be added here as completed)*

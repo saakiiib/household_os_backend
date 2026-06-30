@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Household;
+use App\Models\HouseholdMember;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,29 +18,48 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email|unique:users,email|max:255',
-            'password' => 'required|string|min:8',
-            'first_name' => 'required|string|max:100',
-            'last_name' => 'required|string|max:100',
-            'phone' => 'nullable|string|max:20',
+            'email'          => 'required|email|unique:users,email|max:255',
+            'password'       => 'required|string|min:8',
+            'first_name'     => 'required|string|max:100',
+            'last_name'      => 'required|string|max:100',
+            'phone'          => 'nullable|string|max:20',
+            'household_name' => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => $validator->errors()
+                'errors'  => $validator->errors()
             ], 422);
         }
 
         $user = User::create([
-            'email' => $request->email,
-            'password' => $request->password, // automatically hashed by User model casts
+            'email'      => $request->email,
+            'password'   => $request->password, // automatically hashed by User model casts
             'first_name' => $request->first_name,
-            'last_name' => $request->last_name,
-            'phone' => $request->phone,
-            'status' => 'active',
+            'last_name'  => $request->last_name,
+            'phone'      => $request->phone,
+            'status'     => 'active',
         ]);
+
+        // Optionally create a household and make the registering user its admin
+        $household = null;
+        if ($request->filled('household_name')) {
+            $household = Household::create([
+                'name'              => $request->household_name,
+                'created_by_user_id' => $user->id,
+                'status'            => 'active',
+            ]);
+
+            HouseholdMember::create([
+                'household_id' => $household->id,
+                'user_id'      => $user->id,
+                'role'         => 'admin',
+                'status'       => 'active',
+                'joined_at'    => now(),
+            ]);
+        }
 
         $token = $user->createToken('HouseholdOS')->accessToken;
 
@@ -47,15 +68,16 @@ class AuthController extends Controller
             'message' => 'Registration successful',
             'data' => [
                 'user' => [
-                    'id' => $user->id,
-                    'email' => $user->email,
+                    'id'         => $user->id,
+                    'email'      => $user->email,
                     'first_name' => $user->first_name,
-                    'last_name' => $user->last_name,
-                    'phone' => $user->phone,
-                    'name' => $user->name,
+                    'last_name'  => $user->last_name,
+                    'phone'      => $user->phone,
+                    'name'       => $user->name,
                     'created_at' => $user->created_at,
                 ],
-                'token' => $token,
+                'household'  => $household ? ['id' => $household->id, 'name' => $household->name] : null,
+                'token'      => $token,
                 'token_type' => 'Bearer'
             ]
         ], 201);
@@ -122,26 +144,23 @@ class AuthController extends Controller
     public function user(Request $request)
     {
         $user = Auth::user();
-        
-        $households = [];
-        if (\Illuminate\Support\Facades\Schema::hasTable('household_members')) {
-            $households = $user->households->map(function ($household) {
-                return [
-                    'id' => $household->id,
-                    'name' => $household->name,
-                    'role' => $household->pivot->role,
-                ];
-            });
-        }
+
+        $households = $user->households->map(function ($household) {
+            return [
+                'id'   => $household->id,
+                'name' => $household->name,
+                'role' => $household->pivot->role,
+            ];
+        });
 
         return response()->json([
             'success' => true,
             'data' => [
-                'id' => $user->id,
-                'email' => $user->email,
+                'id'         => $user->id,
+                'email'      => $user->email,
                 'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
-                'avatar' => $user->avatar,
+                'last_name'  => $user->last_name,
+                'avatar'     => $user->avatar,
                 'households' => $households,
             ]
         ], 200);
