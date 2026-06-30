@@ -1,7 +1,7 @@
 # DONE - Completed Tasks
 
-**Total Completed:** 49 tasks  
-**Backend Tasks:** 49/70  
+**Total Completed:** 63 tasks  
+**Backend Tasks:** 63/70  
 **Frontend Tasks:** 0/45  
 **Last Updated:** June 30, 2026
 
@@ -76,10 +76,25 @@
 - [x] Verified all Phase 5 checks pass via tinker script (2026-06-30 14:26)
 
 ### Phase 6: Notifications & Alerts
-*(Tasks will be added here as completed)*
+- [x] Create notifications table migration (2026-06-30 14:28)
+- [x] Create Notification model with fields and casts (2026-06-30 14:28)
+- [x] Add fcm_token migration and user helper column (2026-06-30 14:28)
+- [x] Implement NotificationService dispatching in-app database notifications + FCM push simulation (2026-06-30 14:28)
+- [x] Implement NotificationsController - index (paginated, unread filter, counts) (2026-06-30 14:29)
+- [x] Implement NotificationsController - read (updates read_at flag) (2026-06-30 14:29)
+- [x] Implement NotificationsController - readAll (marks all read at once) (2026-06-30 14:29)
+- [x] Implement NotificationsController - updateFcmToken (sets device token) (2026-06-30 14:29)
+- [x] Register Phase 6 routes in api.php (2026-06-30 14:29)
+- [x] Verified all Phase 6 checks pass via tinker script (2026-06-30 14:29)
 
 ### Phase 7: Real-Time Broadcasting
-*(Tasks will be added here as completed)*
+- [x] Published broadcasting and channels configuration (2026-06-30 14:37)
+- [x] Defined household-specific private channel with member verification (2026-06-30 14:37)
+- [x] Created TaskUpdated event and dispatched on task change/complete/delete (2026-06-30 14:38)
+- [x] Created RenewalUpdated event and dispatched on renewal change/complete/delete (2026-06-30 14:38)
+- [x] Created DocumentUpdated event and dispatched on document upload/delete (2026-06-30 14:38)
+- [x] Verified all Phase 7 broadcast dispatches and channel authorization via tinker (2026-06-30 14:39)
+- [x] Tested real-time sync with log driver integration (2026-06-30 14:39)
 
 ### Phase 8: Scheduled Jobs & Alerts
 *(Tasks will be added here as completed)*

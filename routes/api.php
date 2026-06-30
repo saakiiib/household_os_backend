@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DocumentsController;
 use App\Http\Controllers\Api\MembersController;
+use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\RenewalsController;
 use App\Http\Controllers\Api\TasksController;
 use Illuminate\Support\Facades\Route;
@@ -129,5 +130,21 @@ Route::middleware('auth:api')->group(function () {
     Route::prefix('documents')->group(function () {
         Route::get('{document_id}/download', [DocumentsController::class, 'download']);
         Route::delete('{document_id}', [DocumentsController::class, 'destroy']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Phase 6: Notification Routes
+    |--------------------------------------------------------------------------
+    | GET    /api/notifications                  → index
+    | PUT    /api/notifications/{id}/read        → read
+    | POST   /api/notifications/read-all         → readAll
+    | POST   /api/notifications/fcm-token        → updateFcmToken
+    */
+    Route::prefix('notifications')->group(function () {
+        Route::get('/', [NotificationsController::class, 'index']);
+        Route::put('{notification_id}/read', [NotificationsController::class, 'read']);
+        Route::post('read-all', [NotificationsController::class, 'readAll']);
+        Route::post('fcm-token', [NotificationsController::class, 'updateFcmToken']);
     });
 });

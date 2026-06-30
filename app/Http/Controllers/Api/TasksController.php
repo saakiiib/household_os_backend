@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\HouseholdMember;
 use App\Models\Task;
 use App\Models\TaskCompletion;
+use App\Events\TaskUpdated;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -178,6 +179,8 @@ class TasksController extends Controller
 
         $task->load(['assignedTo', 'createdBy']);
 
+        event(new TaskUpdated($task, 'created'));
+
         return response()->json([
             'success' => true,
             'message' => 'Task created successfully',
@@ -277,6 +280,8 @@ class TasksController extends Controller
 
         $task->load(['assignedTo', 'createdBy', 'completedBy']);
 
+        event(new TaskUpdated($task, 'updated'));
+
         return response()->json([
             'success' => true,
             'message' => 'Task updated successfully',
@@ -307,6 +312,8 @@ class TasksController extends Controller
                 'message' => 'Only admins, co-admins, or the task creator can delete tasks.',
             ], 403);
         }
+
+        event(new TaskUpdated($task, 'deleted'));
 
         $task->delete();
 
@@ -391,6 +398,8 @@ class TasksController extends Controller
             ]);
             $nextTaskId = $nextTask->id;
         }
+
+        event(new TaskUpdated($task, 'completed'));
 
         return response()->json([
             'success' => true,

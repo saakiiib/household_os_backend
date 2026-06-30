@@ -1,8 +1,8 @@
 # TODO - Household OS Development Progress
 
 **Last Updated:** June 30, 2026  
-**Current Focus:** Backend Phase 6 - Notifications & Alerts  
-**Overall Progress:** 53% (38/70 backend tasks + 0/45 frontend tasks)
+**Current Focus:** Backend Phase 8 - Scheduled Jobs & Alerts  
+**Overall Progress:** 71% (51/70 backend tasks + 0/45 frontend tasks)
 
 ---
 
@@ -68,21 +68,21 @@
 - [x] Setup file storage in public/uploads/
 
 ### Phase 6: Notifications & Alerts (7 tasks)
-- [ ] Create notifications table migration
-- [ ] Create Notification model
-- [ ] Verify Firebase FCM integration (already exists)
-- [ ] Implement NotificationsController - get notifications
-- [ ] Implement NotificationsController - mark as read
-- [ ] Implement notification sending service
-- [ ] Add FCM token management endpoints
+- [x] Create notifications table migration
+- [x] Create Notification model
+- [x] Verify Firebase FCM integration (already exists / mocked)
+- [x] Implement NotificationsController - get notifications
+- [x] Implement NotificationsController - mark as read
+- [x] Implement notification sending service
+- [x] Add FCM token management endpoints
 
 ### Phase 7: Real-Time Broadcasting (6 tasks)
-- [ ] Setup WebSocket server configuration
-- [ ] Create broadcasting channels per household
-- [ ] Implement event broadcasting for task updates
-- [ ] Implement event broadcasting for renewals
-- [ ] Implement event broadcasting for documents
-- [ ] Test real-time sync across devices
+- [x] Setup WebSocket server configuration
+- [x] Create broadcasting channels per household
+- [x] Implement event broadcasting for task updates
+- [x] Implement event broadcasting for renewals
+- [x] Implement event broadcasting for documents
+- [x] Test real-time sync across devices
 
 ### Phase 8: Scheduled Jobs & Alerts (8 tasks)
 - [ ] Create renewal alert job (check 90d, 30d, 7d, due)

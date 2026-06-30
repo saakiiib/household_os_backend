@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\HouseholdMember;
 use App\Models\Renewal;
 use App\Models\RenewalHistory;
+use App\Events\RenewalUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -166,6 +167,8 @@ class RenewalsController extends Controller
 
         $renewal->load('responsibleUser');
 
+        event(new RenewalUpdated($renewal, 'created'));
+
         return response()->json([
             'success' => true,
             'message' => 'Renewal created successfully',
@@ -240,6 +243,8 @@ class RenewalsController extends Controller
 
         $renewal->load('responsibleUser');
 
+        event(new RenewalUpdated($renewal, 'updated'));
+
         return response()->json([
             'success' => true,
             'message' => 'Renewal updated successfully',
@@ -266,6 +271,8 @@ class RenewalsController extends Controller
                 'message' => 'Only admins, co-admins, or the renewal creator can delete this renewal.',
             ], 403);
         }
+
+        event(new RenewalUpdated($renewal, 'deleted'));
 
         $renewal->delete();
 
@@ -341,6 +348,8 @@ class RenewalsController extends Controller
         ]);
 
         $renewal->load('responsibleUser');
+
+        event(new RenewalUpdated($renewal, 'completed'));
 
         return response()->json([
             'success' => true,

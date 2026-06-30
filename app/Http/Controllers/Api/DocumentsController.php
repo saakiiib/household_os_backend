@@ -7,6 +7,7 @@ use App\Models\Document;
 use App\Models\DocumentAccess;
 use App\Models\HouseholdMember;
 use App\Services\EncryptionService;
+use App\Events\DocumentUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -222,6 +223,8 @@ class DocumentsController extends Controller
 
         $document->load('uploadedBy');
 
+        event(new DocumentUpdated($document, 'created'));
+
         return response()->json([
             'success' => true,
             'message' => 'Document uploaded and encrypted successfully',
@@ -312,6 +315,8 @@ class DocumentsController extends Controller
         if (Storage::disk('local')->exists($doc->file_path)) {
             Storage::disk('local')->delete($doc->file_path);
         }
+
+        event(new DocumentUpdated($doc, 'deleted'));
 
         $doc->delete();
 
