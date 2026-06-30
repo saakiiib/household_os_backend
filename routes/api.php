@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MembersController;
+use App\Http\Controllers\Api\RenewalsController;
 use App\Http\Controllers\Api\TasksController;
 use Illuminate\Support\Facades\Route;
 
@@ -82,5 +83,34 @@ Route::middleware('auth:api')->group(function () {
         Route::patch('{task_id}', [TasksController::class, 'update']);
         Route::delete('{task_id}', [TasksController::class, 'destroy']);
         Route::post('{task_id}/complete', [TasksController::class, 'complete']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Phase 4: Renewal Routes
+    |--------------------------------------------------------------------------
+    | Household-scoped:
+    |   GET    /api/households/{household_id}/renewals           → index
+    |   POST   /api/households/{household_id}/renewals           → store
+    |   GET    /api/households/{household_id}/renewals/upcoming  → upcoming
+    | Detail routes:
+    |   GET    /api/renewals/{renewal_id}          → show
+    |   PATCH  /api/renewals/{renewal_id}          → update
+    |   DELETE /api/renewals/{renewal_id}          → destroy
+    |   POST   /api/renewals/{renewal_id}/complete → complete
+    */
+    Route::prefix('households/{household_id}')
+        ->middleware('household.role')
+        ->group(function () {
+            Route::get('renewals/upcoming', [RenewalsController::class, 'upcoming']);
+            Route::get('renewals', [RenewalsController::class, 'index']);
+            Route::post('renewals', [RenewalsController::class, 'store']);
+        });
+
+    Route::prefix('renewals')->group(function () {
+        Route::get('{renewal_id}', [RenewalsController::class, 'show']);
+        Route::patch('{renewal_id}', [RenewalsController::class, 'update']);
+        Route::delete('{renewal_id}', [RenewalsController::class, 'destroy']);
+        Route::post('{renewal_id}/complete', [RenewalsController::class, 'complete']);
     });
 });

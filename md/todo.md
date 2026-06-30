@@ -1,8 +1,8 @@
 # TODO - Household OS Development Progress
 
 **Last Updated:** June 30, 2026  
-**Current Focus:** Backend Phase 4 - Renewal Tracking  
-**Overall Progress:** 30% (21/70 backend tasks + 0/45 frontend tasks)
+**Current Focus:** Backend Phase 5 - Document Vault  
+**Overall Progress:** 42% (30/70 backend tasks + 0/45 frontend tasks)
 
 ---
 
@@ -45,15 +45,17 @@
 - [x] Register Phase 3 routes in api.php
 
 ### Phase 4: Renewal Tracking (9 tasks)
-- [ ] Create renewals table migration
-- [ ] Create Renewal model with alert fields
-- [ ] Implement RenewalsController - create renewal
-- [ ] Implement RenewalsController - update renewal
-- [ ] Implement RenewalsController - delete renewal
-- [ ] Implement RenewalsController - list renewals
-- [ ] Create renewal alert status tracking
-- [ ] Create RenewalHistory model
-- [ ] Setup initial alert checking logic
+- [x] Create renewals table migration
+- [x] Create renewal_history table migration
+- [x] Create Renewal model with days_remaining & urgency accessors
+- [x] Create RenewalHistory model
+- [x] Implement RenewalsController - index (list + filters: status/category/upcoming)
+- [x] Implement RenewalsController - store (create renewal)
+- [x] Implement RenewalsController - show (single renewal with history)
+- [x] Implement RenewalsController - update
+- [x] Implement RenewalsController - destroy
+- [x] Implement RenewalsController - complete (logs history + handles rolling dates)
+- [x] Register Phase 4 routes in api.php
 
 ### Phase 5: Document Vault & Encryption (8 tasks)
 - [ ] Create documents table migration

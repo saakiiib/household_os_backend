@@ -1,7 +1,7 @@
 # DONE - Completed Tasks
 
-**Total Completed:** 30 tasks  
-**Backend Tasks:** 30/70  
+**Total Completed:** 41 tasks  
+**Backend Tasks:** 41/70  
 **Frontend Tasks:** 0/45  
 **Last Updated:** June 30, 2026
 
@@ -51,7 +51,18 @@
 - [x] Verified all 25 Phase 3 checks pass via tinker script (2026-06-30 14:12)
 
 ### Phase 4: Renewal Tracking
-*(Tasks will be added here as completed)*
+- [x] Create renewals table migration (2026-06-30 14:20)
+- [x] Create renewal_history table migration (2026-06-30 14:20)
+- [x] Create Renewal model with days_remaining & urgency accessors (2026-06-30 14:21)
+- [x] Create RenewalHistory model (2026-06-30 14:21)
+- [x] Implement RenewalsController - index with filters (2026-06-30 14:21)
+- [x] Implement RenewalsController - store (create renewal) (2026-06-30 14:21)
+- [x] Implement RenewalsController - show (with history details) (2026-06-30 14:21)
+- [x] Implement RenewalsController - update (role/ownership gated) (2026-06-30 14:21)
+- [x] Implement RenewalsController - destroy (role/ownership gated) (2026-06-30 14:21)
+- [x] Implement RenewalsController - complete (resets reminders, rolls forward) (2026-06-30 14:21)
+- [x] Register Phase 4 routes in api.php (2026-06-30 14:21)
+- [x] Verified all Phase 4 checks pass via tinker script (2026-06-30 14:22)
 
 ### Phase 5: Document Vault & Encryption
 *(Tasks will be added here as completed)*
