@@ -1,7 +1,7 @@
 # DONE - Completed Tasks
 
-**Total Completed:** 41 tasks  
-**Backend Tasks:** 41/70  
+**Total Completed:** 49 tasks  
+**Backend Tasks:** 49/70  
 **Frontend Tasks:** 0/45  
 **Last Updated:** June 30, 2026
 
@@ -65,7 +65,15 @@
 - [x] Verified all Phase 4 checks pass via tinker script (2026-06-30 14:22)
 
 ### Phase 5: Document Vault & Encryption
-*(Tasks will be added here as completed)*
+- [x] Create documents table migration (2026-06-30 14:25)
+- [x] Create Document model with encryption support (2026-06-30 14:25)
+- [x] Create DocumentAccess model for tracking (2026-06-30 14:25)
+- [x] Implement AES-256-CBC EncryptionService (2026-06-30 14:25)
+- [x] Implement DocumentsController - store (file upload, envelope encryption, SHA256 checksum) (2026-06-30 14:25)
+- [x] Implement DocumentsController - download (permission check, decryption, SHA256 integrity match, logs access) (2026-06-30 14:25)
+- [x] Implement DocumentsController - destroy (permission check, deletes file and DB row) (2026-06-30 14:25)
+- [x] Register Phase 5 routes in api.php (2026-06-30 14:25)
+- [x] Verified all Phase 5 checks pass via tinker script (2026-06-30 14:26)
 
 ### Phase 6: Notifications & Alerts
 *(Tasks will be added here as completed)*

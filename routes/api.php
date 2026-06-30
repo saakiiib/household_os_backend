@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DocumentsController;
 use App\Http\Controllers\Api\MembersController;
 use App\Http\Controllers\Api\RenewalsController;
 use App\Http\Controllers\Api\TasksController;
@@ -105,6 +106,10 @@ Route::middleware('auth:api')->group(function () {
             Route::get('renewals/upcoming', [RenewalsController::class, 'upcoming']);
             Route::get('renewals', [RenewalsController::class, 'index']);
             Route::post('renewals', [RenewalsController::class, 'store']);
+
+            // Phase 5: Documents
+            Route::get('documents', [DocumentsController::class, 'index']);
+            Route::post('documents', [DocumentsController::class, 'store']);
         });
 
     Route::prefix('renewals')->group(function () {
@@ -112,5 +117,17 @@ Route::middleware('auth:api')->group(function () {
         Route::patch('{renewal_id}', [RenewalsController::class, 'update']);
         Route::delete('{renewal_id}', [RenewalsController::class, 'destroy']);
         Route::post('{renewal_id}/complete', [RenewalsController::class, 'complete']);
+    });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Phase 5: Document Detail Routes
+    |--------------------------------------------------------------------------
+    | GET    /api/documents/{document_id}/download → download
+    | DELETE /api/documents/{document_id}          → destroy
+    */
+    Route::prefix('documents')->group(function () {
+        Route::get('{document_id}/download', [DocumentsController::class, 'download']);
+        Route::delete('{document_id}', [DocumentsController::class, 'destroy']);
     });
 });

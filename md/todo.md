@@ -1,8 +1,8 @@
 # TODO - Household OS Development Progress
 
 **Last Updated:** June 30, 2026  
-**Current Focus:** Backend Phase 5 - Document Vault  
-**Overall Progress:** 42% (30/70 backend tasks + 0/45 frontend tasks)
+**Current Focus:** Backend Phase 6 - Notifications & Alerts  
+**Overall Progress:** 53% (38/70 backend tasks + 0/45 frontend tasks)
 
 ---
 
@@ -58,14 +58,14 @@
 - [x] Register Phase 4 routes in api.php
 
 ### Phase 5: Document Vault & Encryption (8 tasks)
-- [ ] Create documents table migration
-- [ ] Create Document model with encryption support
-- [ ] Create DocumentAccess model for permissions
-- [ ] Implement DocumentsController - upload endpoint
-- [ ] Implement DocumentsController - download endpoint
-- [ ] Implement DocumentsController - delete endpoint
-- [ ] Implement AES-256-CBC encryption service
-- [ ] Setup file storage in public/uploads/
+- [x] Create documents table migration
+- [x] Create Document model with encryption support
+- [x] Create DocumentAccess model for permissions
+- [x] Implement DocumentsController - upload endpoint
+- [x] Implement DocumentsController - download endpoint
+- [x] Implement DocumentsController - delete endpoint
+- [x] Implement AES-256-CBC encryption service
+- [x] Setup file storage in public/uploads/
 
 ### Phase 6: Notifications & Alerts (7 tasks)
 - [ ] Create notifications table migration
