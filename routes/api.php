@@ -105,16 +105,16 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     Route::prefix('households/{household_id}')
         ->middleware('household.role')
         ->group(function () {
-            Route::get('renewals/upcoming', [RenewalsController::class, 'upcoming']);
-            Route::get('renewals', [RenewalsController::class, 'index']);
-            Route::post('renewals', [RenewalsController::class, 'store']);
+            Route::get('renewals/upcoming', [RenewalsController::class, 'upcoming'])->middleware('throttle:renewals');
+            Route::get('renewals', [RenewalsController::class, 'index'])->middleware('throttle:renewals');
+            Route::post('renewals', [RenewalsController::class, 'store'])->middleware('throttle:renewals');
 
             // Phase 5: Documents
             Route::get('documents', [DocumentsController::class, 'index']);
-            Route::post('documents', [DocumentsController::class, 'store']);
+            Route::post('documents', [DocumentsController::class, 'store'])->middleware('throttle:uploads');
         });
 
-    Route::prefix('renewals')->group(function () {
+    Route::prefix('renewals')->middleware('throttle:renewals')->group(function () {
         Route::get('{renewal_id}', [RenewalsController::class, 'show']);
         Route::patch('{renewal_id}', [RenewalsController::class, 'update']);
         Route::delete('{renewal_id}', [RenewalsController::class, 'destroy']);
@@ -129,7 +129,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     | DELETE /api/documents/{document_id}          → destroy
     */
     Route::prefix('documents')->group(function () {
-        Route::get('{document_id}/download', [DocumentsController::class, 'download']);
+        Route::get('{document_id}/download', [DocumentsController::class, 'download'])->middleware('throttle:downloads');
         Route::delete('{document_id}', [DocumentsController::class, 'destroy']);
     });
 

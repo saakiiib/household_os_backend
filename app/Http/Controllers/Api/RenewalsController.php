@@ -8,6 +8,7 @@ use App\Models\Renewal;
 use App\Models\RenewalHistory;
 use App\Events\RenewalUpdated;
 use Illuminate\Http\Request;
+use App\Http\Requests\UpdateRenewalRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
@@ -200,7 +201,7 @@ class RenewalsController extends Controller
      * Update a renewal's details.
      * Requires: admin/co-admin or creator.
      */
-    public function update(Request $request, $renewal_id)
+    public function update(UpdateRenewalRequest $request, $renewal_id)
     {
         $renewal    = Renewal::findOrFail($renewal_id);
         $membership = $this->getMembership($renewal->household_id);
@@ -216,30 +217,7 @@ class RenewalsController extends Controller
             ], 403);
         }
 
-        $validator = Validator::make($request->all(), [
-            'title'               => 'sometimes|string|max:255',
-            'category'            => 'sometimes|in:insurance,passport,subscription,warranty,contract,medical,other',
-            'renewal_date'        => 'sometimes|date',
-            'cost'                => 'nullable|numeric|min:0',
-            'currency'            => 'nullable|string|size:3',
-            'responsible_user_id' => 'sometimes|integer|exists:users,id',
-            'frequency'           => 'sometimes|in:annual,bi-annual,quarterly,monthly,one-time',
-            'status'              => 'sometimes|in:active,completed,cancelled',
-            'notes'               => 'nullable|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors'  => $validator->errors(),
-            ], 422);
-        }
-
-        $renewal->update($request->only([
-            'title', 'category', 'renewal_date', 'cost', 'currency',
-            'responsible_user_id', 'frequency', 'status', 'notes',
-        ]));
+        $renewal->update($request->validated());
 
         $renewal->load('responsibleUser');
 
@@ -309,7 +287,7 @@ class RenewalsController extends Controller
 
         $validator = Validator::make($request->all(), [
             'new_renewal_date' => 'required_if:frequency,annual,bi-annual,quarterly,monthly|nullable|date|after:renewal_date',
-            'cost_paid'        => 'required|numeric|min:0',
+            'cost_paid'        => 'nullable|numeric|min:0',
             'notes'            => 'nullable|string',
         ]);
 
@@ -332,15 +310,14 @@ class RenewalsController extends Controller
             'renewed_by_user_id'  => Auth::id(),
             'previous_date'       => $previousDate,
             'new_date'            => $newDate,
-            'cost'                => $request->cost_paid,
+            'cost'                => $request->input('cost_paid', 0),
             'notes'               => $request->notes,
         ]);
 
         // Update renewal
-        $isOneTime = $renewal->frequency === 'one-time';
         $renewal->update([
-            'renewal_date'        => $isOneTime ? $previousDate : $newDate,
-            'status'              => $isOneTime ? 'completed' : 'active',
+            'renewal_date'        => $newDate,
+            'status'              => 'renewed',
             'reminder_sent_90d'   => false,
             'reminder_sent_30d'   => false,
             'reminder_sent_7d'    => false,

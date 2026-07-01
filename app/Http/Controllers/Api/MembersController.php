@@ -8,6 +8,7 @@ use App\Models\HouseholdMember;
 use App\Models\Invitation;
 use App\Models\User;
 use Illuminate\Http\Request;
+use App\Http\Requests\UpdateMemberRoleRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -66,7 +67,9 @@ class MembersController extends Controller
             ], 403);
         }
 
-        $validator = Validator::make($request->all(), [
+        $invitedEmail = $request->input('invited_email', $request->input('email'));
+
+        $validator = Validator::make($request->all() + ['invited_email' => $invitedEmail], [
             'invited_email' => 'required|email|max:255',
             'role' => 'required|in:admin,co-admin,member',
         ]);
@@ -83,7 +86,7 @@ class MembersController extends Controller
 
         // Check if a pending invitation already exists for this email
         $existingInvitation = Invitation::where('household_id', $household_id)
-            ->where('invited_email', $request->invited_email)
+            ->where('invited_email', $invitedEmail)
             ->where('status', 'pending')
             ->first();
 
@@ -95,7 +98,7 @@ class MembersController extends Controller
         }
 
         // Check if user is already an active member
-        $invitedUser = User::where('email', $request->invited_email)->first();
+        $invitedUser = User::where('email', $invitedEmail)->first();
         if ($invitedUser) {
             $existingMember = HouseholdMember::where('household_id', $household_id)
                 ->where('user_id', $invitedUser->id)
@@ -113,7 +116,7 @@ class MembersController extends Controller
         $invitation = Invitation::create([
             'household_id' => $household_id,
             'invited_by_user_id' => Auth::id(),
-            'invited_email' => $request->invited_email,
+            'invited_email' => $invitedEmail,
             'token' => (string) Str::uuid(),
             'role' => $request->role,
             'status' => 'pending',
@@ -204,7 +207,7 @@ class MembersController extends Controller
      * Change the role of a household member.
      * Requires: admin role only.
      */
-    public function updateRole(Request $request, $household_id, $member_id)
+    public function updateRole(UpdateMemberRoleRequest $request, $household_id, $member_id)
     {
         $membership = $request->get('_household_member');
 
@@ -213,18 +216,6 @@ class MembersController extends Controller
                 'success' => false,
                 'message' => 'Only admins can change member roles.',
             ], 403);
-        }
-
-        $validator = Validator::make($request->all(), [
-            'role' => 'required|in:admin,co-admin,member',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
         }
 
         $targetMember = HouseholdMember::where('id', $member_id)

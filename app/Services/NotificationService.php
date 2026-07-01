@@ -12,7 +12,7 @@ class NotificationService
      * Send a notification to a specific user.
      * Channels can be a list: ['in_app', 'push', 'email', 'sms'].
      */
-    public static function send(array $params): Notification
+    public function send(array $params): Notification
     {
         $householdId = $params['household_id'];
         $userId      = $params['user_id'];

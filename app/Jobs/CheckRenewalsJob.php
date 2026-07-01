@@ -65,7 +65,7 @@ class CheckRenewalsJob implements ShouldQueue
     {
         $timeStr = $days === 0 ? "today" : "in {$days} days";
         
-        NotificationService::send([
+        app(NotificationService::class)->send([
             'household_id' => $renewal->household_id,
             'user_id' => $renewal->responsible_user_id,
             'notification_type' => "renewal_{$days}d",
@@ -92,7 +92,7 @@ class CheckRenewalsJob implements ShouldQueue
             ->get();
 
         foreach ($admins as $admin) {
-            NotificationService::send([
+            app(NotificationService::class)->send([
                 'household_id' => $renewal->household_id,
                 'user_id' => $admin->user_id,
                 'notification_type' => 'renewal_overdue_escalation',
