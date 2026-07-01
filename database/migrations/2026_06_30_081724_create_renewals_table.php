@@ -23,7 +23,7 @@ return new class extends Migration
             $table->foreignId('responsible_user_id')->constrained('users');
             $table->enum('frequency', ['annual', 'bi-annual', 'quarterly', 'monthly', 'one-time']);
             $table->text('notes')->nullable();
-            $table->enum('status', ['active', 'completed', 'cancelled'])->default('active');
+            $table->enum('status', ['active', 'completed', 'cancelled', 'renewed'])->default('active');
             // document_id will be added after documents table migration in Phase 5
             $table->boolean('reminder_sent_90d')->default(false);
             $table->boolean('reminder_sent_30d')->default(false);
