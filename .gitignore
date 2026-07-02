@@ -27,3 +27,5 @@ yarn-error.log
 /public/uploads
 /public/vendor
 /md
+.phpunit.result.cache
+.rnd

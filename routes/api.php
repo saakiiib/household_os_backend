@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DocumentsController;
+use App\Http\Controllers\Api\HouseholdController;
 use App\Http\Controllers\Api\MembersController;
 use App\Http\Controllers\Api\NotificationsController;
 use App\Http\Controllers\Api\RenewalsController;
@@ -36,6 +37,13 @@ Route::middleware('auth:api')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
+
+    // Household CRUD (authenticated users)
+    Route::post('households', [HouseholdController::class, 'store']);
+    Route::get('households/{id}', [HouseholdController::class, 'show']);
+    Route::patch('households/{id}', [HouseholdController::class, 'update']);
+    Route::delete('households/{id}', [HouseholdController::class, 'destroy']);
+    Route::post('households/{id}/regenerate-invite', [HouseholdController::class, 'regenerateInvite']);
 
     // Invitation acceptance (any authenticated user, no household membership required yet)
     Route::post('invitations/{token}/accept', [MembersController::class, 'acceptInvitation']);

@@ -113,11 +113,13 @@ class RenewalTest extends TestCase
 
     public function test_member_can_complete_renewal(): void
     {
+        // One-time renewal should become 'completed'
         $renewal = Renewal::factory()->create([
             'household_id'        => $this->household->id,
             'responsible_user_id' => $this->admin->id,
             'created_by_user_id'  => $this->admin->id,
             'status'              => 'active',
+            'frequency'           => 'one-time',
         ]);
 
         $this->actingAs($this->admin, 'api')
@@ -126,7 +128,28 @@ class RenewalTest extends TestCase
 
         $this->assertDatabaseHas('renewals', [
             'id'     => $renewal->id,
-            'status' => 'renewed',
+            'status' => 'completed',
+        ]);
+    }
+
+    public function test_recurring_renewal_stays_active_after_completion(): void
+    {
+        // Recurring renewal should stay 'active' so the alert cycle restarts
+        $renewal = Renewal::factory()->create([
+            'household_id'        => $this->household->id,
+            'responsible_user_id' => $this->admin->id,
+            'created_by_user_id'  => $this->admin->id,
+            'status'              => 'active',
+            'frequency'           => 'annual',
+        ]);
+
+        $this->actingAs($this->admin, 'api')
+             ->postJson("/api/renewals/{$renewal->id}/complete")
+             ->assertStatus(200);
+
+        $this->assertDatabaseHas('renewals', [
+            'id'     => $renewal->id,
+            'status' => 'active',
         ]);
     }
 

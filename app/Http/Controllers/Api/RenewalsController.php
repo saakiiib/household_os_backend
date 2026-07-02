@@ -278,7 +278,7 @@ class RenewalsController extends Controller
             return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
         }
 
-        if ($renewal->status === 'completed') {
+        if (in_array($renewal->status, ['completed', 'renewed'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'This renewal has already been completed.',
@@ -314,10 +314,13 @@ class RenewalsController extends Controller
             'notes'               => $request->notes,
         ]);
 
-        // Update renewal
+        // Update renewal — keep active for recurring so CheckRenewalsJob picks up the new date;
+        // mark completed only for one-time renewals.
+        $newStatus = $renewal->frequency === 'one-time' ? 'completed' : 'active';
+
         $renewal->update([
             'renewal_date'        => $newDate,
-            'status'              => 'renewed',
+            'status'              => $newStatus,
             'reminder_sent_90d'   => false,
             'reminder_sent_30d'   => false,
             'reminder_sent_7d'    => false,
