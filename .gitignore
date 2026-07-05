@@ -25,7 +25,3 @@ npm-debug.log
 Thumbs.db
 yarn-error.log
 /public/uploads
-/public/vendor
-/md
-.phpunit.result.cache
-.rnd
