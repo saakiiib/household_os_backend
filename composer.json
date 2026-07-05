@@ -16,7 +16,6 @@
         "laravel/passport": "^13.0",
         "laravel/tinker": "^2.10.1",
         "laravel/ui": "^4.6",
-        "saakiiib/laravel-spa": "^1.0",
         "yajra/laravel-datatables-oracle": "^12.4"
     },
     "require-dev": {

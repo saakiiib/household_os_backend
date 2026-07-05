@@ -6,23 +6,18 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->string('fcm_token')->nullable()->after('remember_token');
+            $table->string('email_verification_code', 6)->nullable()->after('email');
+            $table->timestamp('email_verification_expires_at')->nullable()->after('email_verification_code');
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('fcm_token');
+            $table->dropColumn(['email_verification_code', 'email_verification_expires_at']);
         });
     }
 };

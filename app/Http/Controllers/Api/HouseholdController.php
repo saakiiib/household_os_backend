@@ -13,6 +13,28 @@ use Illuminate\Support\Str;
 class HouseholdController extends Controller
 {
     /**
+     * GET /api/households
+     * List all households the authenticated user belongs to.
+     */
+    public function index(Request $request)
+    {
+        $households = $request->user()->households()->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $households->map(fn($h) => [
+                'id'            => $h->id,
+                'name'          => $h->name,
+                'description'   => $h->description,
+                'invite_code'   => $h->invite_code,
+                'privacy_level' => $h->privacy_level,
+                'status'        => $h->status,
+                'created_at'    => $h->created_at,
+            ]),
+        ]);
+    }
+
+    /**
      * POST /api/households
      * Create a new household.
      * Requires: authenticated user.
@@ -249,5 +271,59 @@ class HouseholdController extends Controller
                 'invite_code' => $household->invite_code,
             ]
         ]);
+    }
+
+    /**
+     * POST /api/households/join
+     * Join a household using an 8-character invite code.
+     */
+    public function joinByCode(Request $request)
+    {
+        $request->validate([
+            'invite_code' => 'required|string|size:8',
+        ]);
+
+        $household = Household::where('invite_code', strtoupper($request->invite_code))
+            ->where('status', 'active')
+            ->first();
+
+        if (!$household) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid invite code.',
+            ], 404);
+        }
+
+        $userId = Auth::id();
+
+        $existing = HouseholdMember::where('household_id', $household->id)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are already a member of this household.',
+            ], 409);
+        }
+
+        HouseholdMember::create([
+            'household_id' => $household->id,
+            'user_id' => $userId,
+            'role' => 'member',
+            'status' => 'active',
+            'joined_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Joined household successfully',
+            'data' => [
+                'id' => $household->id,
+                'name' => $household->name,
+                'invite_code' => $household->invite_code,
+            ]
+        ], 201);
     }
 }
