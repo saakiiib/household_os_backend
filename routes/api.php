@@ -52,6 +52,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
 
         Route::middleware('household.role:admin,co-admin')->group(function () {
             Route::post('invitations', [MembersController::class, 'invite']);
+            Route::delete('invitations/{invitation_id}', [MembersController::class, 'cancelInvitation']);
         });
 
         Route::middleware('household.role:admin')->group(function () {

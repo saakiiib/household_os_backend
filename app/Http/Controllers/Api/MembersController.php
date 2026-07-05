@@ -10,8 +10,10 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use App\Http\Requests\UpdateMemberRoleRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use App\Notifications\InvitationMail;
 
 class MembersController extends Controller
 {
@@ -24,13 +26,15 @@ class MembersController extends Controller
     {
         $household = Household::findOrFail($household_id);
 
+        // Get active members
         $members = HouseholdMember::with('user')
             ->where('household_id', $household_id)
-            ->whereIn('status', ['active', 'invited'])
+            ->where('status', 'active')
             ->get()
             ->map(function ($member) {
                 return [
                     'id' => $member->id,
+                    'user_id' => $member->user_id,
                     'user' => $member->user ? [
                         'id' => $member->user->id,
                         'email' => $member->user->email,
@@ -45,9 +49,34 @@ class MembersController extends Controller
                 ];
             });
 
+        // Get pending invitations
+        $invitations = Invitation::where('household_id', $household_id)
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->get()
+            ->map(function ($invitation) {
+                return [
+                    'id' => $invitation->id,
+                    'user_id' => null,
+                    'user' => [
+                        'id' => null,
+                        'email' => $invitation->invited_email,
+                        'first_name' => null,
+                        'last_name' => null,
+                        'name' => $invitation->invited_email,
+                        'avatar' => null,
+                    ],
+                    'role' => $invitation->role,
+                    'status' => 'invited',
+                    'joined_at' => null,
+                    'invitation_token' => $invitation->token,
+                    'invitation_expires_at' => $invitation->expires_at,
+                ];
+            });
+
         return response()->json([
             'success' => true,
-            'data' => $members,
+            'data' => $members->merge($invitations),
         ]);
     }
 
@@ -113,19 +142,41 @@ class MembersController extends Controller
             }
         }
 
+        // Generate short 6-digit code (same as verification codes)
+        $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
         $invitation = Invitation::create([
             'household_id' => $household_id,
             'invited_by_user_id' => Auth::id(),
             'invited_email' => $invitedEmail,
-            'token' => (string) Str::uuid(),
+            'token' => $code,
             'role' => $request->role,
             'status' => 'pending',
             'expires_at' => now()->addDays(7),
         ]);
 
+        // Send invitation email
+        $emailSent = true;
+        try {
+            $inviter = Auth::user();
+            $inviterName = $inviter->name ?? $inviter->email;
+            Notification::route('mail', $invitedEmail)
+                ->notify(new InvitationMail(
+                    $household->name,
+                    $invitation->token,
+                    $invitation->role,
+                    $inviterName
+                ));
+        } catch (\Exception $e) {
+            \Log::error('Invitation email failed for ' . $invitedEmail . ': ' . $e->getMessage());
+            $emailSent = false;
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Invitation sent successfully',
+            'message' => $emailSent
+                ? 'Invitation sent successfully'
+                : 'Invitation created but email could not be sent. Please share the invite code manually.',
             'data' => [
                 'id' => $invitation->id,
                 'invited_email' => $invitation->invited_email,
@@ -162,6 +213,22 @@ class MembersController extends Controller
 
         $user = Auth::user();
 
+        // Only the invited email's owner can accept
+        if (strtolower($user->email) !== strtolower($invitation->invited_email)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This invitation is not for your email address.',
+            ], 403);
+        }
+
+        // Check household is still active
+        if ($invitation->household->status !== 'active') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This household is no longer active.',
+            ], 410);
+        }
+
         // Check user is not already an active member
         $existingMember = HouseholdMember::where('household_id', $invitation->household_id)
             ->where('user_id', $user->id)
@@ -175,14 +242,15 @@ class MembersController extends Controller
             ], 409);
         }
 
-        // Create membership
-        HouseholdMember::create([
-            'household_id' => $invitation->household_id,
-            'user_id' => $user->id,
-            'role' => $invitation->role,
-            'status' => 'active',
-            'joined_at' => now(),
-        ]);
+        // Create or reinstate membership (handles previously-removed users)
+        HouseholdMember::updateOrCreate(
+            ['household_id' => $invitation->household_id, 'user_id' => $user->id],
+            [
+                'role' => $invitation->role,
+                'status' => 'active',
+                'joined_at' => now(),
+            ]
+        );
 
         // Update invitation status
         $invitation->update([
@@ -230,7 +298,21 @@ class MembersController extends Controller
             ], 404);
         }
 
-        // Prevent changing the household creator's original admin role if they are the only admin
+        // Prevent demoting the last admin
+        if ($targetMember->isAdmin() && $request->role !== 'admin') {
+            $adminCount = HouseholdMember::where('household_id', $household_id)
+                ->where('status', 'active')
+                ->where('role', 'admin')
+                ->count();
+
+            if ($adminCount <= 1) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot demote the last admin.',
+                ], 409);
+            }
+        }
+
         $targetMember->update(['role' => $request->role]);
 
         return response()->json([
@@ -285,6 +367,42 @@ class MembersController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Member removed from household successfully',
+        ]);
+    }
+
+    /**
+     * DELETE /api/households/{household_id}/invitations/{invitation_id}
+     * Cancel a pending invitation.
+     * Requires: admin or co-admin role.
+     */
+    public function cancelInvitation(Request $request, $household_id, $invitation_id)
+    {
+        $membership = $request->get('_household_member');
+
+        if (!$membership->isAdminOrCoAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only admins and co-admins can cancel invitations.',
+            ], 403);
+        }
+
+        $invitation = Invitation::where('id', $invitation_id)
+            ->where('household_id', $household_id)
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$invitation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invitation not found or already processed.',
+            ], 404);
+        }
+
+        $invitation->update(['status' => 'cancelled']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Invitation cancelled successfully',
         ]);
     }
 }

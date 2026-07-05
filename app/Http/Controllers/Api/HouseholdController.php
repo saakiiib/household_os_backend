@@ -29,7 +29,10 @@ class HouseholdController extends Controller
                 'invite_code'   => $h->invite_code,
                 'privacy_level' => $h->privacy_level,
                 'status'        => $h->status,
+                'created_by_user_id' => $h->created_by_user_id,
+                'member_count'  => $h->householdMembers()->where('status', 'active')->count(),
                 'created_at'    => $h->created_at,
+                'user_role'     => $h->pivot->role ?? null,
             ]),
         ]);
     }
@@ -82,6 +85,9 @@ class HouseholdController extends Controller
                 'invite_code' => $household->invite_code,
                 'privacy_level' => $household->privacy_level,
                 'status' => $household->status,
+                'created_by_user_id' => Auth::id(),
+                'member_count' => 1,
+                'user_role' => 'admin',
                 'created_at' => $household->created_at,
             ]
         ], 201);
@@ -124,7 +130,9 @@ class HouseholdController extends Controller
                 'invite_code' => $household->invite_code,
                 'privacy_level' => $household->privacy_level,
                 'status' => $household->status,
+                'created_by_user_id' => $household->created_by_user_id,
                 'member_count' => $memberCount,
+                'user_role' => $membership->role,
                 'created_at' => $household->created_at,
                 'updated_at' => $household->updated_at,
             ]
@@ -308,13 +316,15 @@ class HouseholdController extends Controller
             ], 409);
         }
 
-        HouseholdMember::create([
-            'household_id' => $household->id,
-            'user_id' => $userId,
-            'role' => 'member',
-            'status' => 'active',
-            'joined_at' => now(),
-        ]);
+        // Create or reinstate membership (handles previously-removed users)
+        HouseholdMember::updateOrCreate(
+            ['household_id' => $household->id, 'user_id' => $userId],
+            [
+                'role' => 'member',
+                'status' => 'active',
+                'joined_at' => now(),
+            ]
+        );
 
         return response()->json([
             'success' => true,
@@ -322,7 +332,14 @@ class HouseholdController extends Controller
             'data' => [
                 'id' => $household->id,
                 'name' => $household->name,
+                'description' => $household->description,
                 'invite_code' => $household->invite_code,
+                'privacy_level' => $household->privacy_level,
+                'status' => $household->status,
+                'created_by_user_id' => $household->created_by_user_id,
+                'member_count' => $household->householdMembers()->where('status', 'active')->count(),
+                'user_role' => 'member',
+                'created_at' => $household->created_at,
             ]
         ], 201);
     }

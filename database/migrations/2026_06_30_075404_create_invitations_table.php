@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('invited_email');
             $table->string('token', 36)->unique();
             $table->enum('role', ['admin', 'co-admin', 'member'])->default('member');
-            $table->enum('status', ['pending', 'accepted', 'rejected', 'expired'])->default('pending');
+            $table->enum('status', ['pending', 'accepted', 'rejected', 'expired', 'cancelled'])->default('pending');
             $table->timestamp('expires_at');
             $table->timestamp('accepted_at')->nullable();
             $table->foreignId('accepted_by_user_id')->nullable()->constrained('users');
