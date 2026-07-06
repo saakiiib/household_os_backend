@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\HouseholdController;
 use App\Http\Controllers\Api\MembersController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\TasksController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -65,5 +66,13 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
             Route::patch('members/{member_id}', [MembersController::class, 'updateRole']);
             Route::delete('members/{member_id}', [MembersController::class, 'removeMember']);
         });
+
+        // Tasks
+        Route::get('tasks', [TasksController::class, 'index']);
+        Route::post('tasks', [TasksController::class, 'store']);
+        Route::get('tasks/{task_id}', [TasksController::class, 'show']);
+        Route::patch('tasks/{task_id}', [TasksController::class, 'update']);
+        Route::delete('tasks/{task_id}', [TasksController::class, 'destroy']);
+        Route::patch('tasks/{task_id}/complete', [TasksController::class, 'complete']);
     });
 });
