@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\HouseholdController;
 use App\Http\Controllers\Api\MembersController;
+use App\Http\Controllers\Api\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,6 +31,11 @@ Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
+
+    // Profile
+    Route::put('profile', [ProfileController::class, 'update']);
+    Route::put('profile/password', [ProfileController::class, 'changePassword']);
+    Route::delete('profile', [ProfileController::class, 'destroy']);
 
     // Household CRUD
     Route::get('households', [HouseholdController::class, 'index']);
