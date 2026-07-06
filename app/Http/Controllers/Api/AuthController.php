@@ -38,6 +38,13 @@ class AuthController extends Controller
             $emailSent = false;
         }
 
+        if (!$emailSent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send verification email. Please try again or use resend.',
+            ], 500);
+        }
+
         // Optionally create a household
         $household = null;
         if ($request->filled('household_name')) {
@@ -58,9 +65,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => $emailSent
-                ? 'Registration successful. Please check your email for verification code.'
-                : 'Registration successful but email could not be sent. Please use resend verification.',
+            'message' => 'Registration successful. Please check your email for verification code.',
             'data' => [
                 'user' => [
                     'id'         => $user->id,
@@ -183,11 +188,16 @@ class AuthController extends Controller
             $emailSent = false;
         }
 
+        if (!$emailSent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send email. Please try again later.',
+            ], 500);
+        }
+
         return response()->json([
             'success' => true,
-            'message' => $emailSent
-                ? 'Verification code sent.'
-                : 'Failed to send email. Please try again later.',
+            'message' => 'Verification code sent.',
         ]);
     }
 
@@ -273,6 +283,7 @@ class AuthController extends Controller
             $body .= "If you did not request this, ignore this email.\n\n";
             $body .= "Thanks,\nHousehold OS Team";
 
+            $emailSent = true;
             try {
                 Mail::raw($body, function ($message) use ($user, $subject) {
                     $message->to($user->email)
@@ -281,12 +292,20 @@ class AuthController extends Controller
                 });
             } catch (\Exception $e) {
                 \Log::error('Password reset email failed for user ' . $user->id . ': ' . $e->getMessage());
+                $emailSent = false;
+            }
+
+            if (!$emailSent) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to send reset email. Please try again later.',
+                ], 500);
             }
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'If an account with that email exists, reset instructions have been sent.',
+            'message' => 'Reset instructions have been sent to your email.',
         ]);
     }
 
