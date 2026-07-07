@@ -184,11 +184,27 @@ class TasksController extends Controller
 
     /**
      * DELETE /api/households/{household_id}/tasks/{task_id}
-     * Delete a task.
+     * Delete a task (creator or admin only).
      */
     public function destroy($household_id, $task_id)
     {
         $task = Task::where('household_id', $household_id)->findOrFail($task_id);
+
+        // Only creator or admin can delete
+        $isCreator = $task->created_by_user_id === Auth::id();
+        if (!$isCreator) {
+            $membership = HouseholdMember::where('household_id', $household_id)
+                ->where('user_id', Auth::id())
+                ->where('status', 'active')
+                ->first();
+            if (!$membership || !$membership->isAdmin()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only the task creator or an admin can delete tasks.',
+                ], 403);
+            }
+        }
+
         $task->delete();
 
         return response()->json([
@@ -205,15 +221,27 @@ class TasksController extends Controller
     {
         $task = Task::where('household_id', $household_id)->findOrFail($task_id);
 
-        // Complete for the current user
+        // Only assigned users can mark their own completion
         $assignment = $task->assignments()->where('user_id', Auth::id())->first();
-        if ($assignment && $assignment->status !== 'completed') {
-            $assignment->update(['status' => 'completed', 'completed_at' => now()]);
+        if (!$assignment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not assigned to this task.',
+            ], 403);
         }
 
+        if ($assignment->status === 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have already completed this task.',
+            ], 409);
+        }
+
+        $assignment->update(['status' => 'completed', 'completed_at' => now()]);
+
         // Check if all assignees completed
-        $allCompleted = $task->assignments()->where('status', '!=', 'completed')->count() === 0;
-        if ($allCompleted) {
+        $pendingCount = $task->assignments()->where('status', '!=', 'completed')->count();
+        if ($pendingCount === 0) {
             $task->update(['status' => 'completed', 'completed_at' => now()]);
         } else {
             $task->update(['status' => 'in_progress']);
@@ -223,7 +251,7 @@ class TasksController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Task completed',
+            'message' => 'Task marked as complete',
             'data' => $this->formatTask($task),
         ]);
     }
@@ -239,8 +267,8 @@ class TasksController extends Controller
             'priority'         => $task->priority,
             'status'           => $task->status,
             'frequency'        => $task->frequency,
-            'due_date'         => $task->due_date?->format('Y-m-d'),
-            'completed_at'     => $task->completed_at?->toIso8601String(),
+            'due_date'         => $task->due_date instanceof \DateTimeInterface ? $task->due_date->format('Y-m-d') : $task->due_date,
+            'completed_at'     => $task->completed_at instanceof \DateTimeInterface ? $task->completed_at->toIso8601String() : $task->completed_at,
             'notes'            => $task->notes,
             'is_overdue'       => $task->is_overdue,
             'days_until_due'   => $task->days_until_due,
@@ -252,14 +280,14 @@ class TasksController extends Controller
                 'avatar'     => $u->avatar,
                 'name'       => $u->name,
                 'completed'  => $u->pivot->status === 'completed',
-                'completed_at' => $u->pivot->completed_at?->toIso8601String(),
+                'completed_at' => $u->pivot->completed_at instanceof \DateTimeInterface ? $u->pivot->completed_at->toIso8601String() : $u->pivot->completed_at,
             ]),
             'created_by'       => $task->createdBy ? [
                 'id'   => $task->createdBy->id,
                 'name' => $task->createdBy->name,
             ] : null,
-            'created_at'       => $task->created_at->toIso8601String(),
-            'updated_at'       => $task->updated_at->toIso8601String(),
+            'created_at'       => $task->created_at instanceof \DateTimeInterface ? $task->created_at->toIso8601String() : $task->created_at,
+            'updated_at'       => $task->updated_at instanceof \DateTimeInterface ? $task->updated_at->toIso8601String() : $task->updated_at,
         ];
     }
 }
