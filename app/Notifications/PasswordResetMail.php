@@ -5,7 +5,7 @@ namespace App\Notifications;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
 
-class VerifyEmail extends Notification
+class PasswordResetMail extends Notification
 {
     public $code;
 
@@ -22,11 +22,11 @@ class VerifyEmail extends Notification
     public function toMail($notifiable)
     {
         return (new MailMessage)
-            ->subject('Your Verification Code - Household OS')
+            ->subject('Reset Your Password - Household OS')
             ->line("Hi {$notifiable->first_name},")
-            ->line('Thanks for signing up!')
-            ->line("Your verification code is: **{$this->code}**")
-            ->line('This code expires in 15 minutes.')
-            ->line('If you did not create an account, no action is needed.');
+            ->line('We received a request to reset your password.')
+            ->line("Your password reset code is: **{$this->code}**")
+            ->line('This code expires in 60 minutes.')
+            ->line('If you did not request a password reset, you can safely ignore this email.');
     }
 }

@@ -8,9 +8,11 @@ use App\Http\Requests\RegisterRequest;
 use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\User;
+use App\Notifications\VerifyEmail;
+use App\Notifications\PasswordResetMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
@@ -276,20 +278,9 @@ class AuthController extends Controller
                 ]
             );
 
-            $subject = 'Reset Your Password - Household OS';
-            $body = "Hi {$user->first_name},\n\n";
-            $body .= "Your password reset code is: {$code}\n\n";
-            $body .= "This code expires in 60 minutes.\n\n";
-            $body .= "If you did not request this, ignore this email.\n\n";
-            $body .= "Thanks,\nHousehold OS Team";
-
             $emailSent = true;
             try {
-                Mail::raw($body, function ($message) use ($user, $subject) {
-                    $message->to($user->email)
-                            ->subject($subject)
-                            ->from(config('mail.from.address'), config('mail.from.name'));
-                });
+                Notification::send($user, new PasswordResetMail($code));
             } catch (\Exception $e) {
                 \Log::error('Password reset email failed for user ' . $user->id . ': ' . $e->getMessage());
                 $emailSent = false;
@@ -405,17 +396,6 @@ class AuthController extends Controller
             'email_verification_expires_at' => now()->addMinutes(15),
         ]);
 
-        $subject = 'Your Verification Code - Household OS';
-        $body = "Hi {$user->first_name},\n\n";
-        $body .= "Your verification code is: {$code}\n\n";
-        $body .= "This code expires in 15 minutes.\n\n";
-        $body .= "If you did not create an account, no action is needed.\n\n";
-        $body .= "Thanks,\nHousehold OS Team";
-
-        Mail::raw($body, function ($message) use ($user, $subject) {
-            $message->to($user->email)
-                    ->subject($subject)
-                    ->from(config('mail.from.address'), config('mail.from.name'));
-        });
+        Notification::send($user, new VerifyEmail($code));
     }
 }
