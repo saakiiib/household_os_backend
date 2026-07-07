@@ -89,13 +89,6 @@ class MembersController extends Controller
     {
         $membership = $request->get('_household_member');
 
-        if (!$membership->isAdminOrCoAdmin()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Only admins and co-admins can invite members.',
-            ], 403);
-        }
-
         $invitedEmail = $request->input('invited_email', $request->input('email'));
 
         $validator = Validator::make($request->all() + ['invited_email' => $invitedEmail], [
@@ -138,6 +131,18 @@ class MembersController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'This user is already an active member of this household.',
+                ], 409);
+            }
+
+            // Enforce single household: invitee must not belong to another household
+            $otherHousehold = HouseholdMember::where('user_id', $invitedUser->id)
+                ->where('status', 'active')
+                ->first();
+
+            if ($otherHousehold) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This user already belongs to another household. They must leave their current household before joining yours.',
                 ], 409);
             }
         }
@@ -239,6 +244,18 @@ class MembersController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'You are already a member of this household.',
+            ], 409);
+        }
+
+        // Enforce single household: user must not belong to another household
+        $otherHousehold = HouseholdMember::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->first();
+
+        if ($otherHousehold) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You already belong to another household. Leave your current household first before accepting this invitation.',
             ], 409);
         }
 

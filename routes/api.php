@@ -34,7 +34,7 @@ Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
 Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
 
     // Profile
-    Route::put('profile', [ProfileController::class, 'update']);
+    Route::match(['put', 'post'], 'profile', [ProfileController::class, 'update']);
     Route::put('profile/password', [ProfileController::class, 'changePassword']);
     Route::delete('profile', [ProfileController::class, 'destroy']);
 
@@ -46,6 +46,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     Route::patch('households/{id}', [HouseholdController::class, 'update']);
     Route::delete('households/{id}', [HouseholdController::class, 'destroy']);
     Route::post('households/{id}/regenerate-invite', [HouseholdController::class, 'regenerateInvite']);
+    Route::post('households/{id}/abandon', [HouseholdController::class, 'abandonHousehold']);
 
     // Invitation acceptance
     Route::post('invitations/{token}/accept', [MembersController::class, 'acceptInvitation']);
@@ -57,7 +58,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
             Route::get('members', [MembersController::class, 'index']);
         });
 
-        Route::middleware('household.role:admin,co-admin')->group(function () {
+        Route::middleware('household.role')->group(function () {
             Route::post('invitations', [MembersController::class, 'invite']);
             Route::delete('invitations/{invitation_id}', [MembersController::class, 'cancelInvitation']);
         });

@@ -7,8 +7,9 @@ use App\Models\HouseholdMember;
 use App\Models\Invitation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
+use Intervention\Image\Facades\Image;
 
 class ProfileController extends Controller
 {
@@ -30,12 +31,32 @@ class ProfileController extends Controller
 
         // Handle avatar upload
         if ($request->hasFile('avatar')) {
-            // Delete old avatar
-            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
-                Storage::disk('public')->delete($user->avatar);
+            // Delete old avatar file
+            if ($user->avatar) {
+                $oldPath = public_path($user->avatar);
+                if (File::exists($oldPath)) {
+                    File::delete($oldPath);
+                }
             }
-            $path = $request->file('avatar')->store('avatars', 'public');
-            $user->update(['avatar' => $path]);
+
+            $file = $request->file('avatar');
+            $filename = 'avatar_' . $user->id . '_' . time() . '.webp';
+            $destPath = public_path('uploads/avatars/');
+
+            if (!File::isDirectory($destPath)) {
+                File::makeDirectory($destPath, 0755, true);
+            }
+
+            Image::make($file)
+                ->resize(800, null, function ($c) {
+                    $c->aspectRatio();
+                    $c->upsize();
+                })
+                ->encode('webp', 80)
+                ->save($destPath . $filename);
+
+            $avatarPath = '/uploads/avatars/' . $filename;
+            $user->update(['avatar' => $avatarPath]);
         }
 
         return response()->json([
@@ -102,8 +123,11 @@ class ProfileController extends Controller
             ->update(['status' => 'cancelled']);
 
         // Delete avatar file
-        if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
-            Storage::disk('public')->delete($user->avatar);
+        if ($user->avatar) {
+            $avatarPath = public_path($user->avatar);
+            if (File::exists($avatarPath)) {
+                File::delete($avatarPath);
+            }
         }
 
         // Revoke all tokens

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Household;
 use App\Models\HouseholdMember;
+use App\Models\Invitation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -56,6 +57,18 @@ class HouseholdController extends Controller
                 'message' => 'Validation failed',
                 'errors' => $validator->errors()
             ], 422);
+        }
+
+        // Enforce single household per user
+        $existingActive = HouseholdMember::where('user_id', Auth::id())
+            ->where('status', 'active')
+            ->first();
+
+        if ($existingActive) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You already belong to a household. Leave your current household first before creating a new one.',
+            ], 409);
         }
 
         $household = Household::create([
@@ -304,6 +317,18 @@ class HouseholdController extends Controller
 
         $userId = Auth::id();
 
+        // Enforce single household per user
+        $existingActive = HouseholdMember::where('user_id', $userId)
+            ->where('status', 'active')
+            ->first();
+
+        if ($existingActive) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You already belong to a household. Leave your current household first before joining another.',
+            ], 409);
+        }
+
         $existing = HouseholdMember::where('household_id', $household->id)
             ->where('user_id', $userId)
             ->where('status', 'active')
@@ -342,5 +367,52 @@ class HouseholdController extends Controller
                 'created_at' => $household->created_at,
             ]
         ], 201);
+    }
+
+    /**
+     * POST /api/households/{id}/abandon
+     * Admin abandons (deletes) the household and all its data.
+     * Requires: admin role. Confirmation token required.
+     */
+    public function abandonHousehold(Request $request, $id)
+    {
+        $request->validate([
+            'confirm' => 'required|in:abandon',
+        ]);
+
+        $household = Household::findOrFail($id);
+
+        $membership = HouseholdMember::where('household_id', $id)
+            ->where('user_id', Auth::id())
+            ->where('status', 'active')
+            ->first();
+
+        if (!$membership) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not an active member of this household.',
+            ], 403);
+        }
+
+        if (!$membership->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only admins can abandon a household.',
+            ], 403);
+        }
+
+        // Delete all invitations for this household
+        Invitation::where('household_id', $id)->delete();
+
+        // Delete all household memberships
+        HouseholdMember::where('household_id', $id)->delete();
+
+        // Delete the household itself
+        $household->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Household abandoned and deleted successfully.',
+        ]);
     }
 }
