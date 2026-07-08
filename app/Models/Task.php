@@ -26,16 +26,9 @@ class Task extends Model
         return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
-    public function assignments()
+    public function assignedUser()
     {
-        return $this->hasMany(TaskAssignment::class);
-    }
-
-    public function assignedUsers()
-    {
-        return $this->belongsToMany(User::class, 'task_assignments')
-                    ->withPivot('status', 'completed_at')
-                    ->withTimestamps();
+        return $this->belongsTo(User::class, 'assigned_user_id');
     }
 
     public function getIsOverdueAttribute(): bool

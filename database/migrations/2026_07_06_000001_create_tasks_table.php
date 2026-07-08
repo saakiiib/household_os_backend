@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('household_id')->constrained()->cascadeOnDelete();
             $table->foreignId('created_by_user_id')->constrained('users');
+            $table->foreignId('assigned_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->string('title');
             $table->text('description')->nullable();
             $table->enum('task_type', ['one-time', 'recurring'])->default('one-time');

@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\HouseholdMember;
 use App\Models\Task;
-use App\Models\TaskAssignment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -14,11 +13,11 @@ class TasksController extends Controller
 {
     /**
      * GET /api/households/{household_id}/tasks
-     * List tasks for the household. Supports filters: status, task_type, assigned_to_me.
+     * List tasks for the household.
      */
     public function index(Request $request, $household_id)
     {
-        $query = Task::with(['assignedUsers:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name'])
+        $query = Task::with(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name'])
             ->where('household_id', $household_id);
 
         // Filters
@@ -29,7 +28,7 @@ class TasksController extends Controller
             $query->where('task_type', $request->task_type);
         }
         if ($request->boolean('assigned_to_me')) {
-            $query->whereHas('assignedUsers', fn($q) => $q->where('users.id', Auth::id()));
+            $query->where('assigned_user_id', Auth::id());
         }
         if ($request->filled('priority')) {
             $query->where('priority', $request->priority);
@@ -50,20 +49,19 @@ class TasksController extends Controller
 
     /**
      * POST /api/households/{household_id}/tasks
-     * Create a task with assignees.
+     * Create a task with a single assignee.
      */
     public function store(Request $request, $household_id)
     {
         $validator = Validator::make($request->all(), [
-            'title'           => 'required|string|max:255',
-            'description'     => 'nullable|string|max:2000',
-            'task_type'       => 'required|in:one-time,recurring',
-            'priority'        => 'sometimes|in:low,medium,high',
-            'frequency'       => 'nullable|required_if:task_type,recurring|in:daily,weekly,biweekly,monthly,yearly',
-            'due_date'        => 'nullable|date',
-            'notes'           => 'nullable|string|max:2000',
-            'assigned_user_ids' => 'required|array|min:1',
-            'assigned_user_ids.*' => 'integer|exists:users,id',
+            'title'             => 'required|string|max:255',
+            'description'       => 'nullable|string|max:2000',
+            'task_type'         => 'required|in:one-time,recurring',
+            'priority'          => 'sometimes|in:low,medium,high',
+            'frequency'         => 'nullable|required_if:task_type,recurring|in:daily,weekly,biweekly,monthly,yearly',
+            'due_date'          => 'nullable|date',
+            'notes'             => 'nullable|string|max:2000',
+            'assigned_user_id'  => 'required|integer|exists:users,id',
         ]);
 
         if ($validator->fails()) {
@@ -75,28 +73,20 @@ class TasksController extends Controller
         }
 
         $task = Task::create([
-            'household_id'     => $household_id,
+            'household_id'      => $household_id,
             'created_by_user_id' => Auth::id(),
-            'title'            => $request->title,
-            'description'      => $request->description,
-            'task_type'        => $request->task_type,
-            'priority'         => $request->priority ?? 'medium',
-            'frequency'        => $request->frequency,
-            'due_date'         => $request->due_date,
-            'notes'            => $request->notes,
-            'status'           => 'pending',
+            'assigned_user_id'  => $request->assigned_user_id,
+            'title'             => $request->title,
+            'description'       => $request->description,
+            'task_type'         => $request->task_type,
+            'priority'          => $request->priority ?? 'medium',
+            'frequency'         => $request->frequency,
+            'due_date'          => $request->due_date,
+            'notes'             => $request->notes,
+            'status'            => 'pending',
         ]);
 
-        // Attach assignees
-        foreach ($request->assigned_user_ids as $userId) {
-            TaskAssignment::create([
-                'task_id'  => $task->id,
-                'user_id'  => $userId,
-                'status'   => 'pending',
-            ]);
-        }
-
-        $task->load(['assignedUsers:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
+        $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
 
         return response()->json([
             'success' => true,
@@ -111,7 +101,7 @@ class TasksController extends Controller
      */
     public function show($household_id, $task_id)
     {
-        $task = Task::with(['assignedUsers:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name'])
+        $task = Task::with(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name'])
             ->where('household_id', $household_id)
             ->findOrFail($task_id);
 
@@ -130,16 +120,15 @@ class TasksController extends Controller
         $task = Task::where('household_id', $household_id)->findOrFail($task_id);
 
         $validator = Validator::make($request->all(), [
-            'title'           => 'sometimes|string|max:255',
-            'description'     => 'nullable|string|max:2000',
-            'task_type'       => 'sometimes|in:one-time,recurring',
-            'priority'        => 'sometimes|in:low,medium,high',
-            'status'          => 'sometimes|in:pending,in_progress,completed',
-            'frequency'       => 'nullable|in:daily,weekly,biweekly,monthly,yearly',
-            'due_date'        => 'nullable|date',
-            'notes'           => 'nullable|string|max:2000',
-            'assigned_user_ids' => 'sometimes|array|min:1',
-            'assigned_user_ids.*' => 'integer|exists:users,id',
+            'title'             => 'sometimes|string|max:255',
+            'description'       => 'nullable|string|max:2000',
+            'task_type'         => 'sometimes|in:one-time,recurring',
+            'priority'          => 'sometimes|in:low,medium,high',
+            'status'            => 'sometimes|in:pending,in_progress,completed',
+            'frequency'         => 'nullable|in:daily,weekly,biweekly,monthly,yearly',
+            'due_date'          => 'nullable|date',
+            'notes'             => 'nullable|string|max:2000',
+            'assigned_user_id'  => 'sometimes|integer|exists:users,id',
         ]);
 
         if ($validator->fails()) {
@@ -152,28 +141,15 @@ class TasksController extends Controller
 
         $task->update($request->only([
             'title', 'description', 'task_type', 'priority', 'status',
-            'frequency', 'due_date', 'notes',
+            'frequency', 'due_date', 'notes', 'assigned_user_id',
         ]));
 
         // Handle completion
         if ($request->status === 'completed' && !$task->completed_at) {
             $task->update(['completed_at' => now()]);
-            $task->assignments()->update(['status' => 'completed', 'completed_at' => now()]);
         }
 
-        // Reassign if provided
-        if ($request->has('assigned_user_ids')) {
-            $task->assignments()->delete();
-            foreach ($request->assigned_user_ids as $userId) {
-                TaskAssignment::create([
-                    'task_id'  => $task->id,
-                    'user_id'  => $userId,
-                    'status'   => $request->status === 'completed' ? 'completed' : 'pending',
-                ]);
-            }
-        }
-
-        $task->load(['assignedUsers:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
+        $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
 
         return response()->json([
             'success' => true,
@@ -215,39 +191,30 @@ class TasksController extends Controller
 
     /**
      * PATCH /api/households/{household_id}/tasks/{task_id}/complete
-     * Mark a specific assignment as completed.
+     * Mark a task as completed.
      */
     public function complete(Request $request, $household_id, $task_id)
     {
         $task = Task::where('household_id', $household_id)->findOrFail($task_id);
 
-        // Only assigned users can mark their own completion
-        $assignment = $task->assignments()->where('user_id', Auth::id())->first();
-        if (!$assignment) {
+        // Only assigned user can mark as complete
+        if ($task->assigned_user_id !== Auth::id()) {
             return response()->json([
                 'success' => false,
                 'message' => 'You are not assigned to this task.',
             ], 403);
         }
 
-        if ($assignment->status === 'completed') {
+        if ($task->status === 'completed') {
             return response()->json([
                 'success' => false,
-                'message' => 'You have already completed this task.',
+                'message' => 'Task is already completed.',
             ], 409);
         }
 
-        $assignment->update(['status' => 'completed', 'completed_at' => now()]);
+        $task->update(['status' => 'completed', 'completed_at' => now()]);
 
-        // Check if all assignees completed
-        $pendingCount = $task->assignments()->where('status', '!=', 'completed')->count();
-        if ($pendingCount === 0) {
-            $task->update(['status' => 'completed', 'completed_at' => now()]);
-        } else {
-            $task->update(['status' => 'in_progress']);
-        }
-
-        $task->load(['assignedUsers:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
+        $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
 
         return response()->json([
             'success' => true,
@@ -272,16 +239,14 @@ class TasksController extends Controller
             'notes'            => $task->notes,
             'is_overdue'       => $task->is_overdue,
             'days_until_due'   => $task->days_until_due,
-            'assigned_users'   => $task->assignedUsers->map(fn($u) => [
-                'id'         => $u->id,
-                'first_name' => $u->first_name,
-                'last_name'  => $u->last_name,
-                'email'      => $u->email,
-                'avatar'     => $u->avatar,
-                'name'       => $u->name,
-                'completed'  => $u->pivot->status === 'completed',
-                'completed_at' => $u->pivot->completed_at instanceof \DateTimeInterface ? $u->pivot->completed_at->toIso8601String() : $u->pivot->completed_at,
-            ]),
+            'assigned_user'    => $task->assignedUser ? [
+                'id'         => $task->assignedUser->id,
+                'first_name' => $task->assignedUser->first_name,
+                'last_name'  => $task->assignedUser->last_name,
+                'email'      => $task->assignedUser->email,
+                'avatar'     => $task->assignedUser->avatar,
+                'name'       => $task->assignedUser->name,
+            ] : null,
             'created_by'       => $task->createdBy ? [
                 'id'   => $task->createdBy->id,
                 'name' => $task->createdBy->name,
