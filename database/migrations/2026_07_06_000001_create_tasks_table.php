@@ -14,7 +14,7 @@ return new class extends Migration
             $table->foreignId('created_by_user_id')->constrained('users');
             $table->string('title');
             $table->text('description')->nullable();
-            $table->enum('task_type', ['one-time', 'rotating', 'recurring'])->default('one-time');
+            $table->enum('task_type', ['one-time', 'recurring'])->default('one-time');
             $table->enum('priority', ['low', 'medium', 'high'])->default('medium');
             $table->enum('status', ['pending', 'in_progress', 'completed'])->default('pending');
             $table->enum('frequency', ['daily', 'weekly', 'biweekly', 'monthly', 'yearly'])->nullable();

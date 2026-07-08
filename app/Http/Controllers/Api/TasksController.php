@@ -57,7 +57,7 @@ class TasksController extends Controller
         $validator = Validator::make($request->all(), [
             'title'           => 'required|string|max:255',
             'description'     => 'nullable|string|max:2000',
-            'task_type'       => 'required|in:one-time,rotating,recurring',
+            'task_type'       => 'required|in:one-time,recurring',
             'priority'        => 'sometimes|in:low,medium,high',
             'frequency'       => 'nullable|required_if:task_type,recurring|in:daily,weekly,biweekly,monthly,yearly',
             'due_date'        => 'nullable|date',
@@ -132,7 +132,7 @@ class TasksController extends Controller
         $validator = Validator::make($request->all(), [
             'title'           => 'sometimes|string|max:255',
             'description'     => 'nullable|string|max:2000',
-            'task_type'       => 'sometimes|in:one-time,rotating,recurring',
+            'task_type'       => 'sometimes|in:one-time,recurring',
             'priority'        => 'sometimes|in:low,medium,high',
             'status'          => 'sometimes|in:pending,in_progress,completed',
             'frequency'       => 'nullable|in:daily,weekly,biweekly,monthly,yearly',
