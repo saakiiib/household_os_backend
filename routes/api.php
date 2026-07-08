@@ -66,6 +66,8 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
         Route::middleware('household.role:admin')->group(function () {
             Route::patch('members/{member_id}', [MembersController::class, 'updateRole']);
             Route::delete('members/{member_id}', [MembersController::class, 'removeMember']);
+            Route::patch('members/{member_id}/approve', [MembersController::class, 'approveMember']);
+            Route::patch('members/{member_id}/reject', [MembersController::class, 'rejectMember']);
         });
 
         // Tasks

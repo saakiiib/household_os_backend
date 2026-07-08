@@ -49,6 +49,29 @@ class MembersController extends Controller
                 ];
             });
 
+        // Get pending members (waiting for approval)
+        $pendingMembers = HouseholdMember::with('user')
+            ->where('household_id', $household_id)
+            ->where('status', 'pending')
+            ->get()
+            ->map(function ($member) {
+                return [
+                    'id' => $member->id,
+                    'user_id' => $member->user_id,
+                    'user' => $member->user ? [
+                        'id' => $member->user->id,
+                        'email' => $member->user->email,
+                        'first_name' => $member->user->first_name,
+                        'last_name' => $member->user->last_name,
+                        'name' => $member->user->name,
+                        'avatar' => $member->user->avatar,
+                    ] : null,
+                    'role' => $member->role,
+                    'status' => $member->status,
+                    'joined_at' => $member->joined_at,
+                ];
+            });
+
         // Get pending invitations
         $invitations = Invitation::where('household_id', $household_id)
             ->where('status', 'pending')
@@ -76,7 +99,7 @@ class MembersController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $members->merge($invitations),
+            'data' => $members->merge($pendingMembers)->merge($invitations),
         ]);
     }
 
@@ -93,7 +116,6 @@ class MembersController extends Controller
 
         $validator = Validator::make($request->all() + ['invited_email' => $invitedEmail], [
             'invited_email' => 'required|email|max:255',
-            'role' => 'required|in:admin,co-admin,member',
         ]);
 
         if ($validator->fails()) {
@@ -150,12 +172,13 @@ class MembersController extends Controller
         // Generate short 6-digit code (same as verification codes)
         $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
+        // Always assign 'member' role - only creator is admin
         $invitation = Invitation::create([
             'household_id' => $household_id,
             'invited_by_user_id' => Auth::id(),
             'invited_email' => $invitedEmail,
             'token' => $code,
-            'role' => $request->role,
+            'role' => 'member',
             'status' => 'pending',
             'expires_at' => now()->addDays(7),
         ]);
@@ -259,12 +282,12 @@ class MembersController extends Controller
             ], 409);
         }
 
-        // Create or reinstate membership (handles previously-removed users)
+        // Create membership with pending status (requires admin approval)
         HouseholdMember::updateOrCreate(
             ['household_id' => $invitation->household_id, 'user_id' => $user->id],
             [
                 'role' => $invitation->role,
-                'status' => 'active',
+                'status' => 'pending',
                 'joined_at' => now(),
             ]
         );
@@ -278,11 +301,12 @@ class MembersController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Invitation accepted successfully',
+            'message' => 'Join request submitted. Waiting for approval from household admin.',
             'data' => [
                 'household_id' => $invitation->household_id,
                 'household_name' => $invitation->household->name,
                 'role' => $invitation->role,
+                'membership_status' => 'pending',
             ]
         ]);
     }
@@ -396,10 +420,10 @@ class MembersController extends Controller
     {
         $membership = $request->get('_household_member');
 
-        if (!$membership->isAdminOrCoAdmin()) {
+        if (!$membership->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only admins and co-admins can cancel invitations.',
+                'message' => 'Only admins can cancel invitations.',
             ], 403);
         }
 
@@ -420,6 +444,97 @@ class MembersController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Invitation cancelled successfully',
+        ]);
+    }
+
+    /**
+     * PATCH /api/households/{household_id}/members/{member_id}/approve
+     * Approve a pending member.
+     * Requires: admin role only.
+     */
+    public function approveMember(Request $request, $household_id, $member_id)
+    {
+        $membership = $request->get('_household_member');
+
+        if (!$membership->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only admins can approve members.',
+            ], 403);
+        }
+
+        $targetMember = HouseholdMember::where('id', $member_id)
+            ->where('household_id', $household_id)
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$targetMember) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pending member not found.',
+            ], 404);
+        }
+
+        $targetMember->update([
+            'status' => 'active',
+            'joined_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Member approved successfully',
+            'data' => [
+                'id' => $targetMember->id,
+                'user_id' => $targetMember->user_id,
+                'role' => $targetMember->role,
+                'status' => $targetMember->status,
+            ]
+        ]);
+    }
+
+    /**
+     * PATCH /api/households/{household_id}/members/{member_id}/reject
+     * Reject a pending member and delete their invitation.
+     * Requires: admin role only.
+     */
+    public function rejectMember(Request $request, $household_id, $member_id)
+    {
+        $membership = $request->get('_household_member');
+
+        if (!$membership->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only admins can reject members.',
+            ], 403);
+        }
+
+        $targetMember = HouseholdMember::where('id', $member_id)
+            ->where('household_id', $household_id)
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$targetMember) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pending member not found.',
+            ], 404);
+        }
+
+        // Get the user ID before deleting
+        $userId = $targetMember->user_id;
+
+        // Delete the pending membership
+        $targetMember->delete();
+
+        // Delete the associated invitation so user can be invited by other households
+        Invitation::where('household_id', $household_id)
+            ->where('invited_email', User::find($userId)->email ?? '')
+            ->where('status', 'accepted')
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Member rejected. Invitation has been voided.',
         ]);
     }
 }

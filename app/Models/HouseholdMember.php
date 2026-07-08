@@ -38,12 +38,4 @@ class HouseholdMember extends Model
     {
         return $this->role === 'admin';
     }
-
-    /**
-     * Check if member is an admin or co-admin.
-     */
-    public function isAdminOrCoAdmin(): bool
-    {
-        return in_array($this->role, ['admin', 'co-admin']);
-    }
 }

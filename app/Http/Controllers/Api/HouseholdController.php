@@ -34,6 +34,7 @@ class HouseholdController extends Controller
                 'member_count'  => $h->householdMembers()->where('status', 'active')->count(),
                 'created_at'    => $h->created_at,
                 'user_role'     => $h->pivot->role ?? null,
+                'membership_status' => $h->pivot->status ?? null,
             ]),
         ]);
     }
@@ -174,10 +175,10 @@ class HouseholdController extends Controller
             ], 403);
         }
 
-        if (!$membership->isAdminOrCoAdmin()) {
+        if (!$membership->isAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only admins and co-admins can update household settings.',
+                'message' => 'Only admins can update household settings.',
             ], 403);
         }
 
@@ -341,19 +342,19 @@ class HouseholdController extends Controller
             ], 409);
         }
 
-        // Create or reinstate membership (handles previously-removed users)
+        // Create membership with pending status (requires admin approval)
         HouseholdMember::updateOrCreate(
             ['household_id' => $household->id, 'user_id' => $userId],
             [
                 'role' => 'member',
-                'status' => 'active',
+                'status' => 'pending',
                 'joined_at' => now(),
             ]
         );
 
         return response()->json([
             'success' => true,
-            'message' => 'Joined household successfully',
+            'message' => 'Join request submitted. Waiting for approval from household admin.',
             'data' => [
                 'id' => $household->id,
                 'name' => $household->name,
@@ -364,6 +365,7 @@ class HouseholdController extends Controller
                 'created_by_user_id' => $household->created_by_user_id,
                 'member_count' => $household->householdMembers()->where('status', 'active')->count(),
                 'user_role' => 'member',
+                'membership_status' => 'pending',
                 'created_at' => $household->created_at,
             ]
         ], 201);
