@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\HouseholdController;
 use App\Http\Controllers\Api\MembersController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\TasksController;
+use App\Http\Controllers\Api\DocumentsController;
+use App\Http\Controllers\Api\RenewalsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -77,5 +79,28 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
         Route::patch('tasks/{task_id}', [TasksController::class, 'update']);
         Route::delete('tasks/{task_id}', [TasksController::class, 'destroy']);
         Route::patch('tasks/{task_id}/complete', [TasksController::class, 'complete']);
+
+        // Documents
+        Route::get('documents', [DocumentsController::class, 'index']);
+        Route::post('documents', [DocumentsController::class, 'store']);
+        Route::get('documents/{document_id}', [DocumentsController::class, 'show']);
+        Route::patch('documents/{document_id}', [DocumentsController::class, 'update']);
+        Route::delete('documents/{document_id}', [DocumentsController::class, 'destroy']);
+
+        // Document files
+        Route::post('documents/{document_id}/files', [DocumentsController::class, 'uploadFiles']);
+        Route::delete('documents/{document_id}/files/{file_id}', [DocumentsController::class, 'deleteFile']);
+        Route::get('documents/{document_id}/files/{file_id}/download', [DocumentsController::class, 'downloadFile']);
+
+        // Document items (car sub-items)
+        Route::patch('documents/{document_id}/items/{item_id}', [DocumentsController::class, 'updateItem']);
+
+        // Renewals
+        Route::get('renewals', [RenewalsController::class, 'index']);
+        Route::post('renewals', [RenewalsController::class, 'store']);
+        Route::get('renewals/{renewal_id}', [RenewalsController::class, 'show']);
+        Route::patch('renewals/{renewal_id}', [RenewalsController::class, 'update']);
+        Route::delete('renewals/{renewal_id}', [RenewalsController::class, 'destroy']);
+        Route::patch('renewals/{renewal_id}/complete', [RenewalsController::class, 'complete']);
     });
 });
