@@ -26,6 +26,26 @@ class Renewal extends Model
         return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
+    public function parent()
+    {
+        return $this->belongsTo(Renewal::class, 'parent_renewal_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Renewal::class, 'parent_renewal_id');
+    }
+
+    public function document()
+    {
+        return $this->belongsTo(Document::class);
+    }
+
+    public function getIsRenewableAttribute(): bool
+    {
+        return $this->status === 'completed' || $this->is_overdue;
+    }
+
     public function getIsOverdueAttribute(): bool
     {
         return $this->due_date && $this->due_date->isPast() && $this->status !== 'completed';

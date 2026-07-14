@@ -103,5 +103,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
         Route::patch('renewals/{renewal_id}', [RenewalsController::class, 'update']);
         Route::delete('renewals/{renewal_id}', [RenewalsController::class, 'destroy']);
         Route::patch('renewals/{renewal_id}/complete', [RenewalsController::class, 'complete']);
+        Route::post('renewals/{renewal_id}/renew', [RenewalsController::class, 'renew']);
+        Route::post('renewals/from-document/{document_id}', [RenewalsController::class, 'createFromDocument']);
     });
 });
