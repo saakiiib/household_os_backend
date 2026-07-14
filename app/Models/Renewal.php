@@ -14,6 +14,7 @@ class Renewal extends Model
     protected $casts = [
         'due_date' => 'date',
         'amount' => 'decimal:2',
+        'notify_days_before' => 'integer',
     ];
 
     public function household()

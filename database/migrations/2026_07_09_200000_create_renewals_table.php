@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('title');
             $table->text('description')->nullable();
             $table->date('due_date');
-            $table->enum('frequency', ['monthly', 'quarterly', 'annual', 'one-time'])->default('annual');
+            $table->enum('frequency', ['monthly', 'quarterly', 'annual'])->default('annual');
             $table->decimal('amount', 10, 2)->nullable();
             $table->string('category')->nullable();
             $table->enum('status', ['pending', 'completed'])->default('pending');

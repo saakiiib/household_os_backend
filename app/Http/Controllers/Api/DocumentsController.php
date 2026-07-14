@@ -29,8 +29,29 @@ class DocumentsController extends Controller
         $query = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'items', 'files'])
             ->where('household_id', $household_id);
 
+        // Text search — title, description, category, created by name
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhere('category', 'like', "%{$search}%")
+                  ->orWhereHas('createdBy', function ($uq) use ($search) {
+                      $uq->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
         if ($request->filled('category')) {
             $query->where('category', $request->category);
+        }
+
+        if ($request->filled('due_date_from')) {
+            $query->where('due_date', '>=', $request->due_date_from);
+        }
+        if ($request->filled('due_date_to')) {
+            $query->where('due_date', '<=', $request->due_date_to);
         }
 
         $documents = $query->orderBy('created_at', 'desc')->get()

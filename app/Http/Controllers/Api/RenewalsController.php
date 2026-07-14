@@ -19,12 +19,29 @@ class RenewalsController extends Controller
         $query = Renewal::with(['createdBy:id,first_name,last_name,email,avatar'])
             ->where('household_id', $household_id);
 
+        // Text search — title, description, category
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhere('category', 'like', "%{$search}%");
+            });
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
         if ($request->filled('frequency')) {
             $query->where('frequency', $request->frequency);
+        }
+
+        if ($request->filled('due_date_from')) {
+            $query->where('due_date', '>=', $request->due_date_from);
+        }
+        if ($request->filled('due_date_to')) {
+            $query->where('due_date', '<=', $request->due_date_to);
         }
 
         $renewals = $query->orderBy('due_date', 'asc')->get()
@@ -42,13 +59,14 @@ class RenewalsController extends Controller
     public function store(Request $request, $household_id)
     {
         $validator = Validator::make($request->all(), [
-            'title'        => 'required|string|max:255',
-            'description'  => 'nullable|string|max:2000',
-            'due_date'     => 'required|date',
-            'frequency'    => 'sometimes|in:monthly,quarterly,annual,one-time',
-            'amount'       => 'nullable|numeric|min:0',
-            'category'     => 'nullable|string|max:255',
-            'notes'        => 'nullable|string|max:2000',
+            'title'               => 'required|string|max:255',
+            'description'         => 'nullable|string|max:2000',
+            'due_date'            => 'required|date',
+            'frequency'           => 'sometimes|in:monthly,quarterly,annual',
+            'amount'              => 'nullable|numeric|min:0',
+            'category'            => 'nullable|string|max:255',
+            'notes'               => 'nullable|string|max:2000',
+            'notify_days_before'  => 'nullable|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -69,6 +87,7 @@ class RenewalsController extends Controller
             'amount'             => $request->amount,
             'category'           => $request->category,
             'notes'              => $request->notes,
+            'notify_days_before' => $request->notify_days_before,
             'status'             => 'pending',
         ]);
 
@@ -109,14 +128,15 @@ class RenewalsController extends Controller
         $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
 
         $validator = Validator::make($request->all(), [
-            'title'        => 'sometimes|string|max:255',
-            'description'  => 'nullable|string|max:2000',
-            'due_date'     => 'sometimes|date',
-            'frequency'    => 'sometimes|in:monthly,quarterly,annual,one-time',
-            'amount'       => 'nullable|numeric|min:0',
-            'category'     => 'nullable|string|max:255',
-            'status'       => 'sometimes|in:pending,completed',
-            'notes'        => 'nullable|string|max:2000',
+            'title'               => 'sometimes|string|max:255',
+            'description'         => 'nullable|string|max:2000',
+            'due_date'            => 'sometimes|date',
+            'frequency'           => 'sometimes|in:monthly,quarterly,annual',
+            'amount'              => 'nullable|numeric|min:0',
+            'category'            => 'nullable|string|max:255',
+            'status'              => 'sometimes|in:pending,completed',
+            'notes'               => 'nullable|string|max:2000',
+            'notify_days_before'  => 'nullable|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -128,7 +148,7 @@ class RenewalsController extends Controller
         }
 
         $renewal->update($request->only([
-            'title', 'description', 'due_date', 'frequency', 'amount', 'category', 'status', 'notes',
+            'title', 'description', 'due_date', 'frequency', 'amount', 'category', 'status', 'notes', 'notify_days_before',
         ]));
 
         $renewal->load(['createdBy:id,first_name,last_name,email,avatar']);
@@ -286,6 +306,7 @@ class RenewalsController extends Controller
             'category'          => $renewal->category,
             'status'            => $renewal->status,
             'notes'             => $renewal->notes,
+            'notify_days_before'=> $renewal->notify_days_before,
             'is_overdue'        => $renewal->is_overdue,
             'is_renewable'      => $renewal->is_renewable,
             'days_until_due'    => $renewal->days_until_due,

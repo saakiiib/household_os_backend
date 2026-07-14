@@ -14,6 +14,7 @@ class Task extends Model
     protected $casts = [
         'due_date' => 'date',
         'completed_at' => 'datetime',
+        'parent_task_id' => 'integer',
     ];
 
     public function household()
@@ -29,6 +30,21 @@ class Task extends Model
     public function assignedUser()
     {
         return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
+    public function parent()
+    {
+        return $this->belongsTo(Task::class, 'parent_task_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Task::class, 'parent_task_id');
+    }
+
+    public function getIsRepeatingAttribute(): bool
+    {
+        return $this->task_type === 'recurring' && $this->frequency !== null;
     }
 
     public function getIsOverdueAttribute(): bool

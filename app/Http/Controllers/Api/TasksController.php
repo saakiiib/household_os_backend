@@ -20,6 +20,19 @@ class TasksController extends Controller
         $query = Task::with(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name'])
             ->where('household_id', $household_id);
 
+        // Text search — title, description, assigned member name
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhereHas('assignedUser', function ($uq) use ($search) {
+                      $uq->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
         // Filters
         if ($request->filled('status')) {
             $query->where('status', $request->status);
@@ -32,6 +45,12 @@ class TasksController extends Controller
         }
         if ($request->filled('priority')) {
             $query->where('priority', $request->priority);
+        }
+        if ($request->filled('due_date_from')) {
+            $query->where('due_date', '>=', $request->due_date_from);
+        }
+        if ($request->filled('due_date_to')) {
+            $query->where('due_date', '<=', $request->due_date_to);
         }
 
         $tasks = $query->orderByRaw("FIELD(status, 'pending', 'in_progress', 'completed')")
@@ -58,7 +77,7 @@ class TasksController extends Controller
             'description'       => 'nullable|string|max:2000',
             'task_type'         => 'required|in:one-time,recurring',
             'priority'          => 'sometimes|in:low,medium,high',
-            'frequency'         => 'nullable|required_if:task_type,recurring|in:daily,weekly,biweekly,monthly,yearly',
+            'frequency'         => 'nullable|required_if:task_type,recurring|in:daily,weekly,monthly',
             'due_date'          => 'nullable|date',
             'notes'             => 'nullable|string|max:2000',
             'assigned_user_id'  => 'required|integer|exists:users,id',
@@ -101,7 +120,12 @@ class TasksController extends Controller
      */
     public function show($household_id, $task_id)
     {
-        $task = Task::with(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name'])
+        $task = Task::with([
+                'assignedUser:id,first_name,last_name,email,avatar',
+                'createdBy:id,first_name,last_name',
+                'parent:id,title,due_date,status,completed_at',
+                'children:id,title,due_date,status,completed_at',
+            ])
             ->where('household_id', $household_id)
             ->findOrFail($task_id);
 
@@ -125,7 +149,7 @@ class TasksController extends Controller
             'task_type'         => 'sometimes|in:one-time,recurring',
             'priority'          => 'sometimes|in:low,medium,high',
             'status'            => 'sometimes|in:pending,in_progress,completed',
-            'frequency'         => 'nullable|in:daily,weekly,biweekly,monthly,yearly',
+            'frequency'         => 'nullable|in:daily,weekly,monthly',
             'due_date'          => 'nullable|date',
             'notes'             => 'nullable|string|max:2000',
             'assigned_user_id'  => 'sometimes|integer|exists:users,id',
@@ -257,6 +281,7 @@ class TasksController extends Controller
                 'household_id'      => $household_id,
                 'created_by_user_id' => $task->created_by_user_id,
                 'assigned_user_id'  => $task->assigned_user_id,
+                'parent_task_id'    => $task->id,
                 'title'             => $task->title,
                 'description'       => $task->description,
                 'task_type'         => $task->task_type,
@@ -328,7 +353,9 @@ class TasksController extends Controller
             'completed_at'     => $task->completed_at instanceof \DateTimeInterface ? $task->completed_at->toIso8601String() : $task->completed_at,
             'notes'            => $task->notes,
             'is_overdue'       => $task->is_overdue,
+            'is_repeating'     => $task->is_repeating,
             'days_until_due'   => $task->days_until_due,
+            'parent_task_id'   => $task->parent_task_id,
             'assigned_user'    => $task->assignedUser ? [
                 'id'         => $task->assignedUser->id,
                 'first_name' => $task->assignedUser->first_name,
@@ -341,6 +368,20 @@ class TasksController extends Controller
                 'id'   => $task->createdBy->id,
                 'name' => $task->createdBy->name,
             ] : null,
+            'parent'           => $task->parent ? [
+                'id'           => $task->parent->id,
+                'title'        => $task->parent->title,
+                'due_date'     => $task->parent->due_date instanceof \DateTimeInterface ? $task->parent->due_date->format('Y-m-d') : $task->parent->due_date,
+                'status'       => $task->parent->status,
+                'completed_at' => $task->parent->completed_at instanceof \DateTimeInterface ? $task->parent->completed_at->toIso8601String() : $task->parent->completed_at,
+            ] : null,
+            'children'         => $task->children->map(fn($child) => [
+                'id'           => $child->id,
+                'title'        => $child->title,
+                'due_date'     => $child->due_date instanceof \DateTimeInterface ? $child->due_date->format('Y-m-d') : $child->due_date,
+                'status'       => $child->status,
+                'completed_at' => $child->completed_at instanceof \DateTimeInterface ? $child->completed_at->toIso8601String() : $child->completed_at,
+            ]),
             'created_at'       => $task->created_at instanceof \DateTimeInterface ? $task->created_at->toIso8601String() : $task->created_at,
             'updated_at'       => $task->updated_at instanceof \DateTimeInterface ? $task->updated_at->toIso8601String() : $task->updated_at,
         ];
