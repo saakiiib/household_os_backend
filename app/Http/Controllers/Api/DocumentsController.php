@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Document;
 use App\Models\DocumentFile;
 use App\Models\DocumentItem;
-use App\Models\HouseholdMember;
 use App\Services\FileEncryptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -205,6 +204,12 @@ class DocumentsController extends Controller
             'category'          => 'sometimes|string|max:255',
             'description'       => 'nullable|string|max:2000',
             'due_date'          => 'nullable|date',
+            'items'             => 'nullable|array',
+            'items.*.id'        => 'nullable|integer',
+            'items.*.item_type' => 'required_with:items|in:mot,service,road_tax,insurance',
+            'items.*.due_date'  => 'nullable|date',
+            'items.*.price'     => 'nullable|numeric|min:0',
+            'items.*.notes'     => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -215,9 +220,51 @@ class DocumentsController extends Controller
             ], 422);
         }
 
-        $document->update($request->only([
-            'title', 'category', 'description', 'due_date',
-        ]));
+        DB::beginTransaction();
+
+        try {
+            $document->update($request->only([
+                'title', 'category', 'description', 'due_date',
+            ]));
+
+            // Update car items if provided
+            if ($request->has('items') && is_array($request->items)) {
+                foreach ($request->items as $itemData) {
+                    if (!empty($itemData['id'])) {
+                        // Update existing item
+                        $item = DocumentItem::where('id', $itemData['id'])
+                            ->where('document_id', $document->id)
+                            ->first();
+                        if ($item) {
+                            $item->update([
+                                'due_date' => $itemData['due_date'] ?? null,
+                                'price'    => $itemData['price'] ?? null,
+                                'notes'    => $itemData['notes'] ?? null,
+                            ]);
+                        }
+                    } else {
+                        // Create new item
+                        $document->items()->create([
+                            'item_type' => $itemData['item_type'],
+                            'due_date'  => $itemData['due_date'] ?? null,
+                            'price'     => $itemData['price'] ?? null,
+                            'notes'     => $itemData['notes'] ?? null,
+                            'status'    => 'pending',
+                        ]);
+                    }
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Document update failed: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update document: ' . $e->getMessage(),
+            ], 500);
+        }
 
         $document->load(['createdBy:id,first_name,last_name,email,avatar', 'items', 'files']);
 
