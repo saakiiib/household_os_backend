@@ -79,6 +79,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
         Route::patch('tasks/{task_id}', [TasksController::class, 'update']);
         Route::delete('tasks/{task_id}', [TasksController::class, 'destroy']);
         Route::patch('tasks/{task_id}/complete', [TasksController::class, 'complete']);
+        Route::patch('tasks/{task_id}/start', [TasksController::class, 'startInProgress']);
 
         // Documents
         Route::get('documents', [DocumentsController::class, 'index']);

@@ -190,6 +190,40 @@ class TasksController extends Controller
     }
 
     /**
+     * PATCH /api/households/{household_id}/tasks/{task_id}/start
+     * Move a task from pending to in_progress.
+     */
+    public function startInProgress(Request $request, $household_id, $task_id)
+    {
+        $task = Task::where('household_id', $household_id)->findOrFail($task_id);
+
+        // Only assigned user can start the task
+        if ($task->assigned_user_id !== Auth::id()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not assigned to this task.',
+            ], 403);
+        }
+
+        if ($task->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only pending tasks can be started.',
+            ], 409);
+        }
+
+        $task->update(['status' => 'in_progress']);
+
+        $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task started',
+            'data' => $this->formatTask($task),
+        ]);
+    }
+
+    /**
      * PATCH /api/households/{household_id}/tasks/{task_id}/complete
      * Mark a task as completed.
      */
@@ -214,13 +248,69 @@ class TasksController extends Controller
 
         $task->update(['status' => 'completed', 'completed_at' => now()]);
 
+        // Auto-create next instance for recurring tasks
+        $newTask = null;
+        if ($task->task_type === 'recurring' && $task->frequency && $task->due_date) {
+            $nextDueDate = $this->calculateNextDueDate($task->due_date, $task->frequency);
+
+            $newTask = Task::create([
+                'household_id'      => $household_id,
+                'created_by_user_id' => $task->created_by_user_id,
+                'assigned_user_id'  => $task->assigned_user_id,
+                'title'             => $task->title,
+                'description'       => $task->description,
+                'task_type'         => $task->task_type,
+                'priority'          => $task->priority,
+                'frequency'         => $task->frequency,
+                'due_date'          => $nextDueDate,
+                'notes'             => $task->notes,
+                'status'            => 'pending',
+            ]);
+
+            $newTask->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
+        }
+
         $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
 
         return response()->json([
             'success' => true,
             'message' => 'Task marked as complete',
             'data' => $this->formatTask($task),
+            'next_task' => $newTask ? $this->formatTask($newTask) : null,
         ]);
+    }
+
+    private function calculateNextDueDate(string $currentDueDate, string $frequency): string
+    {
+        $date = new \DateTime($currentDueDate);
+
+        switch ($frequency) {
+            case 'daily':
+                $date->modify('+1 day');
+                break;
+            case 'weekly':
+                $date->modify('+7 days');
+                break;
+            case 'biweekly':
+                $date->modify('+14 days');
+                break;
+            case 'monthly':
+                $day = (int) $date->format('d');
+                $date->modify('+1 month');
+                // If the original day exceeded the new month's last day, use the last day
+                $maxDay = (int) $date->format('t');
+                if ($day > $maxDay) {
+                    $date->setDate((int) $date->format('Y'), (int) $date->format('m'), $maxDay);
+                } else {
+                    $date->setDate((int) $date->format('Y'), (int) $date->format('m'), $day);
+                }
+                break;
+            case 'yearly':
+                $date->modify('+1 year');
+                break;
+        }
+
+        return $date->format('Y-m-d');
     }
 
     private function formatTask(Task $task): array
