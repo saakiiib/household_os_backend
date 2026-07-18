@@ -78,7 +78,10 @@ class TasksController extends Controller
             'task_type'         => 'required|in:one-time,recurring',
             'priority'          => 'sometimes|in:low,medium,high',
             'frequency'         => 'nullable|required_if:task_type,recurring|in:daily,weekly,monthly',
-            'due_date'          => 'nullable|date',
+            'due_date'          => 'required|date',
+            'due_time'          => 'nullable|date_format:H:i',
+            'reminder_before'   => 'nullable|in:15_minutes,1_hour,1_day,3_days,1_week',
+            'repeat'            => 'nullable|in:does_not_repeat,daily,weekly,monthly',
             'notes'             => 'nullable|string|max:2000',
             'assigned_user_id'  => 'required|integer|exists:users,id',
         ]);
@@ -101,11 +104,16 @@ class TasksController extends Controller
             'priority'          => $request->priority ?? 'medium',
             'frequency'         => $request->frequency,
             'due_date'          => $request->due_date,
+            'due_time'          => $request->due_time,
+            'reminder_before'   => $request->reminder_before,
+            'repeat'            => $request->repeat ?? 'does_not_repeat',
             'notes'             => $request->notes,
             'status'            => 'pending',
         ]);
 
         $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
+
+        ActivityController::log($household_id, Auth::id(), 'task', $task->id, 'created', 'Task created');
 
         return response()->json([
             'success' => true,
@@ -150,7 +158,10 @@ class TasksController extends Controller
             'priority'          => 'sometimes|in:low,medium,high',
             'status'            => 'sometimes|in:pending,in_progress,completed',
             'frequency'         => 'nullable|in:daily,weekly,monthly',
-            'due_date'          => 'nullable|date',
+            'due_date'          => 'sometimes|date',
+            'due_time'          => 'nullable|date_format:H:i',
+            'reminder_before'   => 'nullable|in:15_minutes,1_hour,1_day,3_days,1_week',
+            'repeat'            => 'nullable|in:does_not_repeat,daily,weekly,monthly',
             'notes'             => 'nullable|string|max:2000',
             'assigned_user_id'  => 'sometimes|integer|exists:users,id',
         ]);
@@ -165,7 +176,7 @@ class TasksController extends Controller
 
         $task->update($request->only([
             'title', 'description', 'task_type', 'priority', 'status',
-            'frequency', 'due_date', 'notes', 'assigned_user_id',
+            'frequency', 'due_date', 'due_time', 'reminder_before', 'repeat', 'notes', 'assigned_user_id',
         ]));
 
         // Handle completion
@@ -174,6 +185,8 @@ class TasksController extends Controller
         }
 
         $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
+
+        ActivityController::log($household_id, Auth::id(), 'task', $task->id, 'updated', 'Task updated');
 
         return response()->json([
             'success' => true,
@@ -240,6 +253,8 @@ class TasksController extends Controller
 
         $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
 
+        ActivityController::log($household_id, Auth::id(), 'task', $task->id, 'started', 'Task started');
+
         return response()->json([
             'success' => true,
             'message' => 'Task started',
@@ -272,10 +287,19 @@ class TasksController extends Controller
 
         $task->update(['status' => 'completed', 'completed_at' => now()]);
 
-        // Auto-create next instance for recurring tasks
+        ActivityController::log($household_id, Auth::id(), 'task', $task->id, 'completed', 'Task completed');
+
+        // Auto-create next instance for recurring tasks (using task_type OR repeat field)
         $newTask = null;
-        if ($task->task_type === 'recurring' && $task->frequency && $task->due_date) {
-            $nextDueDate = $this->calculateNextDueDate($task->due_date, $task->frequency);
+        $repeatFrequency = null;
+        if ($task->repeat && $task->repeat !== 'does_not_repeat' && $task->due_date) {
+            $repeatFrequency = $task->repeat;
+        } elseif ($task->task_type === 'recurring' && $task->frequency && $task->due_date) {
+            $repeatFrequency = $task->frequency;
+        }
+
+        if ($repeatFrequency) {
+            $nextDueDate = $this->calculateNextDueDate($task->due_date, $repeatFrequency);
 
             $newTask = Task::create([
                 'household_id'      => $household_id,
@@ -288,11 +312,16 @@ class TasksController extends Controller
                 'priority'          => $task->priority,
                 'frequency'         => $task->frequency,
                 'due_date'          => $nextDueDate,
+                'due_time'          => $task->due_time,
+                'reminder_before'   => $task->reminder_before,
+                'repeat'            => $task->repeat,
                 'notes'             => $task->notes,
                 'status'            => 'pending',
             ]);
 
             $newTask->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
+
+            ActivityController::log($household_id, Auth::id(), 'task', $newTask->id, 'repeated', 'Task repeated');
         }
 
         $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
@@ -350,6 +379,10 @@ class TasksController extends Controller
             'status'           => $task->status,
             'frequency'        => $task->frequency,
             'due_date'         => $task->due_date instanceof \DateTimeInterface ? $task->due_date->format('Y-m-d') : $task->due_date,
+            'due_date_formatted' => $task->due_date instanceof \DateTimeInterface ? $task->due_date->format('d-m-y') : $task->due_date,
+            'due_time'         => $task->due_time,
+            'reminder_before'  => $task->reminder_before,
+            'repeat'           => $task->repeat ?? 'does_not_repeat',
             'completed_at'     => $task->completed_at instanceof \DateTimeInterface ? $task->completed_at->toIso8601String() : $task->completed_at,
             'notes'            => $task->notes,
             'is_overdue'       => $task->is_overdue,

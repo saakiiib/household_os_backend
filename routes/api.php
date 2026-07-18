@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\TasksController;
 use App\Http\Controllers\Api\DocumentsController;
 use App\Http\Controllers\Api\RenewalsController;
+use App\Http\Controllers\Api\ActivityController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -71,6 +72,9 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
             Route::patch('members/{member_id}/approve', [MembersController::class, 'approveMember']);
             Route::patch('members/{member_id}/reject', [MembersController::class, 'rejectMember']);
         });
+
+        // Activity Log
+        Route::get('activities', [ActivityController::class, 'index']);
 
         // Tasks
         Route::get('tasks', [TasksController::class, 'index']);
