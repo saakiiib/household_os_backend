@@ -14,7 +14,17 @@ class Renewal extends Model
     protected $casts = [
         'due_date' => 'date',
         'amount' => 'decimal:2',
-        'notify_days_before' => 'integer',
+    ];
+
+    const CATEGORIES = [
+        'home_insurance',
+        'vehicles',
+        'identity',
+        'finance',
+        'utilities',
+        'medical',
+        'emergency',
+        'other',
     ];
 
     public function household()
@@ -27,6 +37,11 @@ class Renewal extends Model
         return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
+    public function vehicle()
+    {
+        return $this->belongsTo(Vehicle::class);
+    }
+
     public function parent()
     {
         return $this->belongsTo(Renewal::class, 'parent_renewal_id');
@@ -37,19 +52,19 @@ class Renewal extends Model
         return $this->hasMany(Renewal::class, 'parent_renewal_id');
     }
 
-    public function document()
+    public function vehicleServices()
     {
-        return $this->belongsTo(Document::class);
-    }
-
-    public function getIsRenewableAttribute(): bool
-    {
-        return $this->status === 'completed' || $this->is_overdue;
+        return $this->hasMany(RenewalVehicleService::class);
     }
 
     public function getIsOverdueAttribute(): bool
     {
         return $this->due_date && $this->due_date->isPast() && $this->status !== 'completed';
+    }
+
+    public function getIsRenewableAttribute(): bool
+    {
+        return $this->status === 'completed' || $this->is_overdue;
     }
 
     public function getDaysUntilDueAttribute(): ?int

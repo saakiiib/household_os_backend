@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Renewal;
+use App\Models\RenewalVehicleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -16,16 +17,18 @@ class RenewalsController extends Controller
      */
     public function index(Request $request, $household_id)
     {
-        $query = Renewal::with(['createdBy:id,first_name,last_name,email,avatar'])
+        $query = Renewal::with(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,brand,model_name', 'vehicleServices'])
             ->where('household_id', $household_id);
 
-        // Text search — title, description, category
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhere('category', 'like', "%{$search}%");
+                  ->orWhere('category', 'like', "%{$search}%")
+                  ->orWhereHas('vehicle', function ($vq) use ($search) {
+                      $vq->where('brand', 'like', "%{$search}%")
+                        ->orWhere('model_name', 'like', "%{$search}%");
+                  });
             });
         }
 
@@ -33,18 +36,12 @@ class RenewalsController extends Controller
             $query->where('status', $request->status);
         }
 
-        if ($request->filled('frequency')) {
-            $query->where('frequency', $request->frequency);
+        if ($request->filled('renewal_type')) {
+            $query->where('renewal_type', $request->renewal_type);
         }
 
-        if ($request->filled('due_date_from')) {
-            $query->where('due_date', '>=', $request->due_date_from);
-        }
-        if ($request->filled('due_date_to')) {
-            $query->where('due_date', '<=', $request->due_date_to);
-        }
-
-        $renewals = $query->orderBy('due_date', 'asc')->get()
+        $renewals = $query->orderByRaw("FIELD(status, 'pending', 'completed')")
+            ->orderBy('due_date', 'asc')->get()
             ->map(fn($renewal) => $this->formatRenewal($renewal));
 
         return response()->json([
@@ -58,16 +55,23 @@ class RenewalsController extends Controller
      */
     public function store(Request $request, $household_id)
     {
-        $validator = Validator::make($request->all(), [
-            'title'               => 'required|string|max:255',
-            'description'         => 'nullable|string|max:2000',
-            'due_date'            => 'required|date',
-            'frequency'           => 'sometimes|in:monthly,quarterly,annual',
-            'amount'              => 'nullable|numeric|min:0',
-            'category'            => 'nullable|string|max:255',
-            'notes'               => 'nullable|string|max:2000',
-            'notify_days_before'  => 'nullable|integer|min:1',
-        ]);
+        $baseRules = [
+            'title'             => 'required|string|max:255',
+            'renewal_type'      => 'required|in:standard,vehicle',
+            'vehicle_id'        => 'required_if:renewal_type,vehicle|nullable|exists:vehicles,id',
+            'category'          => 'nullable|in:' . implode(',', Renewal::CATEGORIES),
+            'frequency'         => 'required|in:monthly,quarterly,annual',
+            'due_date'          => 'required_if:renewal_type,standard|nullable|date',
+            'amount'            => 'nullable|numeric|min:0',
+            'reminder_before'   => 'nullable|in:30_days,14_days,7_days,3_days',
+            'notes'             => 'nullable|string|max:2000',
+            'vehicle_services'  => 'required_if:renewal_type,vehicle|nullable|array',
+            'vehicle_services.*.service_type' => 'required_with:vehicle_services|in:mot,road_tax,insurance,annual_service',
+            'vehicle_services.*.service_date' => 'required_with:vehicle_services|date',
+            'vehicle_services.*.service_amount' => 'nullable|numeric|min:0',
+        ];
+
+        $validator = Validator::make($request->all(), $baseRules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -77,21 +81,44 @@ class RenewalsController extends Controller
             ], 422);
         }
 
-        $renewal = Renewal::create([
-            'household_id'       => $household_id,
-            'created_by_user_id' => Auth::id(),
-            'title'              => $request->title,
-            'description'        => $request->description,
-            'due_date'           => $request->due_date,
-            'frequency'          => $request->frequency ?? 'annual',
-            'amount'             => $request->amount,
-            'category'           => $request->category,
-            'notes'              => $request->notes,
-            'notify_days_before' => $request->notify_days_before,
-            'status'             => 'pending',
-        ]);
+        DB::beginTransaction();
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar']);
+        try {
+            $renewal = Renewal::create([
+                'household_id'       => $household_id,
+                'created_by_user_id' => Auth::id(),
+                'renewal_type'       => $request->renewal_type,
+                'vehicle_id'         => $request->vehicle_id,
+                'title'              => $request->title,
+                'category'           => $request->category,
+                'frequency'          => $request->frequency,
+                'due_date'           => $request->due_date,
+                'amount'             => $request->amount,
+                'reminder_before'   => $request->reminder_before,
+                'notes'             => $request->notes,
+                'status'             => 'pending',
+            ]);
+
+            if ($request->renewal_type === 'vehicle' && $request->has('vehicle_services')) {
+                foreach ($request->vehicle_services as $service) {
+                    $renewal->vehicleServices()->create([
+                        'service_type'   => $service['service_type'],
+                        'service_date'   => $service['service_date'],
+                        'service_amount' => $service['service_amount'] ?? null,
+                    ]);
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create renewal: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,brand,model_name', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -107,9 +134,10 @@ class RenewalsController extends Controller
     {
         $renewal = Renewal::with([
                 'createdBy:id,first_name,last_name,email,avatar',
+                'vehicle:id,brand,model_name',
+                'vehicleServices',
                 'parent:id,title,due_date,status,amount',
                 'children:id,title,due_date,status,amount',
-                'document:id,title,category',
             ])
             ->where('household_id', $household_id)
             ->findOrFail($renewal_id);
@@ -128,15 +156,18 @@ class RenewalsController extends Controller
         $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
 
         $validator = Validator::make($request->all(), [
-            'title'               => 'sometimes|string|max:255',
-            'description'         => 'nullable|string|max:2000',
-            'due_date'            => 'sometimes|date',
-            'frequency'           => 'sometimes|in:monthly,quarterly,annual',
-            'amount'              => 'nullable|numeric|min:0',
-            'category'            => 'nullable|string|max:255',
-            'status'              => 'sometimes|in:pending,completed',
-            'notes'               => 'nullable|string|max:2000',
-            'notify_days_before'  => 'nullable|integer|min:1',
+            'title'             => 'sometimes|string|max:255',
+            'category'          => 'nullable|in:' . implode(',', Renewal::CATEGORIES),
+            'frequency'         => 'sometimes|in:monthly,quarterly,annual',
+            'due_date'          => 'sometimes|date',
+            'amount'            => 'nullable|numeric|min:0',
+            'reminder_before'   => 'nullable|in:30_days,14_days,7_days,3_days',
+            'notes'             => 'nullable|string|max:2000',
+            'status'            => 'sometimes|in:pending,completed',
+            'vehicle_services'  => 'nullable|array',
+            'vehicle_services.*.service_type' => 'required_with:vehicle_services|in:mot,road_tax,insurance,annual_service',
+            'vehicle_services.*.service_date' => 'required_with:vehicle_services|date',
+            'vehicle_services.*.service_amount' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -147,11 +178,34 @@ class RenewalsController extends Controller
             ], 422);
         }
 
-        $renewal->update($request->only([
-            'title', 'description', 'due_date', 'frequency', 'amount', 'category', 'status', 'notes', 'notify_days_before',
-        ]));
+        DB::beginTransaction();
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar']);
+        try {
+            $renewal->update($request->only([
+                'title', 'category', 'frequency', 'due_date', 'amount', 'reminder_before', 'notes', 'status',
+            ]));
+
+            if ($request->has('vehicle_services')) {
+                $renewal->vehicleServices()->delete();
+                foreach ($request->vehicle_services as $service) {
+                    $renewal->vehicleServices()->create([
+                        'service_type'   => $service['service_type'],
+                        'service_date'   => $service['service_date'],
+                        'service_amount' => $service['service_amount'] ?? null,
+                    ]);
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update renewal: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,brand,model_name', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -190,7 +244,7 @@ class RenewalsController extends Controller
 
         $renewal->update(['status' => 'completed']);
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar']);
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,brand,model_name', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -201,17 +255,15 @@ class RenewalsController extends Controller
 
     /**
      * POST /api/households/{household_id}/renewals/{renewal_id}/renew
-     * Create a new renewal chained from the current one.
      */
     public function renew(Request $request, $household_id, $renewal_id)
     {
-        $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
+        $renewal = Renewal::with('vehicleServices')->where('household_id', $household_id)->findOrFail($renewal_id);
 
-        // Can only renew if completed or overdue
         if (!$renewal->is_renewable) {
             return response()->json([
                 'success' => false,
-                'message' => 'This renewal cannot be renewed yet. It must be completed or overdue.',
+                'message' => 'This renewal cannot be renewed yet.',
             ], 422);
         }
 
@@ -227,22 +279,45 @@ class RenewalsController extends Controller
             ], 422);
         }
 
-        $newRenewal = Renewal::create([
-            'household_id'       => $household_id,
-            'created_by_user_id' => Auth::id(),
-            'parent_renewal_id'  => $renewal->id,
-            'document_id'        => $renewal->document_id,
-            'title'              => $renewal->title,
-            'description'        => $renewal->description,
-            'due_date'           => $request->due_date,
-            'frequency'          => $renewal->frequency,
-            'amount'             => $renewal->amount,
-            'category'           => $renewal->category,
-            'notes'              => $renewal->notes,
-            'status'             => 'pending',
-        ]);
+        DB::beginTransaction();
 
-        $newRenewal->load(['createdBy:id,first_name,last_name,email,avatar']);
+        try {
+            $newRenewal = Renewal::create([
+                'household_id'       => $household_id,
+                'created_by_user_id' => Auth::id(),
+                'parent_renewal_id'  => $renewal->id,
+                'renewal_type'       => $renewal->renewal_type,
+                'vehicle_id'         => $renewal->vehicle_id,
+                'title'              => $renewal->title,
+                'category'           => $renewal->category,
+                'frequency'          => $renewal->frequency,
+                'due_date'           => $request->due_date,
+                'amount'             => $renewal->amount,
+                'reminder_before'   => $renewal->reminder_before,
+                'notes'             => $renewal->notes,
+                'status'             => 'pending',
+            ]);
+
+            if ($renewal->renewal_type === 'vehicle' && $renewal->vehicleServices->isNotEmpty()) {
+                foreach ($renewal->vehicleServices as $service) {
+                    $newRenewal->vehicleServices()->create([
+                        'service_type'   => $service->service_type,
+                        'service_date'   => $service->service_date,
+                        'service_amount' => $service->service_amount,
+                    ]);
+                }
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to renew: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        $newRenewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,brand,model_name', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -251,74 +326,42 @@ class RenewalsController extends Controller
         ], 201);
     }
 
-    /**
-     * POST /api/households/{household_id}/renewals/from-document/{document_id}
-     * Create a new renewal linked to a document.
-     */
-    public function createFromDocument(Request $request, $household_id, $document_id)
-    {
-        $document = \App\Models\Document::where('household_id', $household_id)->findOrFail($document_id);
-
-        $validator = Validator::make($request->all(), [
-            'due_date' => 'required|date',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $renewal = Renewal::create([
-            'household_id'       => $household_id,
-            'created_by_user_id' => Auth::id(),
-            'document_id'        => $document->id,
-            'title'              => $document->title,
-            'description'        => $document->description,
-            'due_date'           => $request->due_date,
-            'frequency'          => 'annual',
-            'category'           => $document->category,
-            'notes'              => null,
-            'status'             => 'pending',
-        ]);
-
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'document:id,title,category']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Renewal created from document',
-            'data' => $this->formatRenewal($renewal),
-        ], 201);
-    }
-
     private function formatRenewal(Renewal $renewal): array
     {
         return [
             'id'                => $renewal->id,
             'household_id'      => $renewal->household_id,
+            'renewal_type'      => $renewal->renewal_type,
+            'vehicle_id'        => $renewal->vehicle_id,
             'title'             => $renewal->title,
-            'description'       => $renewal->description,
-            'due_date'          => $renewal->due_date instanceof \DateTimeInterface ? $renewal->due_date->format('Y-m-d') : $renewal->due_date,
-            'frequency'         => $renewal->frequency,
-            'amount'            => $renewal->amount,
             'category'          => $renewal->category,
-            'status'            => $renewal->status,
+            'frequency'         => $renewal->frequency,
+            'due_date'          => $renewal->due_date instanceof \DateTimeInterface ? $renewal->due_date->format('Y-m-d') : $renewal->due_date,
+            'amount'            => $renewal->amount,
+            'reminder_before'   => $renewal->reminder_before,
             'notes'             => $renewal->notes,
-            'notify_days_before'=> $renewal->notify_days_before,
+            'status'            => $renewal->status,
             'is_overdue'        => $renewal->is_overdue,
             'is_renewable'      => $renewal->is_renewable,
             'days_until_due'    => $renewal->days_until_due,
             'parent_renewal_id' => $renewal->parent_renewal_id,
-            'document_id'       => $renewal->document_id,
             'created_by_user_id'=> $renewal->created_by_user_id,
             'created_by'        => $renewal->createdBy ? [
                 'id'    => $renewal->createdBy->id,
                 'name'  => $renewal->createdBy->name,
                 'email' => $renewal->createdBy->email,
-                'avatar'=> $renewal->createdBy->avatar,
             ] : null,
+            'vehicle'           => $renewal->vehicle ? [
+                'id'         => $renewal->vehicle->id,
+                'brand'      => $renewal->vehicle->brand,
+                'model_name' => $renewal->vehicle->model_name,
+            ] : null,
+            'vehicle_services'  => $renewal->vehicleServices->map(fn($s) => [
+                'id'             => $s->id,
+                'service_type'   => $s->service_type,
+                'service_date'   => $s->service_date instanceof \DateTimeInterface ? $s->service_date->format('Y-m-d') : $s->service_date,
+                'service_amount' => $s->service_amount,
+            ]),
             'parent'            => $renewal->parent ? [
                 'id'       => $renewal->parent->id,
                 'title'    => $renewal->parent->title,
@@ -333,11 +376,6 @@ class RenewalsController extends Controller
                 'status'   => $child->status,
                 'amount'   => $child->amount,
             ]),
-            'document'          => $renewal->document ? [
-                'id'       => $renewal->document->id,
-                'title'    => $renewal->document->title,
-                'category' => $renewal->document->category,
-            ] : null,
             'created_at'        => $renewal->created_at?->toIso8601String(),
             'updated_at'        => $renewal->updated_at?->toIso8601String(),
         ];
