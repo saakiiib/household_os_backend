@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\TasksController;
 use App\Http\Controllers\Api\DocumentsController;
 use App\Http\Controllers\Api\RenewalsController;
 use App\Http\Controllers\Api\ActivityController;
+use App\Http\Controllers\Api\VehiclesController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -106,5 +107,12 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
         Route::patch('renewals/{renewal_id}/complete', [RenewalsController::class, 'complete']);
         Route::post('renewals/{renewal_id}/renew', [RenewalsController::class, 'renew']);
         Route::post('renewals/from-document/{document_id}', [RenewalsController::class, 'createFromDocument']);
+
+        // Vehicles
+        Route::get('vehicles', [VehiclesController::class, 'index']);
+        Route::post('vehicles', [VehiclesController::class, 'store']);
+        Route::get('vehicles/{vehicle_id}', [VehiclesController::class, 'show']);
+        Route::patch('vehicles/{vehicle_id}', [VehiclesController::class, 'update']);
+        Route::delete('vehicles/{vehicle_id}', [VehiclesController::class, 'destroy']);
     });
 });
