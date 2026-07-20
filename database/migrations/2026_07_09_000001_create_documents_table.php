@@ -11,11 +11,11 @@ return new class extends Migration
         Schema::create('documents', function (Blueprint $table) {
             $table->id();
             $table->foreignId('household_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('assigned_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('created_by_user_id')->constrained('users');
             $table->string('title');
-            $table->string('category')->default('other'); // passport, insurance, school, medical, car, other
+            $table->string('category')->default('other'); // home_insurance, vehicles, identity, finance, utilities, medical, emergency, other
             $table->text('description')->nullable();
-            $table->date('due_date')->nullable(); // expiry date for normal docs, null for car
+            $table->date('due_date')->nullable();
             $table->timestamps();
 
             $table->index(['household_id', 'category']);

@@ -97,9 +97,6 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
         Route::delete('documents/{document_id}/files/{file_id}', [DocumentsController::class, 'deleteFile']);
         Route::get('documents/{document_id}/files/{file_id}/download', [DocumentsController::class, 'downloadFile']);
 
-        // Document items (car sub-items)
-        Route::patch('documents/{document_id}/items/{item_id}', [DocumentsController::class, 'updateItem']);
-
         // Renewals
         Route::get('renewals', [RenewalsController::class, 'index']);
         Route::post('renewals', [RenewalsController::class, 'store']);

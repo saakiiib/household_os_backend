@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Document;
 use App\Models\DocumentFile;
-use App\Models\DocumentItem;
 use App\Services\FileEncryptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,7 +25,7 @@ class DocumentsController extends Controller
      */
     public function index(Request $request, $household_id)
     {
-        $query = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'items', 'files'])
+        $query = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files'])
             ->where('household_id', $household_id);
 
         // Text search — title, description, category, created by name
@@ -65,21 +64,15 @@ class DocumentsController extends Controller
 
     /**
      * POST /api/households/{household_id}/documents
-     * Creates document + car items + files in a single DB transaction.
+     * Creates document + files in a single DB transaction.
      */
     public function store(Request $request, $household_id)
     {
-        // 1. Validate non-file fields
         $validator = Validator::make($request->all(), [
             'title'             => 'required|string|max:255',
-            'category'          => 'required|string|max:255',
+            'category'          => 'required|in:' . implode(',', Document::CATEGORIES),
             'description'       => 'nullable|string|max:2000',
             'due_date'          => 'nullable|date',
-            'items'             => 'nullable|array',
-            'items.*.item_type' => 'required_with:items|in:mot,service,road_tax,insurance',
-            'items.*.due_date'  => 'nullable|date',
-            'items.*.price'     => 'nullable|numeric|min:0',
-            'items.*.notes'     => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -90,13 +83,12 @@ class DocumentsController extends Controller
             ], 422);
         }
 
-        // 2. Get files and normalize to array (Flutter sends 1 file as single object)
+        // Get files and normalize to array
         $files = [];
         if ($request->hasFile('files')) {
             $raw = $request->file('files');
             $files = is_array($raw) ? $raw : [$raw];
 
-            // Validate each file
             foreach ($files as $i => $file) {
                 if (!$file instanceof \Illuminate\Http\UploadedFile) {
                     return response()->json([
@@ -134,7 +126,6 @@ class DocumentsController extends Controller
         DB::beginTransaction();
 
         try {
-            // 3. Create the document
             $document = Document::create([
                 'household_id'       => $household_id,
                 'created_by_user_id' => Auth::id(),
@@ -144,20 +135,6 @@ class DocumentsController extends Controller
                 'due_date'           => $request->due_date,
             ]);
 
-            // 4. If car category, create the 4 sub-items
-            if ($request->category === 'car' && $request->has('items') && is_array($request->items)) {
-                foreach ($request->items as $item) {
-                    $document->items()->create([
-                        'item_type' => $item['item_type'],
-                        'due_date'  => $item['due_date'] ?? null,
-                        'price'     => $item['price'] ?? null,
-                        'notes'     => $item['notes'] ?? null,
-                        'status'    => 'pending',
-                    ]);
-                }
-            }
-
-            // 5. If files attached, encrypt and store them
             foreach ($files as $file) {
                 $path = $this->fileService->encryptAndStore($file, 'documents');
                 $encryptedPaths[] = $path;
@@ -189,7 +166,7 @@ class DocumentsController extends Controller
             ], 500);
         }
 
-        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'items', 'files']);
+        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files']);
 
         return response()->json([
             'success' => true,
@@ -203,7 +180,7 @@ class DocumentsController extends Controller
      */
     public function show($household_id, $document_id)
     {
-        $document = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'items', 'files'])
+        $document = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files'])
             ->where('household_id', $household_id)
             ->findOrFail($document_id);
 
@@ -222,15 +199,9 @@ class DocumentsController extends Controller
 
         $validator = Validator::make($request->all(), [
             'title'             => 'sometimes|string|max:255',
-            'category'          => 'sometimes|string|max:255',
+            'category'          => 'sometimes|in:' . implode(',', Document::CATEGORIES),
             'description'       => 'nullable|string|max:2000',
             'due_date'          => 'nullable|date',
-            'items'             => 'nullable|array',
-            'items.*.id'        => 'nullable|integer',
-            'items.*.item_type' => 'required_with:items|in:mot,service,road_tax,insurance',
-            'items.*.due_date'  => 'nullable|date',
-            'items.*.price'     => 'nullable|numeric|min:0',
-            'items.*.notes'     => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -241,53 +212,11 @@ class DocumentsController extends Controller
             ], 422);
         }
 
-        DB::beginTransaction();
+        $document->update($request->only([
+            'title', 'category', 'description', 'due_date',
+        ]));
 
-        try {
-            $document->update($request->only([
-                'title', 'category', 'description', 'due_date',
-            ]));
-
-            // Update car items if provided
-            if ($request->has('items') && is_array($request->items)) {
-                foreach ($request->items as $itemData) {
-                    if (!empty($itemData['id'])) {
-                        // Update existing item
-                        $item = DocumentItem::where('id', $itemData['id'])
-                            ->where('document_id', $document->id)
-                            ->first();
-                        if ($item) {
-                            $item->update([
-                                'due_date' => $itemData['due_date'] ?? null,
-                                'price'    => $itemData['price'] ?? null,
-                                'notes'    => $itemData['notes'] ?? null,
-                            ]);
-                        }
-                    } else {
-                        // Create new item
-                        $document->items()->create([
-                            'item_type' => $itemData['item_type'],
-                            'due_date'  => $itemData['due_date'] ?? null,
-                            'price'     => $itemData['price'] ?? null,
-                            'notes'     => $itemData['notes'] ?? null,
-                            'status'    => 'pending',
-                        ]);
-                    }
-                }
-            }
-
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Document update failed: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to update document: ' . $e->getMessage(),
-            ], 500);
-        }
-
-        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'items', 'files']);
+        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files']);
 
         return response()->json([
             'success' => true,
@@ -306,12 +235,10 @@ class DocumentsController extends Controller
         DB::beginTransaction();
 
         try {
-            // Delete all associated files from disk
             foreach ($document->files as $file) {
                 $this->fileService->delete($file->file_path);
             }
 
-            // Delete from DB (cascades to items and files)
             $document->delete();
 
             DB::commit();
@@ -339,7 +266,6 @@ class DocumentsController extends Controller
     {
         $document = Document::where('household_id', $household_id)->findOrFail($document_id);
 
-        // 1. Get files and normalize to array
         if (!$request->hasFile('files')) {
             return response()->json([
                 'success' => false,
@@ -350,7 +276,6 @@ class DocumentsController extends Controller
         $raw = $request->file('files');
         $files = is_array($raw) ? $raw : [$raw];
 
-        // Validate each file
         foreach ($files as $i => $file) {
             if (!$file instanceof \Illuminate\Http\UploadedFile) {
                 return response()->json([
@@ -381,19 +306,6 @@ class DocumentsController extends Controller
             ], 422);
         }
 
-        // 2. Validate document_item if provided
-        if ($request->document_item_id) {
-            $item = DocumentItem::where('id', $request->document_item_id)
-                ->where('document_id', $document_id)
-                ->first();
-            if (!$item) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Document item not found for this document.',
-                ], 422);
-            }
-        }
-
         $uploadedFiles = [];
         $encryptedPaths = [];
 
@@ -406,7 +318,6 @@ class DocumentsController extends Controller
 
                 $docFile = DocumentFile::create([
                     'document_id'       => $document_id,
-                    'document_item_id'  => $request->document_item_id,
                     'file_path'         => $path,
                     'original_filename' => $file->getClientOriginalName(),
                     'mime_type'         => $file->getMimeType(),
@@ -498,42 +409,6 @@ class DocumentsController extends Controller
             ->header('Content-Disposition', 'inline; filename="' . $file->original_filename . '"');
     }
 
-    /**
-     * PATCH /api/households/{household_id}/documents/{document_id}/items/{item_id}
-     * Update a car sub-item (due_date, price, status, notes).
-     */
-    public function updateItem(Request $request, $household_id, $document_id, $item_id)
-    {
-        Document::where('household_id', $household_id)->findOrFail($document_id);
-
-        $item = DocumentItem::where('id', $item_id)
-            ->where('document_id', $document_id)
-            ->firstOrFail();
-
-        $validator = Validator::make($request->all(), [
-            'due_date' => 'sometimes|date',
-            'price'    => 'sometimes|numeric|min:0',
-            'status'   => 'sometimes|in:pending,completed',
-            'notes'    => 'nullable|string|max:1000',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $item->update($request->only(['due_date', 'price', 'status', 'notes']));
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Item updated successfully',
-            'data' => $this->formatItem($item),
-        ]);
-    }
-
     // ==================== FORMAT HELPERS ====================
 
     private function formatDocument(Document $doc): array
@@ -554,28 +429,9 @@ class DocumentsController extends Controller
             ] : null,
             'is_overdue'        => $doc->is_overdue,
             'days_until_due'    => $doc->days_until_due,
-            'items'             => $doc->items->map(fn($item) => $this->formatItem($item)),
             'files'             => $doc->files->map(fn($file) => $this->formatFile($file)),
             'created_at'        => $doc->created_at?->toIso8601String(),
             'updated_at'        => $doc->updated_at?->toIso8601String(),
-        ];
-    }
-
-    private function formatItem(DocumentItem $item): array
-    {
-        return [
-            'id'            => $item->id,
-            'document_id'   => $item->document_id,
-            'item_type'     => $item->item_type,
-            'due_date'      => $item->due_date instanceof \DateTimeInterface ? $item->due_date->format('Y-m-d') : $item->due_date,
-            'price'         => $item->price,
-            'status'        => $item->status,
-            'notes'         => $item->notes,
-            'is_overdue'    => $item->is_overdue,
-            'days_until_due'=> $item->days_until_due,
-            'files'         => $item->files->map(fn($f) => $this->formatFile($f)),
-            'created_at'    => $item->created_at?->toIso8601String(),
-            'updated_at'    => $item->updated_at?->toIso8601String(),
         ];
     }
 
@@ -584,7 +440,6 @@ class DocumentsController extends Controller
         return [
             'id'                => $file->id,
             'document_id'       => $file->document_id,
-            'document_item_id'  => $file->document_item_id,
             'original_filename' => $file->original_filename,
             'mime_type'         => $file->mime_type,
             'file_size'         => $file->file_size,

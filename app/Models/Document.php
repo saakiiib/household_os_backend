@@ -15,6 +15,17 @@ class Document extends Model
         'due_date' => 'date',
     ];
 
+    const CATEGORIES = [
+        'home_insurance',
+        'vehicles',
+        'identity',
+        'finance',
+        'utilities',
+        'medical',
+        'emergency',
+        'other',
+    ];
+
     public function household()
     {
         return $this->belongsTo(Household::class);
@@ -23,11 +34,6 @@ class Document extends Model
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
-    }
-
-    public function items()
-    {
-        return $this->hasMany(DocumentItem::class);
     }
 
     public function files()

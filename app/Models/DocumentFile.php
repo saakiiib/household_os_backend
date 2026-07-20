@@ -15,9 +15,4 @@ class DocumentFile extends Model
     {
         return $this->belongsTo(Document::class);
     }
-
-    public function documentItem()
-    {
-        return $this->belongsTo(DocumentItem::class);
-    }
 }

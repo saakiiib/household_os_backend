@@ -380,7 +380,7 @@ class TasksController extends Controller
             'frequency'        => $task->frequency,
             'due_date'         => $task->due_date instanceof \DateTimeInterface ? $task->due_date->format('Y-m-d') : $task->due_date,
             'due_date_formatted' => $task->due_date instanceof \DateTimeInterface ? $task->due_date->format('d-m-y') : $task->due_date,
-            'due_time'         => $task->due_time,
+            'due_time'         => $task->due_time instanceof \DateTimeInterface ? $task->due_time->format('H:i') : $task->due_time,
             'reminder_before'  => $task->reminder_before,
             'repeat'           => $task->repeat ?? 'does_not_repeat',
             'completed_at'     => $task->completed_at instanceof \DateTimeInterface ? $task->completed_at->toIso8601String() : $task->completed_at,

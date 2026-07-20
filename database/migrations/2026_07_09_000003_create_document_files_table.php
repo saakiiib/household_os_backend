@@ -11,7 +11,6 @@ return new class extends Migration
         Schema::create('document_files', function (Blueprint $table) {
             $table->id();
             $table->foreignId('document_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('document_item_id')->nullable()->constrained('document_items')->cascadeOnDelete();
             $table->string('file_path');
             $table->string('original_filename');
             $table->string('mime_type');
@@ -19,7 +18,6 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index('document_id');
-            $table->index('document_item_id');
         });
     }
 
