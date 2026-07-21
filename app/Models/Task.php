@@ -50,12 +50,54 @@ class Task extends Model
 
     public function getIsOverdueAttribute(): bool
     {
-        return $this->due_date && $this->due_date->isPast() && $this->status !== 'completed';
+        if (!$this->due_date || $this->status === 'completed') return false;
+
+        $now = now();
+        $dueDate = $this->due_date->copy()->startOfDay();
+        $today = $now->copy()->startOfDay();
+
+        // If due date is before today, it's overdue
+        if ($dueDate->lt($today)) return true;
+
+        // If due date is today, check the time too
+        if ($dueDate->eq($today) && $this->due_time) {
+            $dueTime = \Carbon\Carbon::parse($this->due_time);
+            $currentTime = $now->copy()->setTime($dueTime->hour, $dueTime->minute);
+            return $now->gt($currentTime);
+        }
+
+        return false;
+    }
+
+    public function getNeedsActionAttribute(): bool
+    {
+        if (!$this->due_date || $this->status === 'completed') return false;
+
+        $now = now();
+        $dueDate = $this->due_date->copy()->startOfDay();
+        $today = $now->copy()->startOfDay();
+
+        // If due date is before today (overdue), needs action
+        if ($dueDate->lt($today)) return true;
+
+        // If due date is today, needs action (check time)
+        if ($dueDate->eq($today)) {
+            if ($this->due_time) {
+                $dueTime = \Carbon\Carbon::parse($this->due_time);
+                $currentTime = $now->copy()->setTime($dueTime->hour, $dueTime->minute);
+                return $now->gte($currentTime);
+            }
+            return true; // Due today, no specific time - needs action
+        }
+
+        return false;
     }
 
     public function getDaysUntilDueAttribute(): ?int
     {
         if (!$this->due_date) return null;
-        return (int) now()->diffInDays($this->due_date, false);
+        $today = now()->startOfDay();
+        $due = $this->due_date->startOfDay();
+        return (int) $today->diffInDays($due, false);
     }
 }

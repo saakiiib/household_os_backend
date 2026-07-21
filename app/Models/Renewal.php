@@ -59,7 +59,16 @@ class Renewal extends Model
 
     public function getIsOverdueAttribute(): bool
     {
-        return $this->due_date && $this->due_date->isPast() && $this->status !== 'completed';
+        if (!$this->due_date || $this->status === 'completed') return false;
+        // Compare only dates, not time - overdue means due date was BEFORE today
+        return $this->due_date->toDateString() < now()->toDateString();
+    }
+
+    public function getNeedsActionAttribute(): bool
+    {
+        if (!$this->due_date || $this->status === 'completed') return false;
+        // Needs action if overdue OR due today
+        return $this->due_date->toDateString() <= now()->toDateString();
     }
 
     public function getIsRenewableAttribute(): bool
@@ -70,6 +79,9 @@ class Renewal extends Model
     public function getDaysUntilDueAttribute(): ?int
     {
         if (!$this->due_date) return null;
-        return (int) now()->diffInDays($this->due_date, false);
+        // Compare only dates - returns 0 if due today, negative if overdue
+        $today = now()->startOfDay();
+        $due = $this->due_date->startOfDay();
+        return (int) $today->diffInDays($due, false);
     }
 }
