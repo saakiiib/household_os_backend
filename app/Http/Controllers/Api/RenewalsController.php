@@ -81,6 +81,22 @@ class RenewalsController extends Controller
             ], 422);
         }
 
+        // Check if vehicle already has a pending renewal
+        if ($request->renewal_type === 'vehicle' && $request->vehicle_id) {
+            $existingPending = Renewal::where('household_id', $household_id)
+                ->where('vehicle_id', $request->vehicle_id)
+                ->where('renewal_type', 'vehicle')
+                ->where('status', 'pending')
+                ->exists();
+
+            if ($existingPending) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This vehicle already has a pending renewal. Complete or delete it first.',
+                ], 422);
+            }
+        }
+
         DB::beginTransaction();
 
         try {

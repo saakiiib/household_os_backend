@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Vehicle;
+use App\Models\Renewal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -85,9 +86,29 @@ class VehiclesController extends Controller
             ->where('household_id', $household_id)
             ->findOrFail($vehicle_id);
 
+        // Get latest renewal with vehicle services for this vehicle
+        $latestRenewal = Renewal::with('vehicleServices')
+            ->where('vehicle_id', $vehicle_id)
+            ->where('renewal_type', 'vehicle')
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        $data = $this->formatVehicle($vehicle);
+        $data['latest_renewal'] = $latestRenewal ? [
+            'id' => $latestRenewal->id,
+            'title' => $latestRenewal->title,
+            'status' => $latestRenewal->status,
+            'due_date' => $latestRenewal->due_date instanceof \DateTimeInterface ? $latestRenewal->due_date->format('Y-m-d') : $latestRenewal->due_date,
+            'services' => $latestRenewal->vehicleServices->map(fn($s) => [
+                'service_type' => $s->service_type,
+                'service_date' => $s->service_date instanceof \DateTimeInterface ? $s->service_date->format('Y-m-d') : $s->service_date,
+                'service_amount' => $s->service_amount,
+            ]),
+        ] : null;
+
         return response()->json([
             'success' => true,
-            'data' => $this->formatVehicle($vehicle),
+            'data' => $data,
         ]);
     }
 

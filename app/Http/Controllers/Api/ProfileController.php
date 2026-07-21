@@ -3,10 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\Invitation;
+use App\Models\Task;
+use App\Models\Document;
+use App\Models\DocumentFile;
+use App\Models\Renewal;
+use App\Models\RenewalVehicleService;
+use App\Models\Vehicle;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Intervention\Image\Facades\Image;
@@ -105,6 +114,8 @@ class ProfileController extends Controller
     /**
      * DELETE /api/profile
      * Delete account and all related data.
+     * If user is household creator → delete entire household and all data.
+     * If user is just a member → remove from household, unassign from tasks.
      */
     public function destroy(Request $request)
     {
@@ -114,33 +125,92 @@ class ProfileController extends Controller
 
         $user = Auth::user();
 
-        // Remove user from all households (set status to removed)
-        HouseholdMember::where('user_id', $user->id)->update(['status' => 'removed']);
+        DB::beginTransaction();
 
-        // Cancel all pending invitations sent by this user
-        Invitation::where('invited_by_user_id', $user->id)
-            ->where('status', 'pending')
-            ->update(['status' => 'cancelled']);
+        try {
+            // Find households where user is the creator
+            $createdHouseholds = Household::where('created_by_user_id', $user->id)->get();
 
-        // Delete avatar file
-        if ($user->avatar) {
-            $avatarPath = public_path($user->avatar);
-            if (File::exists($avatarPath)) {
-                File::delete($avatarPath);
+            foreach ($createdHouseholds as $household) {
+                $householdId = $household->id;
+
+                // Delete activity logs
+                ActivityLog::where('household_id', $householdId)->delete();
+
+                // Delete renewal vehicle services for household renewals
+                $renewalIds = Renewal::where('household_id', $householdId)->pluck('id');
+                RenewalVehicleService::whereIn('renewal_id', $renewalIds)->delete();
+                Renewal::where('household_id', $householdId)->delete();
+
+                // Delete vehicles
+                Vehicle::where('household_id', $householdId)->delete();
+
+                // Delete document files from storage, then documents
+                $documents = Document::where('household_id', $householdId)->with('files')->get();
+                foreach ($documents as $doc) {
+                    foreach ($doc->files as $file) {
+                        $filePath = public_path($file->file_path);
+                        if (File::exists($filePath)) {
+                            File::delete($filePath);
+                        }
+                    }
+                }
+                Document::where('household_id', $householdId)->delete();
+
+                // Delete tasks (and child tasks via cascade)
+                Task::where('household_id', $householdId)->delete();
+
+                // Delete invitations
+                Invitation::where('household_id', $householdId)->delete();
+
+                // Delete household members
+                HouseholdMember::where('household_id', $householdId)->delete();
+
+                // Delete the household
+                $household->delete();
             }
+
+            // For non-created households, just remove membership
+            HouseholdMember::where('user_id', $user->id)->update(['status' => 'removed']);
+
+            // Unassign user from tasks in other households
+            Task::where('assigned_user_id', $user->id)->update(['assigned_user_id' => null]);
+
+            // Cancel all pending invitations sent by this user
+            Invitation::where('invited_by_user_id', $user->id)
+                ->where('status', 'pending')
+                ->update(['status' => 'cancelled']);
+
+            // Delete avatar file
+            if ($user->avatar) {
+                $avatarPath = public_path($user->avatar);
+                if (File::exists($avatarPath)) {
+                    File::delete($avatarPath);
+                }
+            }
+
+            // Revoke all tokens
+            $user->tokens()->each(function ($token) {
+                $token->delete();
+            });
+
+            // Delete user
+            $user->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Account deleted successfully.',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Account deletion failed: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete account: ' . $e->getMessage(),
+            ], 500);
         }
-
-        // Revoke all tokens
-        $user->tokens()->each(function ($token) {
-            $token->delete();
-        });
-
-        // Delete user
-        $user->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Account deleted successfully.',
-        ]);
     }
 }
