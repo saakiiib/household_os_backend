@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\HouseholdMember;
 use App\Models\Task;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -115,6 +116,20 @@ class TasksController extends Controller
 
         ActivityController::log($household_id, Auth::id(), 'task', $task->id, 'created', 'Task created');
 
+        // Always send assignment notification
+        \Log::info("TASK STORE: Sending notification to user {$task->assigned_user_id} for task {$task->id}");
+        try {
+            app(NotificationService::class)->sendToUser(
+                $task->assigned_user_id,
+                'New task assigned',
+                'You have been assigned: ' . $task->title,
+                'task_assigned',
+                ['type' => 'task', 'id' => $task->id]
+            );
+        } catch (\Throwable $e) {
+            \Log::error("TASK STORE: Notification failed: " . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Task created successfully',
@@ -174,6 +189,8 @@ class TasksController extends Controller
             ], 422);
         }
 
+        $oldAssignedUserId = $task->assigned_user_id;
+
         $task->update($request->only([
             'title', 'description', 'task_type', 'priority', 'status',
             'frequency', 'due_date', 'due_time', 'reminder_before', 'repeat', 'notes', 'assigned_user_id',
@@ -185,6 +202,26 @@ class TasksController extends Controller
         }
 
         $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
+
+        // Send notification if assignee changed
+        \Log::info("TASK UPDATE: Checking notification for task {$task->id}, old_assigned={$oldAssignedUserId}, new_assigned=" . ($request->assigned_user_id ?? 'null'));
+
+        if ($request->has('assigned_user_id') && $request->assigned_user_id != $oldAssignedUserId) {
+            \Log::info("TASK UPDATE: Sending notification to user {$request->assigned_user_id}");
+            try {
+                app(NotificationService::class)->sendToUser(
+                    $request->assigned_user_id,
+                    'Task reassigned',
+                    'You have been assigned: ' . $task->title,
+                    'task_assigned',
+                    ['type' => 'task', 'id' => $task->id]
+                );
+            } catch (\Throwable $e) {
+                \Log::error("TASK UPDATE: Notification failed: " . $e->getMessage());
+            }
+        } else {
+            \Log::info("TASK UPDATE: No assignee change, skipping notification");
+        }
 
         ActivityController::log($household_id, Auth::id(), 'task', $task->id, 'updated', 'Task updated');
 

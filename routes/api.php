@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\DocumentsController;
 use App\Http\Controllers\Api\RenewalsController;
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\VehiclesController;
+use App\Http\Controllers\Api\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -114,4 +115,12 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
         Route::patch('vehicles/{vehicle_id}', [VehiclesController::class, 'update']);
         Route::delete('vehicles/{vehicle_id}', [VehiclesController::class, 'destroy']);
     });
+
+    // Notifications
+    Route::get('notifications', [NotificationController::class, 'index']);
+    Route::get('notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('notifications/{id}/read', [NotificationController::class, 'markRead']);
+    Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::post('fcm-token', [NotificationController::class, 'saveFcmToken']);
+    Route::delete('fcm-token', [NotificationController::class, 'deleteFcmToken']);
 });
