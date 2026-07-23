@@ -10,7 +10,15 @@ use App\Http\Controllers\Api\RenewalsController;
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\VehiclesController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\SubscriptionController;
 use Illuminate\Support\Facades\Route;
+
+/*
+|--------------------------------------------------------------------------
+| Public Routes
+|--------------------------------------------------------------------------
+*/
+Route::get('subscription/plans', [SubscriptionController::class, 'index']);
 
 /*
 |--------------------------------------------------------------------------
