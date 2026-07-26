@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'household.role' => App\Http\Middleware\HouseholdRole::class,
+            'subscription' => App\Http\Middleware\RequireSubscription::class,
             'throttle'       => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         ]);
     })

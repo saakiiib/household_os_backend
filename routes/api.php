@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\VehiclesController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\SubscriptionController;
+use App\Http\Controllers\Api\PaymentController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -19,6 +20,17 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::get('subscription/plans', [SubscriptionController::class, 'index']);
+
+// PayPal return URL (user redirected here after approving payment)
+Route::get('subscription/paypal-capture', function () {
+    return response()->json([
+        'message' => 'Payment approved. You can close this window and return to the app.',
+    ]);
+});
+
+// Payment webhooks (public, no auth)
+Route::post('subscription/stripe/webhook', [PaymentController::class, 'stripeWebhook']);
+Route::post('subscription/paypal/webhook', [PaymentController::class, 'paypalWebhook']);
 
 /*
 |--------------------------------------------------------------------------
@@ -131,4 +143,27 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     Route::post('notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('fcm-token', [NotificationController::class, 'saveFcmToken']);
     Route::delete('fcm-token', [NotificationController::class, 'deleteFcmToken']);
+
+    // Subscription & Payments
+    Route::get('subscription/current', [SubscriptionController::class, 'current']);
+    Route::post('subscription/checkout', [PaymentController::class, 'checkout']);
+    Route::post('subscription/cancel', [SubscriptionController::class, 'cancel']);
+    Route::get('subscription/history', [SubscriptionController::class, 'history']);
+    Route::post('subscription/paypal/capture', [PaymentController::class, 'paypalCapture']);
+    Route::post('subscription/stripe/confirm', [PaymentController::class, 'stripeConfirm']);
+});
+
+// Stripe return URLs (public, matched by WebView)
+Route::get('subscription/stripe/success', function (\Illuminate\Http\Request $request) {
+    $sessionId = $request->query('session_id');
+    return response()->json([
+        'message' => 'Payment successful. You can close this window.',
+        'session_id' => $sessionId,
+    ]);
+});
+
+Route::get('subscription/stripe/cancel', function () {
+    return response()->json([
+        'message' => 'Payment cancelled.',
+    ]);
 });

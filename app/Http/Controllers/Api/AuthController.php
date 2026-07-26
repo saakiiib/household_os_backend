@@ -356,6 +356,22 @@ class AuthController extends Controller
             ];
         });
 
+        // Get household subscription info (subscription is per-household, not per-user)
+        $subscription = $user->householdSubscription();
+        $subscriptionData = null;
+        if ($subscription) {
+            $subscription->load('plan');
+            $subscriptionData = [
+                'status' => $subscription->status,
+                'plan_name' => $subscription->plan?->name,
+                'trial_ends_at' => $subscription->trial_ends_at?->toIso8601String(),
+                'current_period_end' => $subscription->current_period_end?->toIso8601String(),
+                'days_remaining' => $subscription->daysRemaining(),
+                'is_active' => $subscription->isActive(),
+                'is_trial' => $subscription->isTrial(),
+            ];
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -366,6 +382,7 @@ class AuthController extends Controller
                 'avatar'     => $user->avatar,
                 'email_verified_at' => $user->email_verified_at,
                 'households' => $households,
+                'subscription' => $subscriptionData,
             ]
         ], 200);
     }

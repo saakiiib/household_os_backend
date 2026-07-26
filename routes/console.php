@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Send reminders daily at 8:00 AM
 Schedule::command('notifications:send-reminders')->dailyAt('08:00');
+
+// Check subscription expiry twice daily
+Schedule::command('subscription:check-expiry')->twiceDaily(8, 20);

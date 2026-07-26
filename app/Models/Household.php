@@ -62,4 +62,20 @@ class Household extends Model
     {
         return $this->hasMany(Invitation::class);
     }
+
+    /**
+     * Get the household's subscription (one per household).
+     */
+    public function subscription()
+    {
+        return $this->hasOne(Subscription::class);
+    }
+
+    /**
+     * Get all payments for this household.
+     */
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
 }

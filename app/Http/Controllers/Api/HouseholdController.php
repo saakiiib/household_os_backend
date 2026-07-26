@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\Invitation;
+use App\Models\Subscription;
+use App\Models\SubscriptionPlan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -88,6 +90,22 @@ class HouseholdController extends Controller
             'status' => 'active',
             'joined_at' => now(),
         ]);
+
+        // Create 1-month free trial on premium plan for this household
+        $premiumPlan = SubscriptionPlan::where('slug', 'household_premium')->first();
+        if ($premiumPlan) {
+            $now = now();
+            Subscription::create([
+                'user_id' => Auth::id(),
+                'household_id' => $household->id,
+                'subscription_plan_id' => $premiumPlan->id,
+                'status' => 'trial',
+                'trial_started_at' => $now,
+                'trial_ends_at' => $now->copy()->addMonth(),
+                'current_period_start' => $now,
+                'current_period_end' => $now->copy()->addMonth(),
+            ]);
+        }
 
         return response()->json([
             'success' => true,
