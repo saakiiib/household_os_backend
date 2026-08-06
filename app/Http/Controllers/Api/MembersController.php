@@ -7,6 +7,7 @@ use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\Invitation;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use App\Http\Requests\UpdateMemberRoleRequest;
 use Illuminate\Support\Facades\Auth;
@@ -480,6 +481,19 @@ class MembersController extends Controller
             'joined_at' => now(),
         ]);
 
+        // Send approval notification to the member
+        try {
+            NotificationService::sendToUser(
+                $targetMember->user_id,
+                'Welcome to the Family!',
+                'Your request to join ' . $household->name . ' has been approved.',
+                'member_approved',
+                ['household_id' => $household->id, 'household_name' => $household->name]
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send approval notification: ' . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Member approved successfully',
@@ -531,6 +545,19 @@ class MembersController extends Controller
             ->where('invited_email', User::find($userId)->email ?? '')
             ->where('status', 'accepted')
             ->delete();
+
+        // Send rejection notification to the member
+        try {
+            NotificationService::sendToUser(
+                $userId,
+                'Join Request Not Approved',
+                'Your request to join ' . $household->name . ' was not approved.',
+                'member_rejected',
+                ['household_id' => $household->id, 'household_name' => $household->name]
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send rejection notification: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,

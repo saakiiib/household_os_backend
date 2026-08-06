@@ -47,4 +47,16 @@ return [
         'mode' => env('PAYPAL_MODE', 'sandbox'),
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'android_client_id' => env('GOOGLE_ANDROID_CLIENT_ID'),
+        'ios_client_id' => env('GOOGLE_IOS_CLIENT_ID'),
+    ],
+
+    'apple' => [
+        'client_id' => env('APPLE_CLIENT_ID'),
+        'team_id'   => env('APPLE_TEAM_ID'),
+        'key_path'  => env('APPLE_KEY_PATH', storage_path('apple/AuthKey.p8')),
+    ],
+
 ];

@@ -22,8 +22,7 @@ class VehiclesController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('brand', 'like', "%{$search}%")
-                  ->orWhere('model_name', 'like', "%{$search}%")
+                $q->where('title', 'like', "%{$search}%")
                   ->orWhere('license_plate', 'like', "%{$search}%")
                   ->orWhereHas('createdBy', function ($uq) use ($search) {
                       $uq->where('first_name', 'like', "%{$search}%")
@@ -47,8 +46,7 @@ class VehiclesController extends Controller
     public function store(Request $request, $household_id)
     {
         $validator = Validator::make($request->all(), [
-            'brand'         => 'required|string|max:255',
-            'model_name'    => 'required|string|max:255',
+            'title'         => 'required|string|max:255',
             'license_plate' => 'nullable|string|max:255',
         ]);
 
@@ -63,8 +61,7 @@ class VehiclesController extends Controller
         $vehicle = Vehicle::create([
             'household_id'       => $household_id,
             'created_by_user_id' => Auth::id(),
-            'brand'              => $request->brand,
-            'model_name'         => $request->model_name,
+            'title'              => $request->title,
             'license_plate'      => $request->license_plate,
         ]);
 
@@ -120,8 +117,7 @@ class VehiclesController extends Controller
         $vehicle = Vehicle::where('household_id', $household_id)->findOrFail($vehicle_id);
 
         $validator = Validator::make($request->all(), [
-            'brand'         => 'sometimes|string|max:255',
-            'model_name'    => 'sometimes|string|max:255',
+            'title'         => 'sometimes|string|max:255',
             'license_plate' => 'nullable|string|max:255',
         ]);
 
@@ -133,7 +129,7 @@ class VehiclesController extends Controller
             ], 422);
         }
 
-        $vehicle->update($request->only(['brand', 'model_name', 'license_plate']));
+        $vehicle->update($request->only(['title', 'license_plate']));
 
         $vehicle->load(['createdBy:id,first_name,last_name,email,avatar']);
 
@@ -163,8 +159,7 @@ class VehiclesController extends Controller
         return [
             'id'               => $vehicle->id,
             'household_id'     => $vehicle->household_id,
-            'brand'            => $vehicle->brand,
-            'model_name'       => $vehicle->model_name,
+            'title'            => $vehicle->title,
             'license_plate'    => $vehicle->license_plate,
             'created_by_user_id' => $vehicle->created_by_user_id,
             'created_by'       => $vehicle->createdBy ? [

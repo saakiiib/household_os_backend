@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\SocialAuthController;
 use App\Http\Controllers\Api\HouseholdController;
 use App\Http\Controllers\Api\MembersController;
 use App\Http\Controllers\Api\ProfileController;
@@ -40,10 +41,16 @@ Route::post('subscription/paypal/webhook', [PaymentController::class, 'paypalWeb
 Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
+    Route::post('social/google', [SocialAuthController::class, 'google']);
+    Route::post('social/apple', [SocialAuthController::class, 'apple']);
     Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('reset-password', [AuthController::class, 'resetPassword']);
     Route::post('verify-email', [AuthController::class, 'verify']);
     Route::post('resend-verification', [AuthController::class, 'resendVerification']);
+
+    // Public invite code endpoints (no auth required)
+    Route::post('invite/preview', [AuthController::class, 'previewInviteCode']);
+    Route::post('invite/join', [AuthController::class, 'joinByInviteCode']);
 
     Route::middleware('auth:api')->group(function () {
         Route::get('user', [AuthController::class, 'user']);
@@ -72,6 +79,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     Route::delete('households/{id}', [HouseholdController::class, 'destroy']);
     Route::post('households/{id}/regenerate-invite', [HouseholdController::class, 'regenerateInvite']);
     Route::post('households/{id}/abandon', [HouseholdController::class, 'abandonHousehold']);
+    Route::post('households/leave', [HouseholdController::class, 'leave']);
 
     // Invitation acceptance
     Route::post('invitations/{token}/accept', [MembersController::class, 'acceptInvitation']);
@@ -127,6 +135,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
         Route::delete('renewals/{renewal_id}', [RenewalsController::class, 'destroy']);
         Route::patch('renewals/{renewal_id}/complete', [RenewalsController::class, 'complete']);
         Route::post('renewals/{renewal_id}/renew', [RenewalsController::class, 'renew']);
+        Route::get('renewals/{renewal_id}/download', [RenewalsController::class, 'download']);
 
         // Vehicles
         Route::get('vehicles', [VehiclesController::class, 'index']);

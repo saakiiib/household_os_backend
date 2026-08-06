@@ -8,7 +8,9 @@ use App\Models\RenewalVehicleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class RenewalsController extends Controller
 {
@@ -17,7 +19,7 @@ class RenewalsController extends Controller
      */
     public function index(Request $request, $household_id)
     {
-        $query = Renewal::with(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,brand,model_name', 'vehicleServices'])
+        $query = Renewal::with(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices'])
             ->where('household_id', $household_id);
 
         if ($request->filled('search')) {
@@ -26,8 +28,7 @@ class RenewalsController extends Controller
                 $q->where('title', 'like', "%{$search}%")
                   ->orWhere('category', 'like', "%{$search}%")
                   ->orWhereHas('vehicle', function ($vq) use ($search) {
-                      $vq->where('brand', 'like', "%{$search}%")
-                        ->orWhere('model_name', 'like', "%{$search}%");
+                      $vq->where('title', 'like', "%{$search}%");
                   });
             });
         }
@@ -69,6 +70,7 @@ class RenewalsController extends Controller
             'vehicle_services.*.service_type' => 'required_with:vehicle_services|in:mot,road_tax,insurance,annual_service',
             'vehicle_services.*.service_date' => 'required_with:vehicle_services|date',
             'vehicle_services.*.service_amount' => 'nullable|numeric|min:0',
+            'document'          => 'nullable|file|max:10240|mimes:pdf,jpg,jpeg,png,gif,webp,doc,docx',
         ];
 
         $validator = Validator::make($request->all(), $baseRules);
@@ -115,6 +117,19 @@ class RenewalsController extends Controller
                 'status'             => 'pending',
             ]);
 
+            // Handle single document upload (no encryption)
+            if ($request->hasFile('document')) {
+                $file = $request->file('document');
+                $filename = Str::random(32) . '.' . $file->getClientOriginalExtension();
+                $path = $file->storeAs('uploads/renewals', $filename);
+
+                $renewal->update([
+                    'document_file_path'     => $path,
+                    'document_original_name' => $file->getClientOriginalName(),
+                    'document_mime_type'     => $file->getMimeType(),
+                ]);
+            }
+
             if ($request->renewal_type === 'vehicle' && $request->has('vehicle_services')) {
                 foreach ($request->vehicle_services as $service) {
                     $renewal->vehicleServices()->create([
@@ -134,7 +149,7 @@ class RenewalsController extends Controller
             ], 500);
         }
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,brand,model_name', 'vehicleServices']);
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -150,7 +165,7 @@ class RenewalsController extends Controller
     {
         $renewal = Renewal::with([
                 'createdBy:id,first_name,last_name,email,avatar',
-                'vehicle:id,brand,model_name',
+                'vehicle:id,title',
                 'vehicleServices',
                 'parent:id,title,due_date,status,amount',
                 'children:id,title,due_date,status,amount',
@@ -184,6 +199,8 @@ class RenewalsController extends Controller
             'vehicle_services.*.service_type' => 'required_with:vehicle_services|in:mot,road_tax,insurance,annual_service',
             'vehicle_services.*.service_date' => 'required_with:vehicle_services|date',
             'vehicle_services.*.service_amount' => 'nullable|numeric|min:0',
+            'document'          => 'nullable|file|max:10240|mimes:pdf,jpg,jpeg,png,gif,webp,doc,docx',
+            'remove_document'   => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
@@ -200,6 +217,40 @@ class RenewalsController extends Controller
             $renewal->update($request->only([
                 'title', 'category', 'frequency', 'due_date', 'amount', 'reminder_before', 'notes', 'status',
             ]));
+
+            // Handle document removal
+            if ($request->boolean('remove_document') && $renewal->document_file_path) {
+                $fullPath = storage_path('app/' . $renewal->document_file_path);
+                if (file_exists($fullPath)) {
+                    unlink($fullPath);
+                }
+                $renewal->update([
+                    'document_file_path'     => null,
+                    'document_original_name' => null,
+                    'document_mime_type'     => null,
+                ]);
+            }
+
+            // Handle single document upload (no encryption)
+            if ($request->hasFile('document')) {
+                // Delete old file if replacing
+                if ($renewal->document_file_path) {
+                    $oldPath = storage_path('app/' . $renewal->document_file_path);
+                    if (file_exists($oldPath)) {
+                        unlink($oldPath);
+                    }
+                }
+
+                $file = $request->file('document');
+                $filename = Str::random(32) . '.' . $file->getClientOriginalExtension();
+                $path = $file->storeAs('uploads/renewals', $filename);
+
+                $renewal->update([
+                    'document_file_path'     => $path,
+                    'document_original_name' => $file->getClientOriginalName(),
+                    'document_mime_type'     => $file->getMimeType(),
+                ]);
+            }
 
             if ($request->has('vehicle_services')) {
                 $renewal->vehicleServices()->delete();
@@ -221,7 +272,7 @@ class RenewalsController extends Controller
             ], 500);
         }
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,brand,model_name', 'vehicleServices']);
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -236,12 +287,47 @@ class RenewalsController extends Controller
     public function destroy($household_id, $renewal_id)
     {
         $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
+
+        // Delete the file from disk
+        if ($renewal->document_file_path) {
+            $fullPath = storage_path('app/' . $renewal->document_file_path);
+            if (file_exists($fullPath)) {
+                unlink($fullPath);
+            }
+        }
+
         $renewal->delete();
 
         return response()->json([
             'success' => true,
             'message' => 'Renewal deleted successfully',
         ]);
+    }
+
+    /**
+     * GET /api/households/{household_id}/renewals/{renewal_id}/download
+     */
+    public function download($household_id, $renewal_id)
+    {
+        $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
+
+        if (!$renewal->document_file_path) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No document attached to this renewal',
+            ], 404);
+        }
+
+        $fullPath = storage_path('app/' . $renewal->document_file_path);
+
+        if (!file_exists($fullPath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Document file not found on server',
+            ], 404);
+        }
+
+        return response()->download($fullPath, $renewal->document_original_name);
     }
 
     /**
@@ -260,7 +346,7 @@ class RenewalsController extends Controller
 
         $renewal->update(['status' => 'completed']);
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,brand,model_name', 'vehicleServices']);
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -333,7 +419,7 @@ class RenewalsController extends Controller
             ], 500);
         }
 
-        $newRenewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,brand,model_name', 'vehicleServices']);
+        $newRenewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -368,9 +454,8 @@ class RenewalsController extends Controller
                 'email' => $renewal->createdBy->email,
             ] : null,
             'vehicle'           => $renewal->vehicle ? [
-                'id'         => $renewal->vehicle->id,
-                'brand'      => $renewal->vehicle->brand,
-                'model_name' => $renewal->vehicle->model_name,
+                'id'    => $renewal->vehicle->id,
+                'title' => $renewal->vehicle->title,
             ] : null,
             'vehicle_services'  => $renewal->vehicleServices->map(fn($s) => [
                 'id'             => $s->id,
@@ -378,6 +463,9 @@ class RenewalsController extends Controller
                 'service_date'   => $s->service_date instanceof \DateTimeInterface ? $s->service_date->format('Y-m-d') : $s->service_date,
                 'service_amount' => $s->service_amount,
             ]),
+            'has_document'      => $renewal->has_document,
+            'document_name'     => $renewal->document_original_name,
+            'document_type'     => $renewal->document_mime_type,
             'parent'            => $renewal->parent ? [
                 'id'       => $renewal->parent->id,
                 'title'    => $renewal->parent->title,

@@ -91,19 +91,21 @@ class HouseholdController extends Controller
             'joined_at' => now(),
         ]);
 
-        // Create 1-month free trial on premium plan for this household
+        // Create 3-month free trial on premium plan for this household
         $premiumPlan = SubscriptionPlan::where('slug', 'household_premium')->first();
         if ($premiumPlan) {
             $now = now();
+            $trialEnd = $now->copy()->addMonths(3);
             Subscription::create([
                 'user_id' => Auth::id(),
                 'household_id' => $household->id,
                 'subscription_plan_id' => $premiumPlan->id,
                 'status' => 'trial',
                 'trial_started_at' => $now,
-                'trial_ends_at' => $now->copy()->addMonth(),
+                'trial_ends_at' => $trialEnd,
                 'current_period_start' => $now,
-                'current_period_end' => $now->copy()->addMonth(),
+                'current_period_end' => $trialEnd,
+                'expires_at' => $trialEnd->copy()->addDays(3),
             ]);
         }
 
@@ -433,6 +435,45 @@ class HouseholdController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Household abandoned and deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Leave a household (regular members only).
+     * Does NOT delete the household — just removes the membership.
+     */
+    public function leave(Request $request)
+    {
+        $request->validate([
+            'household_id' => 'required|integer|exists:households,id',
+        ]);
+
+        $user = $request->user();
+        $householdId = $request->household_id;
+
+        $membership = HouseholdMember::where('user_id', $user->id)
+            ->where('household_id', $householdId)
+            ->first();
+
+        if (!$membership) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not a member of this household.',
+            ], 404);
+        }
+
+        if ($membership->role === 'owner') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Household owners cannot leave. Transfer ownership first.',
+            ], 403);
+        }
+
+        $membership->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'You have left the household.',
         ]);
     }
 }

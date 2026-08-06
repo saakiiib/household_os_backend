@@ -16,6 +16,8 @@ class Renewal extends Model
         'amount' => 'decimal:2',
     ];
 
+    protected $appends = ['has_document'];
+
     const CATEGORIES = [
         'home_insurance',
         'vehicles',
@@ -83,5 +85,22 @@ class Renewal extends Model
         $today = now()->startOfDay();
         $due = $this->due_date->startOfDay();
         return (int) $today->diffInDays($due, false);
+    }
+
+    public function getHasDocumentAttribute(): bool
+    {
+        return !empty($this->document_file_path);
+    }
+
+    protected static function booted(): void
+    {
+        static::deleted(function (Renewal $renewal) {
+            if ($renewal->document_file_path) {
+                $fullPath = storage_path('app/' . $renewal->document_file_path);
+                if (file_exists($fullPath)) {
+                    unlink($fullPath);
+                }
+            }
+        });
     }
 }

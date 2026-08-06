@@ -7,11 +7,13 @@ use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
 use App\Models\Household;
 use App\Models\HouseholdMember;
+use App\Models\Invitation;
 use App\Models\User;
 use App\Notifications\VerifyEmail;
 use App\Notifications\PasswordResetMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 
@@ -399,6 +401,401 @@ class AuthController extends Controller
             'success' => true,
             'message' => 'Logged out successfully'
         ], 200);
+    }
+
+    /**
+     * Preview invitation details by code (public, no auth required).
+     * Returns household name, role, and whether account is needed.
+     */
+    public function previewInviteCode(Request $request)
+    {
+        $request->validate([
+            'code' => 'required|string|min:6|max:8',
+        ]);
+
+        $code = strtoupper(trim($request->code));
+
+        // Try 6-digit invitation code first
+        if (strlen($code) == 6 && ctype_digit($code)) {
+            $invitation = Invitation::with('household')
+                ->where('token', $code)
+                ->where('status', 'pending')
+                ->first();
+
+            if (!$invitation || !$invitation->isValid()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid or expired invitation code.',
+                ], 404);
+            }
+
+            $existingUser = User::where('email', $invitation->invited_email)->first();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'type' => 'invitation',
+                    'household_name' => $invitation->household->name,
+                    'role' => $invitation->role,
+                    'invited_email' => $invitation->invited_email,
+                    'account_exists' => $existingUser !== null,
+                ],
+            ]);
+        }
+
+        // Try 8-char household invite code
+        $household = Household::where('invite_code', $code)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$household) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid invite code.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'type' => 'household',
+                'household_name' => $household->name,
+                'role' => 'member',
+                'invited_email' => null,
+                'account_exists' => false,
+            ],
+        ]);
+    }
+
+    /**
+     * Join a household by invite code (public, no auth required).
+     * Auto-creates account from invitation email data if account doesn't exist.
+     * Returns auth token and user data.
+     */
+    public function joinByInviteCode(Request $request)
+    {
+        $request->validate([
+            'code' => 'required|string|min:6|max:8',
+            'password' => 'required|string|min:8|max:128',
+        ], [
+            'code.required' => 'Invite code is required.',
+            'password.required' => 'Password is required.',
+            'password.min' => 'Password must be at least 8 characters.',
+        ]);
+
+        $code = strtoupper(trim($request->code));
+
+        // Try 6-digit invitation code first
+        if (strlen($code) == 6 && ctype_digit($code)) {
+            return $this->joinByInvitationCode($request, $code);
+        }
+
+        // Try 8-char household invite code
+        return $this->joinByHouseholdCode($request, $code);
+    }
+
+    private function joinByInvitationCode(Request $request, string $code)
+    {
+        $invitation = Invitation::with('household')
+            ->where('token', $code)
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$invitation || !$invitation->isValid()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid or expired invitation code.',
+            ], 404);
+        }
+
+        // Check household is still active
+        if ($invitation->household->status !== 'active') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This household is no longer active.',
+            ], 410);
+        }
+
+        $email = $invitation->invited_email;
+        $user = User::where('email', $email)->first();
+        $isNewUser = false;
+
+        if ($user) {
+            // Existing user — verify password
+            if (!Hash::check($request->password, $user->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Incorrect password. Please try again.',
+                ], 422);
+            }
+
+            // Check if user already belongs to a DIFFERENT household
+            $existingMembership = HouseholdMember::where('user_id', $user->id)
+                ->where('status', 'active')
+                ->where('household_id', '!=', $invitation->household_id)
+                ->first();
+
+            if ($existingMembership) {
+                $otherHousehold = $existingMembership->household;
+                $tempToken = $user->createToken('HouseholdOS')->accessToken;
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You are already a member of another household. Leave it first before joining.',
+                    'error_code' => 'ALREADY_IN_HOUSEHOLD',
+                    'data' => [
+                        'current_household_id' => $otherHousehold->id,
+                        'current_household_name' => $otherHousehold->name,
+                        'current_role' => $existingMembership->role,
+                        'leave_first' => true,
+                        'token' => $tempToken,
+                        'token_type' => 'Bearer',
+                        'user' => [
+                            'id' => $user->id,
+                            'email' => $user->email,
+                            'first_name' => $user->first_name,
+                            'last_name' => $user->last_name,
+                        ],
+                    ],
+                ], 409);
+            }
+        } else {
+            // New user — require names
+            if (empty($request->first_name) || empty($request->last_name)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'First name and last name are required for new accounts.',
+                ], 422);
+            }
+
+            $user = User::create([
+                'email' => $email,
+                'password' => $request->password,
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]);
+            $isNewUser = true;
+        }
+
+        // Check if already pending/active in THIS household
+        $existingPending = HouseholdMember::where('household_id', $invitation->household_id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if ($existingPending) {
+            if ($existingPending->status === 'active') {
+                // Already a member — just log them in
+                $token = $user->createToken('HouseholdOS')->accessToken;
+                return response()->json([
+                    'success' => true,
+                    'message' => 'You are already a member of this household.',
+                    'data' => [
+                        'user' => [
+                            'id' => $user->id,
+                            'email' => $user->email,
+                            'first_name' => $user->first_name,
+                            'last_name' => $user->last_name,
+                            'name' => $user->name,
+                        ],
+                        'household' => [
+                            'id' => $invitation->household->id,
+                            'name' => $invitation->household->name,
+                        ],
+                        'membership_status' => 'active',
+                        'token' => $token,
+                        'token_type' => 'Bearer',
+                        'is_new_user' => false,
+                    ]
+                ], 200);
+            }
+            // Update existing pending membership
+            $existingPending->update([
+                'role' => $invitation->role,
+                'status' => 'pending',
+                'joined_at' => now(),
+            ]);
+        } else {
+            // Create membership with pending status (requires admin approval)
+            HouseholdMember::create([
+                'household_id' => $invitation->household_id,
+                'user_id' => $user->id,
+                'role' => $invitation->role,
+                'status' => 'pending',
+                'joined_at' => now(),
+            ]);
+        }
+
+        // Update invitation
+        $invitation->update([
+            'status' => 'accepted',
+            'accepted_at' => now(),
+            'accepted_by_user_id' => $user->id,
+        ]);
+
+        // Send notification to household admins about new join request
+        $this->sendJoinRequestNotification($invitation->household, $user);
+
+        $token = $user->createToken('HouseholdOS')->accessToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Join request submitted. Waiting for approval from household admin.',
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'email' => $user->email,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'name' => $user->name,
+                    'email_verified_at' => $user->email_verified_at,
+                ],
+                'household' => [
+                    'id' => $invitation->household->id,
+                    'name' => $invitation->household->name,
+                ],
+                'membership_status' => 'pending',
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'is_new_user' => $isNewUser,
+            ]
+        ], 201);
+    }
+
+    private function joinByHouseholdCode(Request $request, string $code)
+    {
+        $household = Household::where('invite_code', $code)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$household) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid invite code.',
+            ], 404);
+        }
+
+        // For household codes, we need to create a temporary account
+        // since there's no email to match against
+        $email = strtolower(trim($request->first_name . '.' . $request->last_name . '@household.local'));
+
+        // Check if user already exists
+        $existingUser = User::where('email', $email)->first();
+        if ($existingUser) {
+            if (!Hash::check($request->password, $existingUser->password)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'An account with this name already exists. Please use a different name.',
+                ], 409);
+            }
+            $user = $existingUser;
+            $isNewUser = false;
+        } else {
+            $user = User::create([
+                'email' => $email,
+                'password' => $request->password,
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]);
+            $isNewUser = true;
+        }
+
+        // Check if user already belongs to a household
+        $existingActive = HouseholdMember::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->first();
+
+        if ($existingActive) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You already belong to a household. Leave your current household first.',
+            ], 409);
+        }
+
+        // Check if already pending in this household
+        $existingPending = HouseholdMember::where('household_id', $household->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if ($existingPending) {
+            if ($existingPending->status === 'active') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You are already a member of this household.',
+                ], 409);
+            }
+            $existingPending->update([
+                'role' => 'member',
+                'status' => 'pending',
+                'joined_at' => now(),
+            ]);
+        } else {
+            HouseholdMember::create([
+                'household_id' => $household->id,
+                'user_id' => $user->id,
+                'role' => 'member',
+                'status' => 'pending',
+                'joined_at' => now(),
+            ]);
+        }
+
+        // Send notification to household admins about new join request
+        $this->sendJoinRequestNotification($household, $user);
+
+        $token = $user->createToken('HouseholdOS')->accessToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Join request submitted. Waiting for approval from household admin.',
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'email' => $user->email,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'name' => $user->name,
+                    'email_verified_at' => $user->email_verified_at,
+                ],
+                'household' => [
+                    'id' => $household->id,
+                    'name' => $household->name,
+                ],
+                'membership_status' => 'pending',
+                'token' => $token,
+                'token_type' => 'Bearer',
+                'is_new_user' => $isNewUser,
+            ]
+        ], 201);
+    }
+
+    private function sendJoinRequestNotification(Household $household, User $newUser): void
+    {
+        try {
+            $adminMembers = HouseholdMember::where('household_id', $household->id)
+                ->where('role', 'admin')
+                ->where('status', 'active')
+                ->pluck('user_id')
+                ->toArray();
+
+            if (empty($adminMembers)) return;
+
+            $userName = $newUser->name ?? $newUser->email;
+
+            \App\Services\NotificationService::sendToUsers(
+                $adminMembers,
+                'New Join Request',
+                "{$userName} has requested to join {$household->name}.",
+                'join_request',
+                [
+                    'household_id' => $household->id,
+                    'user_id' => $newUser->id,
+                ]
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send join request notification: ' . $e->getMessage());
+        }
     }
 
     /**
