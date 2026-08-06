@@ -63,9 +63,7 @@ class StripeService
 
         $session = CheckoutSession::create([
             'customer' => $customer->id,
-            'automatic_payment_methods' => [
-                'enabled' => true,
-            ],
+            'payment_method_types' => ['card'],
             'line_items' => [
                 [
                     'price_data' => [
