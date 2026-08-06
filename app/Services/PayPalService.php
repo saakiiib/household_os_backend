@@ -244,11 +244,15 @@ class PayPalService
 
         if (!$payment) {
             Log::warning('PayPal payment not found for order', ['order_id' => $orderId]);
-            return;
+            throw new \Exception('Payment record not found for this order.');
         }
 
         $paymentType = $payment->metadata['payment_type'] ?? 'monthly';
         $plan = SubscriptionPlan::find($payment->subscription_plan_id);
+        if (!$plan) {
+            Log::error('PayPal subscription plan not found', ['plan_id' => $payment->subscription_plan_id]);
+            throw new \Exception('Subscription plan not found.');
+        }
         $householdId = $payment->household_id;
 
         // Find or create subscription for this household
@@ -281,6 +285,11 @@ class PayPalService
         $payment->update([
             'subscription_id' => $subscription->id,
             'status' => 'succeeded',
+        ]);
+
+        Log::info('PayPal activateFromCapture: success', [
+            'order_id' => $orderId,
+            'subscription_id' => $subscription->id,
         ]);
     }
 
