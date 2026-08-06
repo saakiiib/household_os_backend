@@ -133,9 +133,18 @@ class PaymentController extends Controller
             'order_id' => 'required|string',
         ]);
 
+        $user = $request->user();
+        if (!$user) {
+            \Log::warning('PaymentController@paypalCapture: user not authenticated');
+            return response()->json([
+                'success' => false,
+                'message' => 'User not authenticated. Please log in and try again.',
+            ]);
+        }
+
         try {
             $captureData = $this->paypal->captureOrder($request->order_id);
-            $this->paypal->activateFromCapture($request->user(), $request->order_id, $captureData);
+            $this->paypal->activateFromCapture($user, $request->order_id, $captureData);
 
             \Log::info('PaymentController@paypalCapture: success', ['order_id' => $request->order_id]);
 
@@ -152,8 +161,8 @@ class PaymentController extends Controller
             ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to capture payment: ' . $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -171,15 +180,25 @@ class PaymentController extends Controller
             'session_id' => 'required|string',
         ]);
 
-        try {
-            $stripe = $this->getStripe();
-            if (!$stripe) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Stripe is not available.',
-                ], 503);
-            }
+        $user = $request->user();
+        if (!$user) {
+            \Log::warning('PaymentController@stripeConfirm: user not authenticated');
+            return response()->json([
+                'success' => false,
+                'message' => 'User not authenticated. Please log in and try again.',
+            ]);
+        }
 
+        $stripe = $this->getStripe();
+        if (!$stripe) {
+            \Log::error('PaymentController@stripeConfirm: Stripe is not available');
+            return response()->json([
+                'success' => false,
+                'message' => 'Stripe is not available.',
+            ]);
+        }
+
+        try {
             $stripe->activateFromConfirm($request->user(), $request->session_id);
 
             \Log::info('PaymentController@stripeConfirm: success', ['session_id' => $request->session_id]);
@@ -195,8 +214,8 @@ class PaymentController extends Controller
             ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to confirm payment: ' . $e->getMessage(),
-            ], 500);
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 

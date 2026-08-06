@@ -130,10 +130,7 @@ class StripeService
     {
         \Log::info('Stripe confirmCheckoutSession: retrieving session', ['session_id' => $sessionId]);
 
-        $session = CheckoutSession::retrieve([
-            'id' => $sessionId,
-            'expand' => ['subscription'],
-        ]);
+        $session = CheckoutSession::retrieve($sessionId);
 
         \Log::info('Stripe confirmCheckoutSession: session retrieved', [
             'session_id' => $sessionId,
