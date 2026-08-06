@@ -132,7 +132,7 @@ class StripeService
 
         $session = CheckoutSession::retrieve([
             'id' => $sessionId,
-            'expand' => ['subscription', 'payment_intent'],
+            'expand' => ['subscription'],
         ]);
 
         \Log::info('Stripe confirmCheckoutSession: session retrieved', [
@@ -161,7 +161,7 @@ class StripeService
                 'status' => $session->status,
                 'payment_status' => $session->payment_status,
             ]);
-            return;
+            throw new \Exception('Payment not yet confirmed by Stripe. Please wait a moment and try again.');
         }
 
         $metadata = $session->metadata;
