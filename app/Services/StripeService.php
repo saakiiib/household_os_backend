@@ -183,7 +183,7 @@ class StripeService
         // Find or create subscription
         $subscription = Subscription::where('household_id', $householdId)->first();
         if (!$subscription) {
-            $subscription = new Subscription([
+            $subscription = Subscription::create([
                 'user_id' => $user->id,
                 'household_id' => $householdId,
             ]);
@@ -279,7 +279,7 @@ class StripeService
         // Find existing subscription for this household, or create new
         $subscription = Subscription::where('household_id', $householdId)->first();
         if (!$subscription) {
-            $subscription = new Subscription([
+            $subscription = Subscription::create([
                 'user_id' => $user->id,
                 'household_id' => $householdId,
             ]);

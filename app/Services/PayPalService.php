@@ -254,7 +254,7 @@ class PayPalService
         // Find or create subscription for this household
         $subscription = Subscription::where('household_id', $householdId)->first();
         if (!$subscription) {
-            $subscription = new Subscription([
+            $subscription = Subscription::create([
                 'user_id' => $user->id,
                 'household_id' => $householdId,
             ]);
