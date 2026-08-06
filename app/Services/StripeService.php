@@ -179,18 +179,12 @@ class StripeService
 
         // Find or create subscription
         $subscription = Subscription::where('household_id', $householdId)->first();
-        if (!$subscription) {
-            $subscription = Subscription::create([
-                'user_id' => $user->id,
-                'household_id' => $householdId,
-            ]);
-        }
 
         $now = now();
         $periodEnd = $paymentType === 'annual' ? $now->copy()->addYear() : $now->copy()->addMonth();
         $expiresAt = $periodEnd->copy()->addDays(Subscription::GRACE_PERIOD_DAYS);
 
-        $subscription->update([
+        $data = [
             'subscription_plan_id' => $planId,
             'status' => 'active',
             'payment_method' => 'stripe',
@@ -202,7 +196,15 @@ class StripeService
             'trial_started_at' => null,
             'trial_ends_at' => null,
             'cancelled_at' => null,
-        ]);
+        ];
+
+        if ($subscription) {
+            $subscription->update($data);
+        } else {
+            $data['user_id'] = $user->id;
+            $data['household_id'] = $householdId;
+            $subscription = Subscription::create($data);
+        }
 
         if ($payment) {
             $payment->update([
@@ -275,18 +277,12 @@ class StripeService
 
         // Find existing subscription for this household, or create new
         $subscription = Subscription::where('household_id', $householdId)->first();
-        if (!$subscription) {
-            $subscription = Subscription::create([
-                'user_id' => $user->id,
-                'household_id' => $householdId,
-            ]);
-        }
 
         $now = now();
         $periodEnd = $paymentType === 'annual' ? $now->copy()->addYear() : $now->copy()->addMonth();
         $expiresAt = $periodEnd->copy()->addDays(\App\Models\Subscription::GRACE_PERIOD_DAYS);
 
-        $subscription->update([
+        $data = [
             'subscription_plan_id' => $planId,
             'status' => 'active',
             'payment_method' => 'stripe',
@@ -298,7 +294,15 @@ class StripeService
             'trial_started_at' => null,
             'trial_ends_at' => null,
             'cancelled_at' => null,
-        ]);
+        ];
+
+        if ($subscription) {
+            $subscription->update($data);
+        } else {
+            $data['user_id'] = $user->id;
+            $data['household_id'] = $householdId;
+            $subscription = Subscription::create($data);
+        }
 
         // Record payment linked to household
         $this->recordPayment($user, $subscription, $planId, $session->amount_total / 100, 'succeeded', $session->payment_intent);

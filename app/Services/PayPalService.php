@@ -257,18 +257,12 @@ class PayPalService
 
         // Find or create subscription for this household
         $subscription = Subscription::where('household_id', $householdId)->first();
-        if (!$subscription) {
-            $subscription = Subscription::create([
-                'user_id' => $user->id,
-                'household_id' => $householdId,
-            ]);
-        }
 
         $now = now();
         $periodEnd = $paymentType === 'annual' ? $now->copy()->addYear() : $now->copy()->addMonth();
         $expiresAt = $periodEnd->copy()->addDays(Subscription::GRACE_PERIOD_DAYS);
 
-        $subscription->update([
+        $subData = [
             'subscription_plan_id' => $plan->id,
             'status' => 'active',
             'payment_method' => 'paypal',
@@ -279,7 +273,15 @@ class PayPalService
             'trial_started_at' => null,
             'trial_ends_at' => null,
             'cancelled_at' => null,
-        ]);
+        ];
+
+        if ($subscription) {
+            $subscription->update($subData);
+        } else {
+            $subData['user_id'] = $user->id;
+            $subData['household_id'] = $householdId;
+            $subscription = Subscription::create($subData);
+        }
 
         // Update payment record
         $payment->update([
