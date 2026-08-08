@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
@@ -397,21 +398,41 @@ class AuthController extends Controller
     {
         $user = Auth::user();
 
+        Log::info('pendingInvitations called', [
+            'user_id' => $user?->id,
+            'email' => $user?->email,
+            'verified' => (bool) ($user?->email_verified_at),
+        ]);
+
         if (!$user || !$user->email) {
+            Log::info('pendingInvitations: no authenticated email');
             return response()->json([
                 'success' => true,
                 'data' => null,
             ], 200);
         }
 
-        $invitation = Invitation::with(['household', 'invitedBy'])
+        $query = Invitation::with(['household', 'invitedBy'])
             ->where('invited_email', $user->email)
             ->where('status', 'pending')
             ->where(function ($query) {
                 $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
-            ->latest('id')
-            ->first();
+            ->latest('id');
+
+        Log::info('pendingInvitations query built', [
+            'sql_email' => $user->email,
+        ]);
+
+        $invitation = $query->first();
+
+        Log::info('pendingInvitations result', [
+            'found' => (bool) $invitation,
+            'invitation_id' => $invitation?->id,
+            'household_id' => $invitation?->household_id,
+            'invited_email' => $invitation?->invited_email,
+            'status' => $invitation?->status,
+        ]);
 
         if (!$invitation) {
             return response()->json([

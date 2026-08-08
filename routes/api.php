@@ -54,7 +54,6 @@ Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
 
     Route::middleware('auth:api')->group(function () {
         Route::get('user', [AuthController::class, 'user']);
-        Route::get('invitations/pending', [AuthController::class, 'pendingInvitations']);
         Route::post('logout', [AuthController::class, 'logout']);
     });
 });
@@ -65,6 +64,7 @@ Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
+    Route::get('invitations/pending', [AuthController::class, 'pendingInvitations']);
 
     // Profile
     Route::match(['put', 'post'], 'profile', [ProfileController::class, 'update']);
