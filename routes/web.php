@@ -29,7 +29,6 @@ Route::get('/clean-db', function () {
         'notifications',
         'payments',
         'subscriptions',
-        'subscription_plans',
         'personal_access_tokens',
         'users',
     ];

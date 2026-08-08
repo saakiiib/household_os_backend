@@ -54,6 +54,7 @@ Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
 
     Route::middleware('auth:api')->group(function () {
         Route::get('user', [AuthController::class, 'user']);
+        Route::get('invitations/pending', [AuthController::class, 'pendingInvitations']);
         Route::post('logout', [AuthController::class, 'logout']);
     });
 });

@@ -390,6 +390,54 @@ class AuthController extends Controller
     }
 
     /**
+     * Get pending invitation(s) for the authenticated user.
+     * Matches by verified email so invited users can see the prompt after signup/login.
+     */
+    public function pendingInvitations(Request $request)
+    {
+        $user = Auth::user();
+
+        if (!$user || !$user->email) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+            ], 200);
+        }
+
+        $invitation = Invitation::with(['household', 'invitedBy'])
+            ->where('invited_email', $user->email)
+            ->where('status', 'pending')
+            ->where(function ($query) {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->latest('id')
+            ->first();
+
+        if (!$invitation) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+            ], 200);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $invitation->id,
+                'household_id' => $invitation->household_id,
+                'household_name' => $invitation->household?->name,
+                'invited_email' => $invitation->invited_email,
+                'invited_by_user_id' => $invitation->invited_by_user_id,
+                'invited_by_name' => $invitation->invitedBy?->name ?? $invitation->invitedBy?->email ?? 'Someone',
+                'role' => $invitation->role,
+                'status' => $invitation->status,
+                'invitation_token' => $invitation->token,
+                'expires_at' => $invitation->expires_at?->toIso8601String(),
+            ],
+        ], 200);
+    }
+
+    /**
      * Logout user.
      */
     public function logout(Request $request)
