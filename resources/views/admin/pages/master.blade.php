@@ -13,6 +13,7 @@
     <link href="{{ asset('resources/backend/css/icons.min.css') }}" rel="stylesheet" type="text/css" />
     <link href="{{ asset('resources/backend/css/app.min.css') }}" rel="stylesheet" type="text/css" />
     <link href="{{ asset('resources/backend/css/custom.min.css') }}" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
 </head>
 
 <body>
@@ -55,6 +56,8 @@
     <script src="{{ asset('resources/backend/libs/sweetalert2/sweetalert2.min.js') }}"></script>
     <script src="{{ asset('resources/backend/js/app.js') }}"></script>
     <script src="{{ asset('resources/backend/js/custom.js') }}"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 
     <script>
         $(function () {

@@ -1,0 +1,49 @@
+@extends('admin.pages.master')
+@section('title', 'Renewals')
+@section('content')
+<div class="container-fluid">
+    <div class="card">
+        <div class="card-header">
+            <h4 class="card-title mb-0">All Renewals</h4>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="renewalsTable" class="table table-bordered table-striped align-middle" width="100%">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Title</th>
+                            <th>Category</th>
+                            <th>Household</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Due Date</th>
+                        </tr>
+                    </thead>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+@endsection
+
+@section('script')
+<script>
+$(function() {
+    $('#renewalsTable').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: '{{ route("admin.renewals.index") }}',
+        columns: [
+            { data: 'id', name: 'id' },
+            { data: 'title', name: 'title' },
+            { data: 'category_fmt', name: 'category', orderable: false, searchable: false },
+            { data: 'household_name', name: 'household_name', orderable: false, searchable: false },
+            { data: 'amount_fmt', name: 'amount', orderable: false, searchable: false },
+            { data: 'status_badge', name: 'status', orderable: false, searchable: false },
+            { data: 'due_date_fmt', name: 'due_date', orderable: false, searchable: false },
+        ]
+    });
+});
+</script>
+@endsection
