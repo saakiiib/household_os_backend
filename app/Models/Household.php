@@ -72,6 +72,30 @@ class Household extends Model
     }
 
     /**
+     * Get all tasks for this household.
+     */
+    public function tasks()
+    {
+        return $this->hasMany(Task::class);
+    }
+
+    /**
+     * Get all documents for this household.
+     */
+    public function documents()
+    {
+        return $this->hasMany(Document::class);
+    }
+
+    /**
+     * Get all renewals for this household.
+     */
+    public function renewals()
+    {
+        return $this->hasMany(Renewal::class);
+    }
+
+    /**
      * Get all payments for this household.
      */
     public function payments()

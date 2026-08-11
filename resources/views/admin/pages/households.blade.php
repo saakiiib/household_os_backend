@@ -2,25 +2,33 @@
 @section('title', 'Households')
 @section('content')
 <div class="container-fluid">
-    <div class="card">
-        <div class="card-header">
-            <h4 class="card-title mb-0">Households</h4>
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0">Households</h4>
+            </div>
         </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table id="householdsTable" class="table table-bordered table-striped align-middle" width="100%">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Created By</th>
-                            <th>Members</th>
-                            <th>Subscription</th>
-                            <th>Created</th>
-                            <th class="text-center" style="width:60px">Action</th>
-                        </tr>
-                    </thead>
-                </table>
+    </div>
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="householdsTable" class="table table-bordered table-striped align-middle" width="100%">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Household</th>
+                                    <th>Created By</th>
+                                    <th>Members</th>
+                                    <th>Subscription</th>
+                                    <th>Created</th>
+                                    <th class="text-center" style="width:60px">Action</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -36,7 +44,7 @@ $(function() {
         ajax: '{{ route("admin.households.index") }}',
         columns: [
             { data: 'id', name: 'id' },
-            { data: 'name', name: 'name' },
+            { data: 'name_link', name: 'name', orderable: true, searchable: true },
             { data: 'creator_name', name: 'creator_name', orderable: false, searchable: false },
             { data: 'members_count', name: 'members_count', orderable: false, searchable: false },
             { data: 'subscription_status', name: 'subscription_status', orderable: false, searchable: false },

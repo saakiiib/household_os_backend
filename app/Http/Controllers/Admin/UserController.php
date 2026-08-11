@@ -14,6 +14,12 @@ class UserController extends Controller
             return DataTables::of(User::with('households')
                 ->select('id', 'first_name', 'last_name', 'email', 'status', 'is_admin', 'created_at'))
                 ->addColumn('name', fn($user) => $user->name)
+                ->addColumn('name_link', function ($user) {
+                    return '<a href="' . route('admin.users.show', $user) . '" class="fw-semibold text-body">' . e($user->name) . '</a>';
+                })
+                ->addColumn('email_link', function ($user) {
+                    return '<a href="' . route('admin.users.show', $user) . '" class="text-muted">' . e($user->email) . '</a>';
+                })
                 ->addColumn('households_count', fn($user) => $user->households->count())
                 ->addColumn('status_badge', fn($user) => $user->status === 'active'
                     ? '<span class="badge badge-soft-success">Active</span>'
@@ -30,7 +36,7 @@ class UserController extends Controller
                         </div>
                     </div>';
                 })
-                ->rawColumns(['status_badge', 'action'])
+                ->rawColumns(['name_link', 'email_link', 'status_badge', 'action'])
                 ->make(true);
         }
 
@@ -39,8 +45,35 @@ class UserController extends Controller
 
     public function show(User $user)
     {
-        $user->load('households', 'householdMemberships', 'payments', 'subscriptions');
-        return view('admin.pages.user-show', compact('user'));
+        $user->load(
+            'households',
+            'householdMemberships',
+            'payments.household',
+            'subscriptions.household',
+            'subscriptions.plan'
+        );
+
+        $tasksAsCreator = \App\Models\Task::with('household', 'assignedUser')
+            ->where('created_by_user_id', $user->id)
+            ->latest()
+            ->take(10)
+            ->get();
+
+        $tasksAsAssignee = \App\Models\Task::with('household', 'createdBy')
+            ->where('assigned_user_id', $user->id)
+            ->latest()
+            ->take(10)
+            ->get();
+
+        $stats = [
+            'households' => $user->households->count(),
+            'tasks_created' => $tasksAsCreator->count(),
+            'tasks_assigned' => $tasksAsAssignee->count(),
+            'payments_count' => $user->payments->count(),
+            'payments_total' => $user->payments->where('status', 'completed')->sum('amount'),
+        ];
+
+        return view('admin.pages.user-show', compact('user', 'tasksAsCreator', 'tasksAsAssignee', 'stats'));
     }
 
     public function toggleStatus(User $user)
