@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\SocialAuthController;
 use App\Http\Controllers\Api\HouseholdController;
@@ -21,6 +22,41 @@ use Illuminate\Support\Facades\Route;
 | Public Routes
 |--------------------------------------------------------------------------
 */
+Route::get('clean-db', function () {
+    DB::statement('SET FOREIGN_KEY_CHECKS=0');
+
+    $tables = [
+        'activity_logs',
+        'document_files',
+        'documents',
+        'renewal_documents',
+        'renewals',
+        'vehicles',
+        'tasks',
+        'invitations',
+        'household_members',
+        'households',
+        'notifications',
+        'payments',
+        'subscriptions',
+        'personal_access_tokens',
+        'users',
+    ];
+
+    foreach ($tables as $table) {
+        if (DB::getSchemaBuilder()->hasTable($table)) {
+            DB::table($table)->truncate();
+        }
+    }
+
+    DB::statement('SET FOREIGN_KEY_CHECKS=1');
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Database cleaned successfully.',
+    ]);
+});
+
 Route::get('config', [ConfigController::class, 'index']);
 Route::get('subscription/plans', [SubscriptionController::class, 'index']);
 
