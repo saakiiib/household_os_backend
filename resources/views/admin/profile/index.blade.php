@@ -16,7 +16,7 @@
 
                             <div class="text-center mb-4">
                                 <img id="imagePreview"
-                                    src="{{ $admin->image ? asset($admin->image) : asset('frontend/images/default-avatar.png') }}"
+                                    src="{{ auth()->user()->avatar ? asset(auth()->user()->avatar) : '' }}"
                                     class="rounded-circle"
                                     style="width:130px; height:130px; object-fit:cover; border:3px solid #e9ecef;">
 
@@ -34,7 +34,7 @@
 
                             <div class="mb-3">
                                 <label>Name <span class="text-danger">*</span></label>
-                                <input type="text" name="name" class="form-control" value="{{ $admin->name }}"
+                                    <input type="text" name="name" class="form-control" value="{{ auth()->user()->name }}"
                                     required>
                             </div>
 
