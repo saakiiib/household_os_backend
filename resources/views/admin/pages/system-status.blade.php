@@ -1,5 +1,126 @@
-@extends('admin.pages.adminmaster')
+@extends('admin.pages.master')
 @section('title', 'System Status')
+
 @section('content')
-<div class="page-head"><div><h1>System Status</h1><p>Real-time health, incidents, dependencies, queues and service-level indicators.</p></div><div class="actions"><button class="btn">Configure</button><button class="btn btn-primary">Export Insight</button></div></div><div class="grid grid-4"><div class="card kpi"><div class="kpi-top"><div class="kpi-icon">⌂</div><span class="badge neutral">Live</span></div><div class="value">1,284</div><div class="label">Active Now</div><div class="trend ">+6.2% vs last period</div></div><div class="card kpi"><div class="kpi-top"><div class="kpi-icon">♙</div><span class="badge neutral">Live</span></div><div class="value">214</div><div class="label">At Risk</div><div class="trend down">-3.1% vs last period</div></div><div class="card kpi"><div class="kpi-top"><div class="kpi-icon">★</div><span class="badge neutral">Live</span></div><div class="value">382</div><div class="label">Opportunities</div><div class="trend ">+8.6% vs last period</div></div><div class="card kpi"><div class="kpi-top"><div class="kpi-icon">£</div><span class="badge neutral">Live</span></div><div class="value">17</div><div class="label">Alerts</div><div class="trend ">+2 vs last period</div></div></div><div class="grid grid-2" style="margin-top:16px"><div class="card"><div class="card-head"><h3 class="section-title">System Status trend</h3><select class="select"><option>Last 30 days</option></select></div><div class="chart"><div class="bar " style="height:31%" data-v="31"></div><div class="bar " style="height:38%" data-v="38"></div><div class="bar " style="height:41%" data-v="41"></div><div class="bar " style="height:49%" data-v="49"></div><div class="bar " style="height:44%" data-v="44"></div><div class="bar " style="height:58%" data-v="58"></div><div class="bar " style="height:61%" data-v="61"></div><div class="bar " style="height:68%" data-v="68"></div><div class="bar " style="height:72%" data-v="72"></div><div class="bar " style="height:77%" data-v="77"></div><div class="bar " style="height:83%" data-v="83"></div><div class="bar " style="height:89%" data-v="89"></div></div></div><div class="card"><div class="card-head"><h3 class="section-title">Priority findings</h3></div><div class="card-body list"><div class="notice"><b>42 households have no emergency contact</b><p>Consider an onboarding reminder automation.</p></div><div class="list-item"><span>Passports expiring within 12 months</span><b>210</b></div><div class="list-item"><span>Premium trials likely to convert</span><b>68%</b></div><div class="list-item"><span>Users inactive for 60+ days</span><b>120</b></div></div></div></div>
+<div class="page-content">
+    <div class="container-fluid">
+
+        <div class="row">
+            <div class="col-12">
+                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                    <div>
+                        <h4 class="mb-sm-0 font-size-18">System Status</h4>
+                        <p class="text-muted mb-0">Infrastructure health, uptime and operational signals.</p>
+                    </div>
+                    <div class="page-title-right d-flex gap-2 align-items-center">
+                        <span class="badge bg-soft-success text-success fs-12"><i class="ri-record-circle-line"></i> Live</span>
+                        <button class="btn btn-soft-primary btn-sm"><i class="ri-download-line"></i> Download report</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            @foreach ($kpis as $k)
+                <div class="col-xl-3 col-md-6">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex">
+                                <div class="flex-grow-1">
+                                    <p class="text-muted mb-2 text-truncate">{{ $k['label'] }}</p>
+                                    <h4 class="mb-0">{{ $k['value'] }}</h4>
+                                </div>
+                                <div class="avatar-sm">
+                                    <span class="avatar-title bg-soft-primary text-primary rounded fs-3">
+                                        <i class="{{ $k['icon'] }}"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            <p class="mt-3 mb-0 text-muted fs-13">
+                                <span class="badge {{ $k['trend'] >= 0 ? 'bg-soft-success text-success' : 'bg-soft-danger text-danger' }}">
+                                    <i class="ri-arrow-{{ $k['trend'] >= 0 ? 'up' : 'down' }}-line"></i> {{ abs($k['trend']) }}%
+                                </span>
+                                <span class="ms-1">vs last period</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center">
+                        <div>
+                            <h4 class="card-title mb-0">Trend — Last 30 days</h4>
+                            <p class="text-muted mb-0 fs-13">Daily activity across the platform</p>
+                        </div>
+                        <div class="ms-auto">
+                            <span class="badge bg-soft-primary text-primary fs-12">Last 30 days</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="trend-chart" style="height:320px"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center">
+                        <h4 class="card-title mb-0">Priority findings</h4>
+                        <span class="badge bg-soft-danger text-danger ms-auto">{{ count($findings) }} alerts</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="vstack gap-3">
+                            @forelse ($findings as $f)
+                                @php
+                                    $levelClass = $f['level'] === 'danger' ? 'bg-soft-danger text-danger' : ($f['level'] === 'warn' ? 'bg-soft-warning text-warning' : 'bg-soft-primary text-primary');
+                                    $dotClass = $f['level'] === 'danger' ? 'bg-danger' : ($f['level'] === 'warn' ? 'bg-warning' : 'bg-primary');
+                                @endphp
+                                <div class="d-flex align-items-start border-bottom pb-3">
+                                    <span class="rounded-circle {{ $dotClass }} me-3 mt-1" style="width:10px;height:10px;"></span>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-1 fw-semibold">{{ $f['title'] }}</h6>
+                                            <span class="badge {{ $levelClass }} fs-12 text-uppercase">{{ $f['level'] }}</span>
+                                        </div>
+                                        <p class="text-muted mb-1 fs-13">{{ $f['detail'] }}</p>
+                                        <small class="text-muted"><i class="ri-time-line"></i> {{ $f['time'] }}</small>
+                                    </div>
+                                </div>
+                            @empty
+                                <p class="text-center text-muted mb-0">No findings reported</p>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+@endsection
+
+@section('script')
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var trend = new ApexCharts(document.querySelector("#trend-chart"), {
+        chart: { type: 'area', height: 320, toolbar: { show: false }, zoom: { enabled: false } },
+        series: [{ name: 'Activity', data: @json($trendSeries) }],
+        xaxis: { categories: @json($trendLabels) },
+        colors: ['#405189'],
+        dataLabels: { enabled: false },
+        stroke: { curve: 'smooth', width: 2 },
+        fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
+        grid: { borderColor: '#f1f1f1' },
+        legend: { position: 'top' }
+    });
+    trend.render();
+});
+</script>
 @endsection

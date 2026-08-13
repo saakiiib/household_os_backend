@@ -1,5 +1,83 @@
-@extends('admin.pages.adminmaster')
+@extends('admin.pages.master')
 @section('title', 'Refund Management')
+
 @section('content')
-<div class="page-head"><div><h1>Refund Management</h1><p>Process full or partial refunds with approvals and immutable audit trails</p></div><div class="actions"><button class="btn">Import</button><button class="btn btn-primary" data-modal="globalModal">+ Create</button></div></div><div class="card"><div class="filters"><input class="input" placeholder="Search..."><select class="select"><option>All statuses</option><option>Active</option><option>Pending</option><option>Archived</option></select><input class="input" type="date"><button class="btn">More filters</button><button class="btn">Export</button></div><div class="table-wrap"><table class="table" style="min-width:900px"><thead><tr><th>Refund</th><th>Transaction</th><th>Customer</th><th>Amount</th><th>Reason</th><th>Requested By</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr><td>RF-2026-214</td><td>pi_984100</td><td>Sarah Johnson</td><td>£6.99</td><td>Duplicate payment</td><td>Support Agent</td><td><span class="badge warning">Pending Approval</span></td><td>Review</td></tr><tr><td>RF-2026-213</td><td>pi_983900</td><td>David Smith</td><td>£12.00</td><td>Service credit</td><td>Finance Manager</td><td><span class="badge success">Completed</span></td><td>View</td></tr></tbody></table></div></div>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <div>
+                    <h4 class="mb-sm-0">Refund Management</h4>
+                    <p class="text-muted mb-0">Process full or partial refunds with approvals and immutable audit trails</p>
+                </div>
+                <div class="page-title-right d-flex gap-2 align-items-center">
+                    <a href="#" class="btn btn-soft-primary btn-sm"><i class="ri-upload-line"></i> Import</a>
+                    <a href="#" class="btn btn-primary btn-sm"><i class="ri-add-line"></i> New Refund</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control form-control-sm" placeholder="Search..." disabled>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" disabled>
+                                <option>All statuses</option>
+                                <option>Active</option>
+                                <option>Pending</option>
+                                <option>Archived</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="date" class="form-control form-control-sm" disabled>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-soft-primary btn-sm w-100" disabled><i class="ri-filter-line"></i> Filter</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header align-items-center d-flex">
+                    <h4 class="card-title mb-0 flex-grow-1">Refunds</h4>
+                    <span class="badge bg-soft-secondary fs-12">0 total</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-nowrap align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Refund</th>
+                                    <th>Transaction</th>
+                                    <th>Customer</th>
+                                    <th>Amount</th>
+                                    <th>Reason</th>
+                                    <th>Requested By</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">No refunds yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection

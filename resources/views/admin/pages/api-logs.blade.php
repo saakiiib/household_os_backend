@@ -1,5 +1,83 @@
-@extends('admin.pages.adminmaster')
+@extends('admin.pages.master')
 @section('title', 'API Access Logs')
+
 @section('content')
-<div class="page-head"><div><h1>API Access Logs</h1><p>Monitor internal APIs, integrations, latency, errors and keys</p></div><div class="actions"><button class="btn">Import</button><button class="btn btn-primary" data-modal="globalModal">+ Create</button></div></div><div class="card"><div class="filters"><input class="input" placeholder="Search..."><select class="select"><option>All statuses</option><option>Active</option><option>Pending</option><option>Archived</option></select><input class="input" type="date"><button class="btn">More filters</button><button class="btn">Export</button></div><div class="table-wrap"><table class="table" style="min-width:900px"><thead><tr><th>Time</th><th>Service</th><th>Endpoint</th><th>Method</th><th>Status</th><th>Latency</th><th>Actor</th><th>Details</th></tr></thead><tbody><tr><td>21:20</td><td>Mobile API</td><td>/api/v1/documents</td><td>POST</td><td><span class="badge success">201</span></td><td>184 ms</td><td>USR-10084</td><td>View</td></tr><tr><td>21:19</td><td>Stripe Webhook</td><td>/webhooks/stripe</td><td>POST</td><td><span class="badge success">200</span></td><td>98 ms</td><td>Stripe</td><td>View</td></tr></tbody></table></div></div>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <div>
+                    <h4 class="mb-sm-0">API Access Logs</h4>
+                    <p class="text-muted mb-0">Monitor internal APIs, integrations, latency, errors and keys</p>
+                </div>
+                <div class="page-title-right d-flex gap-2 align-items-center">
+                    <a href="#" class="btn btn-soft-primary btn-sm"><i class="ri-upload-line"></i> Import</a>
+                    <a href="#" class="btn btn-primary btn-sm"><i class="ri-add-line"></i> New Log</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control form-control-sm" placeholder="Search..." disabled>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" disabled>
+                                <option>All statuses</option>
+                                <option>Active</option>
+                                <option>Pending</option>
+                                <option>Archived</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="date" class="form-control form-control-sm" disabled>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-soft-primary btn-sm w-100" disabled><i class="ri-filter-line"></i> Filter</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header align-items-center d-flex">
+                    <h4 class="card-title mb-0 flex-grow-1">API Requests</h4>
+                    <span class="badge bg-soft-secondary fs-12">0 total</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-nowrap align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Service</th>
+                                    <th>Endpoint</th>
+                                    <th>Method</th>
+                                    <th>Status</th>
+                                    <th>Latency</th>
+                                    <th>Actor</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">No API logs yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection

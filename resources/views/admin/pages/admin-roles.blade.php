@@ -1,5 +1,88 @@
-@extends('admin.pages.adminmaster')
+@extends('admin.pages.master')
 @section('title', 'Admin Roles & Permissions')
+
 @section('content')
-<div class="page-head"><div><h1>Admin Roles & Permissions</h1><p>Enterprise RBAC for super admins, finance, support, content, security and custom roles</p></div><div class="actions"><button class="btn">Import</button><button class="btn btn-primary" data-modal="globalModal">+ Create</button></div></div><div class="card"><div class="filters"><input class="input" placeholder="Search..."><select class="select"><option>All statuses</option><option>Active</option><option>Pending</option><option>Archived</option></select><input class="input" type="date"><button class="btn">More filters</button><button class="btn">Export</button></div><div class="table-wrap"><table class="table" style="min-width:900px"><thead><tr><th>Role</th><th>Admins</th><th>Scope</th><th>Sensitive Actions</th><th>Last Updated</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr><td>Super Admin</td><td>2</td><td>All modules</td><td>Refunds, deletion, API keys</td><td>Today</td><td><span class="badge warning">Protected</span></td><td>View</td></tr><tr><td>Support Agent</td><td>14</td><td>Tickets, users</td><td>Impersonation by approval</td><td>Yesterday</td><td><span class="badge success">Active</span></td><td>Edit</td></tr></tbody></table></div></div>
+<div class="container-fluid">
+
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <div>
+                    <h4 class="mb-sm-0 font-size-18">Admin Roles & Permissions</h4>
+                    <p class="text-muted mb-0">Enterprise RBAC for super admins, finance, support, content, security and custom roles.</p>
+                </div>
+                <div class="page-title-right d-flex gap-2 align-items-center">
+                    <button class="btn btn-soft-primary btn-sm"><i class="ri-upload-2-line"></i> Import</button>
+                    <button class="btn btn-primary btn-sm"><i class="ri-add-line"></i> Create Role</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header align-items-center d-flex">
+                    <h4 class="card-title mb-0 flex-grow-1">Roles</h4>
+                    <span class="badge bg-soft-primary fs-12">0 roles</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-nowrap align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Role</th>
+                                    <th>Admins</th>
+                                    <th>Scope</th>
+                                    <th>Sensitive Actions</th>
+                                    <th>Last Updated</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">No roles defined yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header align-items-center d-flex">
+                    <h4 class="card-title mb-0 flex-grow-1">Permission Matrix</h4>
+                    <span class="badge bg-soft-secondary fs-12">Placeholder</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-nowrap align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Permission</th>
+                                    <th>Super Admin</th>
+                                    <th>Finance</th>
+                                    <th>Support</th>
+                                    <th>Content</th>
+                                    <th>Security</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted">Permission matrix will appear here once roles are configured</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
 @endsection

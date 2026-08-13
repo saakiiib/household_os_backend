@@ -1,5 +1,232 @@
-@extends('admin.pages.adminmaster')
-@section('title', 'Smith Family')
+@extends('admin.pages.master')
+@section('title', 'Household Details')
+
 @section('content')
-<div class="page-head"><div><h1>Smith Family</h1><p>Complete household control centre for members, billing, documents, activity and administrative actions.</p></div><div class="actions"><a class="btn" href="households.html">← Back</a><button class="btn btn-primary">Edit Household</button></div></div><div class="grid grid-4"><div class="card kpi"><div class="label">Household Health</div><div style="display:flex;align-items:center;gap:16px;margin-top:14px"><div class="metric-ring"><strong>87%</strong></div><div><span class="badge success">Healthy</span><p class="muted">Strong engagement</p></div></div></div><div class="card kpi"><div class="label">Members</div><div class="value">5</div><a href="#members">View full member list</a></div><div class="card kpi"><div class="label">Current Plan</div><div class="value" style="font-size:22px">Family Premium</div><div class="trend">Renews 12 Jul 2027</div></div><div class="card kpi"><div class="label">Lifetime Value</div><div class="value">£146.97</div><a href="#billing">Payment breakdown</a></div></div><div class="card" style="margin-top:16px"><div class="tabs"><div class="tab active">Overview</div><div class="tab" id="members">Members</div><div class="tab" id="billing">Payments & Billing</div><div class="tab">Activity</div><div class="tab">Documents</div><div class="tab">Admin Controls</div></div><div class="card-body"><div class="grid grid-3"><div><div class="muted">Primary owner</div><b>David Smith</b></div><div><div class="muted">Created</div><b>12 July 2024</b></div><div><div class="muted">Storage</div><b>8.2 GB of 25 GB</b><div class="progress" style="margin-top:8px"><span style="width:33%"></span></div></div></div></div></div><div class="card" style="margin-top:16px"><div class="card-head"><div><h3 class="section-title">Household Members</h3><div class="section-sub">Roles, permissions, invitations and device access</div></div><button class="btn btn-primary" data-modal="globalModal">Invite member</button></div><div class="table-wrap"><table class="table" style="min-width:900px"><thead><tr><th>Member</th><th>Role</th><th>Permissions</th><th>Status</th><th>Activity</th><th>Actions</th></tr></thead><tbody><tr><td><div class="person"><div class="mini-avatar">DS</div><div><b>David Smith</b><div class="muted">Owner</div></div></div></td><td>Owner</td><td>All permissions</td><td><span class="badge success">Active</span></td><td>Last active 4 min ago</td><td>⋯</td></tr><tr><td><div class="person"><div class="mini-avatar">ES</div><div><b>Emma Smith</b><div class="muted">emma@example.com</div></div></div></td><td>Adult</td><td>Documents, tasks, renewals</td><td><span class="badge success">Active</span></td><td>Last active today</td><td>⋯</td></tr><tr><td><div class="person"><div class="mini-avatar">OS</div><div><b>Oliver Smith</b><div class="muted">Child</div></div></div></td><td>Child</td><td>Tasks and calendar</td><td><span class="badge success">Active</span></td><td>Last active yesterday</td><td>⋯</td></tr></tbody></table></div></div><div class="card" style="margin-top:16px"><div class="card-head"><div><h3 class="section-title">Payment Breakdown</h3><div class="section-sub">Invoices, credits, refunds, payment method and subscription events</div></div><button class="btn">Generate invoice</button></div><div class="table-wrap"><table class="table" style="min-width:900px"><thead><tr><th>Reference</th><th>Description</th><th>Amount</th><th>Method</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody><tr><td>INV-2026-0712</td><td>Family Premium Annual</td><td>£69.99</td><td>Visa •••• 4242</td><td>12 Jul 2026</td><td><span class="badge success">Paid</span></td><td>Download</td></tr><tr><td>INV-2025-0712</td><td>Family Premium Annual</td><td>£69.99</td><td>Visa •••• 4242</td><td>12 Jul 2025</td><td><span class="badge success">Paid</span></td><td>Download</td></tr><tr><td>CR-2026-0021</td><td>Service credit</td><td>-£6.99</td><td>Account credit</td><td>03 Mar 2026</td><td><span class="badge info">Applied</span></td><td>View</td></tr></tbody></table></div></div><div class="grid grid-2" style="margin-top:16px"><div class="card"><div class="card-head"><h3 class="section-title">Household Timeline</h3></div><div class="card-body timeline"><div class="event"><h4>Annual subscription renewed</h4><p>£69.99 paid successfully</p></div><div class="event"><h4>Oliver completed “Renew pet insurance”</h4><p>Task completed by household member</p></div><div class="event"><h4>Passport uploaded and classified</h4><p>OCR extracted expiry and owner</p></div></div></div><div class="card"><div class="card-head"><h3 class="section-title">Admin Controls</h3></div><div class="card-body list"><button class="btn">Impersonate owner</button><button class="btn">Transfer ownership</button><button class="btn">Export household data</button><button class="btn">Add internal note</button><div class="danger-zone"><b>Restricted actions</b><p class="muted">Require reason, permission check, recent 2FA and audit logging.</p><button class="btn btn-danger">Suspend household</button></div></div></div></div>
+<div class="container-fluid">
+
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <div>
+                    <h4 class="mb-sm-0 font-size-18">{{ $household->name ?? 'Household' }}</h4>
+                    <p class="text-muted mb-0">Complete household control centre for members, billing, documents, activity and administrative actions.</p>
+                </div>
+                <div class="page-title-right d-flex gap-2 align-items-center">
+                    <a href="{{ route('admin.page', ['page' => 'households']) }}" class="btn btn-soft-secondary btn-sm"><i class="ri-arrow-left-line"></i> Back</a>
+                    <button class="btn btn-soft-primary btn-sm"><i class="ri-edit-line"></i> Edit Household</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (!$household)
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <div class="avatar-lg mx-auto mb-3">
+                            <span class="avatar-title bg-soft-secondary text-secondary rounded-circle fs-1"><i class="ri-home-line"></i></span>
+                        </div>
+                        <h5 class="mb-1">No household selected</h5>
+                        <p class="text-muted mb-0">Select a household to view its members, billing and activity.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @else
+        <div class="row">
+            <div class="col-xl-3 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-2 text-truncate">Members</p>
+                                <h4 class="mb-0">{{ $members->count() }}</h4>
+                            </div>
+                            <div class="avatar-sm">
+                                <span class="avatar-title bg-soft-primary text-primary rounded fs-3"><i class="ri-group-line"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-2 text-truncate">Current Plan</p>
+                                <h4 class="mb-0">{{ $household->plan ?? '—' }}</h4>
+                            </div>
+                            <div class="avatar-sm">
+                                <span class="avatar-title bg-soft-info text-info rounded fs-3"><i class="ri-vip-crown-line"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-2 text-truncate">Lifetime Value</p>
+                                <h4 class="mb-0">£{{ number_format($payments->sum('amount'), 2) }}</h4>
+                            </div>
+                            <div class="avatar-sm">
+                                <span class="avatar-title bg-soft-success text-success rounded fs-3"><i class="ri-money-pound-circle-line"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-2 text-truncate">Household Health</p>
+                                <h4 class="mb-0">{{ $household->health ?? '—' }}</h4>
+                            </div>
+                            <div class="avatar-sm">
+                                <span class="avatar-title bg-soft-warning text-warning rounded fs-3"><i class="ri-heart-pulse-line"></i></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header align-items-center d-flex">
+                        <h4 class="card-title mb-0 flex-grow-1">Household Members</h4>
+                        <button class="btn btn-soft-primary btn-sm"><i class="ri-user-add-line"></i> Invite member</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-nowrap align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Member</th>
+                                        <th>Email</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                        <th>Activity</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse ($members as $member)
+                                        <tr>
+                                            <td class="fw-medium">{{ optional($member->user)->name ?? $member->name ?? '—' }}</td>
+                                            <td>{{ optional($member->user)->email ?? $member->email ?? '—' }}</td>
+                                            <td><span class="badge bg-soft-primary text-primary">{{ ucfirst($member->role ?? 'member') }}</span></td>
+                                            <td><span class="badge bg-soft-success text-success">{{ ucfirst($member->status ?? 'active') }}</span></td>
+                                            <td class="text-muted">{{ $member->last_active_at ? $member->last_active_at->diffForHumans() : '—' }}</td>
+                                            <td><a href="#" class="btn btn-sm btn-soft-primary">View</a></td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="6" class="text-center text-muted">No members found</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header align-items-center d-flex">
+                        <h4 class="card-title mb-0 flex-grow-1">Payment Breakdown</h4>
+                        <button class="btn btn-soft-primary btn-sm"><i class="ri-file-list-line"></i> Generate invoice</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-nowrap align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Reference</th>
+                                        <th>Description</th>
+                                        <th>Amount</th>
+                                        <th>Method</th>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @forelse ($payments as $payment)
+                                        <tr>
+                                            <td class="fw-medium">{{ $payment->reference ?? '—' }}</td>
+                                            <td>{{ $payment->description ?? '—' }}</td>
+                                            <td>£{{ number_format($payment->amount ?? 0, 2) }}</td>
+                                            <td>{{ $payment->method ?? '—' }}</td>
+                                            <td class="text-muted">{{ $payment->created_at ? $payment->created_at->format('d M Y') : '—' }}</td>
+                                            <td><span class="badge bg-soft-secondary text-secondary">{{ ucfirst($payment->status ?? '—') }}</span></td>
+                                            <td><a href="#" class="btn btn-sm btn-soft-primary">Download</a></td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">No payments found</td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-xl-8">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center">
+                        <h4 class="card-title mb-0">Household Timeline</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="timeline timeline-primary">
+                            @forelse ($timeline as $item)
+                                <div class="timeline-item">
+                                    <div class="timeline-marker"></div>
+                                    <div class="timeline-content">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="fw-medium">{{ $item->description ?? '—' }}</span>
+                                            <small class="text-muted">{{ $item->created_at ? $item->created_at->diffForHumans() : ($item->time ?? '') }}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            @empty
+                                <p class="text-center text-muted mb-0">No timeline events</p>
+                            @endforelse
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4">
+                <div class="card">
+                    <div class="card-header d-flex align-items-center">
+                        <h4 class="card-title mb-0">Admin Controls</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="vstack gap-2">
+                            <a href="#" class="btn btn-soft-danger btn-sm"><i class="ri-forbid-line"></i> Suspend Household</a>
+                            <a href="#" class="btn btn-soft-warning btn-sm"><i class="ri-refresh-line"></i> Reset Access</a>
+                            <a href="#" class="btn btn-soft-primary btn-sm"><i class="ri-mail-send-line"></i> Send Notice</a>
+                            <a href="#" class="btn btn-soft-secondary btn-sm"><i class="ri-lock-line"></i> Lock Account</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
+</div>
 @endsection

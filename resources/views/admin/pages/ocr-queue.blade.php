@@ -1,5 +1,9 @@
-@extends('admin.pages.adminmaster')
+@extends('admin.pages.master')
 @section('title', 'OCR & Document Intelligence')
 @section('content')
-<div class="page-head"><div><h1>OCR & Document Intelligence</h1><p>Monitor extraction, classification, expiry detection and failed jobs</p></div><div class="actions"><button class="btn">Import</button><button class="btn btn-primary" data-modal="globalModal">+ Create</button></div></div><div class="card"><div class="filters"><input class="input" placeholder="Search..."><select class="select"><option>All statuses</option><option>Active</option><option>Pending</option><option>Archived</option></select><input class="input" type="date"><button class="btn">More filters</button><button class="btn">Export</button></div><div class="table-wrap"><table class="table" style="min-width:900px"><thead><tr><th>Job</th><th>Document</th><th>Engine</th><th>Stage</th><th>Confidence</th><th>Queued</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr><td>OCR-9842</td><td>Passport-David.pdf</td><td>Azure Vision</td><td>Extracting</td><td>—</td><td>2 min ago</td><td><span class="badge info">Processing</span></td><td>View</td></tr><tr><td>OCR-9841</td><td>Insurance.pdf</td><td>AWS Textract</td><td>Complete</td><td>96%</td><td>7 min ago</td><td><span class="badge success">Completed</span></td><td>View</td></tr><tr><td>OCR-9839</td><td>Receipt.jpg</td><td>Tesseract</td><td>Failed</td><td>31%</td><td>14 min ago</td><td><span class="badge danger">Review</span></td><td>Retry</td></tr></tbody></table></div></div>
+@include('admin.pages.module', [
+    'title' => 'OCR & Document Intelligence',
+    'icon' => 'ri-scan-line',
+    'desc' => 'Queue and results for document OCR, classification and data extraction.',
+])
 @endsection

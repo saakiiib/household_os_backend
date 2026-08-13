@@ -1,5 +1,76 @@
-@extends('admin.pages.adminmaster')
+@extends('admin.pages.master')
 @section('title', 'Mobile App Content')
 @section('content')
-<div class="page-head"><div><h1>Mobile App Content</h1><p>Manage onboarding, banners, announcements, version notes and maintenance messages</p></div><div class="actions"><button class="btn">Import</button><button class="btn btn-primary" data-modal="globalModal">+ Create</button></div></div><div class="card"><div class="filters"><input class="input" placeholder="Search..."><select class="select"><option>All statuses</option><option>Active</option><option>Pending</option><option>Archived</option></select><input class="input" type="date"><button class="btn">More filters</button><button class="btn">Export</button></div><div class="table-wrap"><table class="table" style="min-width:900px"><thead><tr><th>Content</th><th>Placement</th><th>Platform</th><th>Audience</th><th>Schedule</th><th>Version</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr><td>Welcome onboarding</td><td>Onboarding</td><td>All</td><td>New users</td><td>Always</td><td>v8</td><td><span class="badge success">Live</span></td><td>Edit</td></tr><tr><td>Summer household check</td><td>Home banner</td><td>iOS + Android</td><td>UK users</td><td>20 Jul</td><td>v1</td><td><span class="badge info">Scheduled</span></td><td>Edit</td></tr></tbody></table></div></div>
+<div class="container-fluid">
+
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <div>
+                    <h4 class="mb-sm-0">Mobile App Content</h4>
+                    <p class="text-muted mb-0">Manage onboarding, banners, announcements, version notes and maintenance messages</p>
+                </div>
+                <div class="page-title-right d-flex gap-2 align-items-center">
+                    <a href="#" class="btn btn-soft-primary btn-sm"><i class="ri-upload-line"></i> Import</a>
+                    <a href="#" class="btn btn-primary btn-sm"><i class="ri-add-line"></i> New Content</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header align-items-center d-flex">
+                    <h4 class="card-title mb-0 flex-grow-1">App Content</h4>
+                    <span class="badge bg-soft-secondary text-secondary fs-12">0 total</span>
+                </div>
+                <div class="card-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-sm-4">
+                            <input type="text" class="form-control" placeholder="Search..." disabled>
+                        </div>
+                        <div class="col-sm-3">
+                            <select class="form-select" disabled>
+                                <option>All statuses</option>
+                                <option>Active</option>
+                                <option>Pending</option>
+                                <option>Archived</option>
+                            </select>
+                        </div>
+                        <div class="col-sm-3">
+                            <input type="date" class="form-control" disabled>
+                        </div>
+                        <div class="col-sm-2 d-flex gap-2">
+                            <button class="btn btn-soft-secondary btn-sm flex-grow-1" disabled>More filters</button>
+                            <button class="btn btn-soft-primary btn-sm flex-grow-1" disabled>Export</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-nowrap align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Content</th>
+                                    <th>Placement</th>
+                                    <th>Platform</th>
+                                    <th>Audience</th>
+                                    <th>Schedule</th>
+                                    <th>Version</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">No data yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
 @endsection

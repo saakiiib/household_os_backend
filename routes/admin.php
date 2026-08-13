@@ -14,8 +14,6 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('admin.dashboard');
 
-// Reference admin pages (41 screens). Real data is wired where a module exists;
-// the rest render the reference UI and will be made dynamic later.
 Route::get('/p/{page}', [PagesController::class, 'show'])->name('admin.page');
 Route::get('/p/{page}/{id}', [PagesController::class, 'detail'])->name('admin.page.detail');
 

@@ -1,5 +1,83 @@
-@extends('admin.pages.adminmaster')
+@extends('admin.pages.master')
 @section('title', 'Backup Manager')
+
 @section('content')
-<div class="page-head"><div><h1>Backup Manager</h1><p>Monitor encrypted database, document and configuration backups</p></div><div class="actions"><button class="btn">Import</button><button class="btn btn-primary" data-modal="globalModal">+ Create</button></div></div><div class="card"><div class="filters"><input class="input" placeholder="Search..."><select class="select"><option>All statuses</option><option>Active</option><option>Pending</option><option>Archived</option></select><input class="input" type="date"><button class="btn">More filters</button><button class="btn">Export</button></div><div class="table-wrap"><table class="table" style="min-width:900px"><thead><tr><th>Backup</th><th>Scope</th><th>Region</th><th>Created</th><th>Size</th><th>Retention</th><th>Integrity</th><th>Actions</th></tr></thead><tbody><tr><td>DB-2026-07-16-2100</td><td>Database</td><td>London</td><td>21:00</td><td>8.4 GB</td><td>35 days</td><td><span class="badge success">Verified</span></td><td>Restore test</td></tr><tr><td>DOC-2026-07-16</td><td>Documents</td><td>London</td><td>02:00</td><td>1.8 TB</td><td>90 days</td><td><span class="badge success">Verified</span></td><td>Details</td></tr></tbody></table></div></div>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <div>
+                    <h4 class="mb-sm-0">Backup Manager</h4>
+                    <p class="text-muted mb-0">Monitor encrypted database, document and configuration backups</p>
+                </div>
+                <div class="page-title-right d-flex gap-2 align-items-center">
+                    <a href="#" class="btn btn-soft-primary btn-sm"><i class="ri-upload-line"></i> Import</a>
+                    <a href="#" class="btn btn-primary btn-sm"><i class="ri-add-line"></i> New Backup</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-md-4">
+                            <input type="text" class="form-control form-control-sm" placeholder="Search..." disabled>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select form-select-sm" disabled>
+                                <option>All statuses</option>
+                                <option>Active</option>
+                                <option>Pending</option>
+                                <option>Archived</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="date" class="form-control form-control-sm" disabled>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-soft-primary btn-sm w-100" disabled><i class="ri-filter-line"></i> Filter</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card">
+                <div class="card-header align-items-center d-flex">
+                    <h4 class="card-title mb-0 flex-grow-1">Backups</h4>
+                    <span class="badge bg-soft-secondary fs-12">0 total</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-nowrap align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Backup</th>
+                                    <th>Scope</th>
+                                    <th>Region</th>
+                                    <th>Created</th>
+                                    <th>Size</th>
+                                    <th>Retention</th>
+                                    <th>Integrity</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">No backups yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection

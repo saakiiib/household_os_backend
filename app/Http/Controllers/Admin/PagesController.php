@@ -37,7 +37,11 @@ class PagesController extends Controller
     {
         abort_unless(in_array($page, $this->pages, true), 404);
 
-        $data = $this->loadData($page);
+        if ($page === 'dashboard') {
+            return redirect()->route('admin.dashboard');
+        }
+
+        $data = $this->loadData($page, $request);
 
         return view('admin.pages.' . $page, array_merge(
             ['active' => $page, 'pageTitle' => $this->title($page)],
@@ -47,16 +51,11 @@ class PagesController extends Controller
 
     /**
      * Detail / drill-down pages for entities that have a backing model.
+     * (The 7 core entities keep their existing detail screens via the old
+     * admin.*.show routes; this covers the additional ones.)
      */
     protected array $detailMap = [
-        'users'         => [User::class, []],
-        'households'    => [Household::class, ['members', 'subscription.plan', 'tasks', 'documents', 'renewals', 'payments']],
         'invitations'   => [Invitation::class, ['household']],
-        'tasks'         => [Task::class, ['household']],
-        'renewals'      => [Renewal::class, ['household']],
-        'documents'     => [Document::class, ['household', 'files']],
-        'subscriptions' => [Subscription::class, ['plan', 'household', 'user']],
-        'payments'      => [Payment::class, ['user', 'household', 'subscription']],
         'notifications' => [Notification::class, ['user']],
         'audit-logs'    => [ActivityLog::class, ['user', 'subject']],
     ];
@@ -69,9 +68,9 @@ class PagesController extends Controller
         $record = $model::with($with)->findOrFail($id);
 
         return view('admin.pages.' . $page . '-show', [
-            'active'   => $page,
+            'active'    => $page,
             'pageTitle' => $this->title($page),
-            'record'   => $record,
+            'record'    => $record,
         ]);
     }
 
@@ -112,12 +111,12 @@ class PagesController extends Controller
         };
     }
 
-    protected function loadData($page): array
+    protected function loadData($page, Request $request): array
     {
         return match ($page) {
-            'dashboard' => $this->dashboard(),
             'users' => ['users' => User::latest()->paginate(20)],
             'households' => ['households' => Household::withCount('members')->latest()->paginate(20)],
+            'household-details' => $this->householdDetails($request),
             'invitations' => ['invitations' => Invitation::with('household')->latest()->paginate(20)],
             'tasks' => ['tasks' => Task::with('household')->latest()->paginate(20)],
             'renewals' => ['renewals' => Renewal::with('household')->latest()->paginate(20)],
@@ -127,25 +126,65 @@ class PagesController extends Controller
             'notifications' => ['notifications' => Notification::latest()->paginate(20)],
             'audit-logs' => ['logs' => ActivityLog::with('causer')->latest()->paginate(20)],
             'activity-map' => ['activities' => ActivityLog::with('causer')->latest()->take(50)->get()],
+            'ai-insights' => $this->insightData(),
+            'analytics' => $this->insightData(),
+            'system-status' => $this->insightData(),
+            'health-scores' => $this->insightData(),
+            'revenue' => $this->insightData(),
+            'fraud' => $this->insightData(),
             default => [],
         };
     }
 
-    protected function dashboard(): array
+    protected function insightData(): array
     {
-        return [
-            'totalUsers' => User::count(),
-            'totalHouseholds' => Household::count(),
-            'activeSubscriptions' => Subscription::where('status', 'active')->count(),
-            'totalRevenue' => Payment::where('status', 'completed')->sum('amount'),
-            'totalTasks' => Task::count(),
-            'pendingTasks' => Task::where('status', '!=', 'completed')->count(),
-            'totalRenewals' => Renewal::count(),
-            'overdueRenewals' => Renewal::where('status', '!=', 'completed')->where('due_date', '<', now())->count(),
-            'totalDocuments' => Document::count(),
-            'openInvitations' => Invitation::whereNull('accepted_at')->where('expires_at', '>', now())->count(),
-            'recentUsers' => User::latest()->take(5)->get(),
-            'recentPayments' => Payment::with('user', 'household')->latest()->take(5)->get(),
+        $activeNow = User::count();
+        $atRisk = Renewal::where('status', 'overdue')->count();
+        $opportunities = Subscription::where('status', 'trial')->count();
+        $alerts = ActivityLog::where('created_at', '>=', now()->subDay())->count();
+
+        $kpis = [
+            ['label' => 'Active Now', 'value' => number_format($activeNow), 'trend' => 3.2, 'icon' => 'ri-pulse-line'],
+            ['label' => 'At Risk', 'value' => number_format($atRisk), 'trend' => -1.1, 'icon' => 'ri-alert-line'],
+            ['label' => 'Opportunities', 'value' => number_format($opportunities), 'trend' => 5.4, 'icon' => 'ri-lightbulb-line'],
+            ['label' => 'Alerts', 'value' => number_format($alerts), 'trend' => 0.0, 'icon' => 'ri-notification-3-line'],
         ];
+
+        $trendLabels = [];
+        $trendSeries = [];
+        for ($i = 29; $i >= 0; $i--) {
+            $d = now()->subDays($i);
+            $trendLabels[] = $d->format('d M');
+            $trendSeries[] = ActivityLog::whereDate('created_at', $d->toDateString())->count();
+        }
+
+        $findings = ActivityLog::with('user')->latest()->take(6)->get()->map(
+            fn($a) => [
+                'title' => $a->description ?? '—',
+                'detail' => class_basename($a->subject_type ?? '') . ' #' . ($a->subject_id ?? ''),
+                'time' => $a->created_at->diffForHumans(),
+                'level' => 'info',
+            ]
+        )->all();
+
+        return compact('kpis', 'trendLabels', 'trendSeries', 'findings');
+    }
+
+    protected function householdDetails(Request $request): array
+    {
+        $id = $request->get('id');
+        $household = $id
+            ? Household::with('members.user')->find($id)
+            : Household::with('members.user')->first();
+
+        if (!$household) {
+            return ['household' => null, 'members' => collect(), 'payments' => collect(), 'timeline' => collect()];
+        }
+
+        $members = $household->members()->with('user')->get();
+        $payments = Payment::where('household_id', $household->id)->latest()->take(10)->get();
+        $timeline = ActivityLog::where('household_id', $household->id)->latest()->take(10)->get();
+
+        return compact('household', 'members', 'payments', 'timeline');
     }
 }
