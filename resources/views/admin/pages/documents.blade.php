@@ -37,7 +37,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Due Soon</p>
-                            <h4 class="mb-0">{{ $documents->filter(function($d){ return $d->due_date && $d->due_date->isFuture(); })->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($documents->items())->filter(function($d){ return $d->due_date && $d->due_date->isFuture(); })->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-warning text-warning rounded fs-3"><i class="ri-calendar-event-line"></i></span>
@@ -52,7 +52,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Overdue</p>
-                            <h4 class="mb-0">{{ $documents->filter(function($d){ return $d->due_date && $d->due_date->isPast(); })->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($documents->items())->filter(function($d){ return $d->due_date && $d->due_date->isPast(); })->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-danger text-danger rounded fs-3"><i class="ri-alarm-warning-line"></i></span>

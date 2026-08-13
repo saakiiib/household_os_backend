@@ -44,7 +44,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Active</p>
-                            <h4 class="mb-0">{{ $subscriptions->where('status', 'active')->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($subscriptions->items())->where('status', 'active')->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-success text-success rounded fs-3"><i class="ri-checkbox-circle-line"></i></span>
@@ -59,7 +59,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Trialing</p>
-                            <h4 class="mb-0">{{ $subscriptions->filter(function($s){ return in_array($s->status, ['trialing','trial']); })->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($subscriptions->items())->filter(function($s){ return in_array($s->status, ['trialing','trial']); })->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-info text-info rounded fs-3"><i class="ri-timer-line"></i></span>
@@ -74,7 +74,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Cancelled / Expired</p>
-                            <h4 class="mb-0">{{ $subscriptions->filter(function($s){ return in_array($s->status, ['cancelled','expired']); })->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($subscriptions->items())->filter(function($s){ return in_array($s->status, ['cancelled','expired']); })->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-danger text-danger rounded fs-3"><i class="ri-close-circle-line"></i></span>

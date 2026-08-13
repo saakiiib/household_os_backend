@@ -45,7 +45,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Paid</p>
-                            <h4 class="mb-0">{{ $payments->where('status', 'paid')->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($payments->items())->where('status', 'paid')->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-success text-success rounded fs-3"><i class="ri-checkbox-circle-line"></i></span>
@@ -60,7 +60,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Failed</p>
-                            <h4 class="mb-0">{{ $payments->where('status', 'failed')->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($payments->items())->where('status', 'failed')->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-danger text-danger rounded fs-3"><i class="ri-close-circle-line"></i></span>
@@ -75,7 +75,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Total Collected</p>
-                            <h4 class="mb-0">£{{ number_format($payments->where('status', 'paid')->sum('amount'), 2) }}</h4>
+                            <h4 class="mb-0">£{{ number_format(collect($payments->items())->where('status', 'paid')->sum('amount'), 2) }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-info text-info rounded fs-3"><i class="ri-money-pound-circle-line"></i></span>

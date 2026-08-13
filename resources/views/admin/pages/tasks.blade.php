@@ -46,7 +46,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Completed</p>
-                            <h4 class="mb-0">{{ $tasks->where('status', 'completed')->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($tasks->items())->where('status', 'completed')->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-success text-success rounded fs-3"><i class="ri-check-double-line"></i></span>
@@ -61,7 +61,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">In Progress</p>
-                            <h4 class="mb-0">{{ $tasks->where('status', 'in_progress')->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($tasks->items())->where('status', 'in_progress')->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-info text-info rounded fs-3"><i class="ri-loader-line"></i></span>
@@ -76,7 +76,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Pending</p>
-                            <h4 class="mb-0">{{ $tasks->where('status', 'pending')->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($tasks->items())->where('status', 'pending')->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-warning text-warning rounded fs-3"><i class="ri-time-line"></i></span>

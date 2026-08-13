@@ -47,7 +47,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Pending</p>
-                            <h4 class="mb-0">{{ $invitations->where('status', 'pending')->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($invitations->items())->where('status', 'pending')->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-warning text-warning rounded fs-3"><i class="ri-time-line"></i></span>
@@ -62,7 +62,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Accepted</p>
-                            <h4 class="mb-0">{{ $invitations->where('status', 'accepted')->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($invitations->items())->where('status', 'accepted')->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-success text-success rounded fs-3"><i class="ri-checkbox-circle-line"></i></span>
@@ -77,7 +77,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Expired / Rejected</p>
-                            <h4 class="mb-0">{{ $invitations->filter(function($i){ return in_array($i->status, ['expired','rejected','cancelled']); })->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($invitations->items())->filter(function($i){ return in_array($i->status, ['expired','rejected','cancelled']); })->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-danger text-danger rounded fs-3"><i class="ri-close-circle-line"></i></span>

@@ -37,7 +37,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Total Members</p>
-                            <h4 class="mb-0">{{ $households->sum('members_count') }}</h4>
+                            <h4 class="mb-0">{{ collect($households->items())->sum('members_count') }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-info text-info rounded fs-3"><i class="ri-group-line"></i></span>
@@ -52,7 +52,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Active</p>
-                            <h4 class="mb-0">{{ $households->where('status', 'active')->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($households->items())->where('status', 'active')->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-success text-success rounded fs-3"><i class="ri-checkbox-circle-line"></i></span>
@@ -67,7 +67,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Archived</p>
-                            <h4 class="mb-0">{{ $households->where('status', 'archived')->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($households->items())->where('status', 'archived')->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-warning text-warning rounded fs-3"><i class="ri-archive-line"></i></span>

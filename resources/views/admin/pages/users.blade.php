@@ -49,7 +49,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Admins</p>
-                            <h4 class="mb-0">{{ $users->where('is_admin', true)->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($users->items())->where('is_admin', true)->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-info text-info rounded fs-3"><i class="ri-shield-star-line"></i></span>
@@ -64,7 +64,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Regular Users</p>
-                            <h4 class="mb-0">{{ $users->where('is_admin', false)->count() }}</h4>
+                            <h4 class="mb-0">{{ collect($users->items())->where('is_admin', false)->count() }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-success text-success rounded fs-3"><i class="ri-group-line"></i></span>
