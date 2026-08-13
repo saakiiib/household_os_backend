@@ -40,7 +40,9 @@ class UserController extends Controller
                 ->make(true);
         }
 
-        return view('admin.pages.users');
+        return view('admin.pages.users', [
+            'users' => User::latest()->paginate(20),
+        ]);
     }
 
     public function show(User $user)

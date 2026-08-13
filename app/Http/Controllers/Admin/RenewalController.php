@@ -31,7 +31,9 @@ class RenewalController extends Controller
                 ->make(true);
         }
 
-        return view('admin.pages.renewals');
+        return view('admin.pages.renewals', [
+            'renewals' => Renewal::with('household')->latest()->paginate(20),
+        ]);
     }
 
     public function show(Renewal $renewal)

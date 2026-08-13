@@ -36,7 +36,9 @@ class TaskController extends Controller
                 ->make(true);
         }
 
-        return view('admin.pages.tasks');
+        return view('admin.pages.tasks', [
+            'tasks' => Task::with('household')->latest()->paginate(20),
+        ]);
     }
 
     public function show(Task $task)

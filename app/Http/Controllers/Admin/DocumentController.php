@@ -27,7 +27,9 @@ class DocumentController extends Controller
                 ->make(true);
         }
 
-        return view('admin.pages.documents');
+        return view('admin.pages.documents', [
+            'documents' => Document::with('household')->latest()->paginate(20),
+        ]);
     }
 
     public function show(Document $document)

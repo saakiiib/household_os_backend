@@ -9,6 +9,8 @@ use App\Models\Subscription;
 use App\Models\Payment;
 use App\Models\Task;
 use App\Models\Renewal;
+use App\Models\Document;
+use App\Models\Invitation;
 
 class DashboardController extends Controller
 {
@@ -26,11 +28,13 @@ class DashboardController extends Controller
 
         $recentUsers = User::latest()->take(5)->get();
         $recentPayments = Payment::with('user', 'household')->latest()->take(5)->get();
+        $totalDocuments = Document::count();
+        $openInvitations = Invitation::whereNull('accepted_at')->where('expires_at', '>', now())->count();
 
         return view('admin.pages.dashboard', compact(
             'totalUsers', 'totalHouseholds', 'activeSubscriptions',
             'totalRevenue', 'totalTasks', 'pendingTasks',
-            'totalRenewals', 'overdueRenewals',
+            'totalRenewals', 'overdueRenewals', 'totalDocuments', 'openInvitations',
             'recentUsers', 'recentPayments'
         ));
     }

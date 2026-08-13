@@ -31,7 +31,9 @@ class SubscriptionController extends Controller
                 ->make(true);
         }
 
-        return view('admin.pages.subscriptions');
+        return view('admin.pages.subscriptions', [
+            'subscriptions' => Subscription::with('plan', 'household')->latest()->paginate(20),
+        ]);
     }
 
     public function show(Subscription $subscription)

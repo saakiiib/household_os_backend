@@ -32,7 +32,9 @@ class PaymentController extends Controller
                 ->make(true);
         }
 
-        return view('admin.pages.payments');
+        return view('admin.pages.payments', [
+            'payments' => Payment::with('user', 'household')->latest()->paginate(20),
+        ]);
     }
 
     public function show(Payment $payment)
