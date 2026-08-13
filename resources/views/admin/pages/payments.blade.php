@@ -1,57 +1,33 @@
-@extends('admin.pages.master')
-@section('title', 'Payments')
+@extends('admin.pages.adminmaster')
+@section('title', 'Payment Management')
 @section('content')
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0">Payments</h4>
-            </div>
-        </div>
-    </div>
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table id="paymentsTable" class="table table-bordered table-striped align-middle" width="100%">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>User</th>
-                                    <th>Household</th>
-                                    <th>Amount</th>
-                                    <th>Gateway</th>
-                                    <th>Status</th>
-                                    <th>Date</th>
-                                </tr>
-                            </thead>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="page-head">
+    <div><h1>Payments</h1><p>All transactions, gateways and statuses.</p></div>
+    <div class="actions"><a class="btn btn-primary" href="{{ route('admin.page', ['page' => 'payments']) }}">Export</a></div>
 </div>
-@endsection
 
-@section('script')
-<script>
-$(function() {
-    $('#paymentsTable').DataTable({
-        processing: true,
-        serverSide: true,
-        ajax: '{{ route("admin.payments.index") }}',
-        columns: [
-            { data: 'id', name: 'id' },
-            { data: 'user_link', name: 'user_name', orderable: false, searchable: false },
-            { data: 'household_link', name: 'household_name', orderable: false, searchable: false },
-            { data: 'amount_fmt', name: 'amount', orderable: true },
-            { data: 'gateway_fmt', name: 'gateway', orderable: false, searchable: false },
-            { data: 'status_badge', name: 'status', orderable: true },
-            { data: 'date_fmt', name: 'created_at', orderable: true },
-        ]
-    });
-});
-</script>
+<div class="card">
+    <div class="card-head"><h3>All Payments</h3><span class="badge neutral">{{ $payments->total() }} total</span></div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead><tr><th>User</th><th>Household</th><th>Amount</th><th>Gateway</th><th>Status</th><th>Date</th><th></th></tr></thead>
+            <tbody>
+                @forelse($payments as $payment)
+                <tr>
+                    <td>{{ $payment->user->name ?? 'N/A' }}</td>
+                    <td>{{ $payment->household->name ?? '—' }}</td>
+                    <td>${{ number_format($payment->amount, 2) }}</td>
+                    <td>{{ ucfirst($payment->gateway ?? '—') }}</td>
+                    <td><span class="badge {{ $payment->status === 'completed' ? 'success' : 'warning' }}">{{ ucfirst($payment->status) }}</span></td>
+                    <td>{{ $payment->created_at->format('d M Y') }}</td>
+                    <td><a class="btn" href="{{ route('admin.page.detail', ['page' => 'payments', 'id' => $payment->id]) }}">View</a></td>
+                </tr>
+                @empty
+                <tr><td colspan="6" class="empty">No payments yet</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+    <div class="card-foot">{{ $payments->links() }}</div>
+</div>
 @endsection

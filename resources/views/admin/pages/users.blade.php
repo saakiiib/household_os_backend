@@ -1,69 +1,32 @@
-@extends('admin.pages.master')
-@section('title', 'Users')
+@extends('admin.pages.adminmaster')
+@section('title', 'User Management')
 @section('content')
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0">Users</h4>
-            </div>
-        </div>
-    </div>
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table id="usersTable" class="table table-bordered table-striped align-middle" width="100%">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>User</th>
-                                    <th>Email</th>
-                                    <th>Households</th>
-                                    <th>Status</th>
-                                    <th>Joined</th>
-                                    <th class="text-center" style="width:60px">Action</th>
-                                </tr>
-                            </thead>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="page-head">
+    <div><h1>Users</h1><p>Manage every account across the platform.</p></div>
+    <div class="actions"><a class="btn btn-primary" href="{{ route('admin.page', ['page' => 'users']) }}">+ New User</a></div>
 </div>
-@endsection
 
-@section('script')
-<script>
-$(function() {
-    $('#usersTable').DataTable({
-        processing: true,
-        serverSide: true,
-        ajax: '{{ route("admin.users.index") }}',
-        columns: [
-            { data: 'id', name: 'id' },
-            { data: 'name_link', name: 'first_name', orderable: true, searchable: true },
-            { data: 'email_link', name: 'email', orderable: true, searchable: true },
-            { data: 'households_count', name: 'households_count', orderable: false, searchable: false },
-            { data: 'status_badge', name: 'status', orderable: true },
-            { data: 'date_fmt', name: 'created_at', orderable: false, searchable: false },
-            { data: 'action', name: 'action', orderable: false, searchable: false, className: 'text-center' },
-        ]
-    });
-});
-
-function toggleStatus(userId) {
-    if (!confirm('Toggle user status?')) return;
-    $.ajax({
-        url: '/admin/users/' + userId + '/toggle-status',
-        type: 'PATCH',
-        headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') },
-        success: function(res) {
-            if (res.success) location.reload();
-        }
-    });
-}
-</script>
+<div class="card">
+    <div class="card-head"><h3>All Users</h3><span class="badge neutral">{{ $users->total() }} total</span></div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead><tr><th>Name</th><th>Email</th><th>Households</th><th>Admin</th><th>Joined</th><th></th></tr></thead>
+            <tbody>
+                @forelse($users as $user)
+                <tr>
+                    <td><div class="avatar" style="display:inline-grid;width:30px;height:30px;border-radius:8px;place-items:center;background:#eef2ff;color:#4338ca;font-size:12px">{{ strtoupper(substr($user->name,0,2)) }}</div> {{ $user->name }}</td>
+                    <td>{{ $user->email }}</td>
+                    <td>{{ $user->households_count ?? $user->households->count() }}</td>
+                    <td><span class="badge {{ $user->is_admin ? 'primary' : 'neutral' }}">{{ $user->is_admin ? 'Yes' : 'No' }}</span></td>
+                    <td>{{ $user->created_at->format('d M Y') }}</td>
+                    <td><a class="btn" href="{{ route('admin.page.detail', ['page' => 'users', 'id' => $user->id]) }}">View</a></td>
+                </tr>
+                @empty
+                <tr><td colspan="6" class="empty">No users yet</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+    <div class="card-foot">{{ $users->links() }}</div>
+</div>
 @endsection

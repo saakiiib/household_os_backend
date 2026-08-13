@@ -1,57 +1,33 @@
-@extends('admin.pages.master')
-@section('title', 'Renewals')
+@extends('admin.pages.adminmaster')
+@section('title', 'Renewal Management')
 @section('content')
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0">Renewals</h4>
-            </div>
-        </div>
-    </div>
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table id="renewalsTable" class="table table-bordered table-striped align-middle" width="100%">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Renewal</th>
-                                    <th>Category</th>
-                                    <th>Household</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                    <th>Due Date</th>
-                                </tr>
-                            </thead>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="page-head">
+    <div><h1>Renewals</h1><p>Upcoming and overdue renewals across all households.</p></div>
+    <div class="actions"><a class="btn btn-primary" href="{{ route('admin.page', ['page' => 'renewals']) }}">+ New Renewal</a></div>
 </div>
-@endsection
 
-@section('script')
-<script>
-$(function() {
-    $('#renewalsTable').DataTable({
-        processing: true,
-        serverSide: true,
-        ajax: '{{ route("admin.renewals.index") }}',
-        columns: [
-            { data: 'id', name: 'id' },
-            { data: 'title_link', name: 'title', orderable: true, searchable: true },
-            { data: 'category_fmt', name: 'category', orderable: false, searchable: false },
-            { data: 'household_link', name: 'household_name', orderable: false, searchable: false },
-            { data: 'amount_fmt', name: 'amount', orderable: false, searchable: false },
-            { data: 'status_badge', name: 'status', orderable: true },
-            { data: 'due_date_fmt', name: 'due_date', orderable: true },
-        ]
-    });
-});
-</script>
+<div class="card">
+    <div class="card-head"><h3>All Renewals</h3><span class="badge neutral">{{ $renewals->total() }} total</span></div>
+    <div class="table-wrap">
+        <table class="table">
+            <thead><tr><th>Title</th><th>Household</th><th>Category</th><th>Amount</th><th>Due</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                @forelse($renewals as $renewal)
+                <tr>
+                    <td>{{ $renewal->title ?? ucfirst(str_replace('_',' ',$renewal->category ?? '')) }}</td>
+                    <td>{{ $renewal->household->name ?? '—' }}</td>
+                    <td>{{ ucfirst(str_replace('_',' ',$renewal->category ?? '—')) }}</td>
+                    <td>${{ number_format($renewal->amount ?? 0, 2) }}</td>
+                    <td>{{ $renewal->due_date ? $renewal->due_date->format('d M Y') : '—' }}</td>
+                    <td><span class="badge {{ $renewal->status === 'completed' ? 'success' : ($renewal->due_date && $renewal->due_date->isPast() ? 'danger' : 'warning') }}">{{ ucfirst($renewal->status) }}</span></td>
+                    <td><a class="btn" href="{{ route('admin.page.detail', ['page' => 'renewals', 'id' => $renewal->id]) }}">View</a></td>
+                </tr>
+                @empty
+                <tr><td colspan="6" class="empty">No renewals yet</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+    <div class="card-foot">{{ $renewals->links() }}</div>
+</div>
 @endsection

@@ -1,110 +1,161 @@
+function pagetop() {
+    window.scrollTo({
+        top: 130,
+        behavior: 'smooth',
+    });
+}
+
+// Success
 function showSuccess(msg) {
-    setTimeout(() => {
-        Swal.fire({
-            icon: 'success',
-            title: msg ?? 'Success!',
-            showConfirmButton: false,
-            timer: 1000
-        });
-    }, 300);
+    Swal.fire({
+        icon: 'success',
+        title: msg ?? 'Success!',
+        showConfirmButton: false,
+        timer: 1000
+    });
 }
 
+// Error
 function showError(msg) {
-    setTimeout(() => {
-        Swal.fire({
-            icon: 'error',
-            title: msg ?? 'Something went wrong!',
-            showConfirmButton: false,
-            timer: 2000
-        });
-    }, 300);
+    Swal.fire({
+        icon: 'error',
+        title: msg ?? 'Something went wrong!',
+        showConfirmButton: false,
+        timer: 2000
+    });
 }
 
+//
+function showConfirm(message = 'Are you sure?') {
+    return Swal.fire({
+        title: message,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes',
+        cancelButtonText: 'Cancel'
+    });
+}
+
+//reload
 function reload(ms = 2000) {
-    setTimeout(() => location.reload(), ms);
+    setTimeout(() => {
+        location.reload();
+    }, ms);
 }
 
 function pageTop() {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({
+        top: 50,
+        behavior: 'smooth',
+    });
 }
 
+// Preview image
 function previewImage(event, imgSelector) {
-    if (event.target.files && event.target.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            $(imgSelector).attr('src', e.target.result).show();
-        };
-        reader.readAsDataURL(event.target.files[0]);
-    }
+  if (event.target.files && event.target.files[0]) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      $(imgSelector).attr('src', e.target.result).show();
+    };
+    reader.readAsDataURL(event.target.files[0]);
+  }
 }
 
-function reloadTable(tableSelector = null) {
-    let table = tableSelector
-        ? $(tableSelector).DataTable()
-        : $('table.dataTable:visible').DataTable();
+$(document).ready(function () {
 
-    if (table) table.ajax.reload(null, false);
-}
+  //Selct2
+  $('.select2').select2({
+      width: '100%'
+  });
 
-function initUI(context = document) {
+   //summernote
+    $('.summernote').summernote({
+        height: 150,
+        toolbar: [
+            ['style', ['style', 'bold', 'italic', 'underline', 'strikethrough', 'clear']],
+            ['font', ['fontname', 'fontsize', 'color', 'forecolor', 'backcolor', 'superscript', 'subscript']],
+            ['para', ['ul', 'ol', 'paragraph', 'height']],
+            ['insert', ['link', 'picture', 'video', 'table', 'hr', 'codeview', 'linkDialogShow']],
+            ['misc', ['fullscreen', 'undo', 'redo', 'help']]
+        ],
+        popover: {
+            image: [
+                ['image', ['resizeFull', 'resizeHalf', 'resizeQuarter', 'resizeNone', 'floatLeft', 'floatRight', 'floatNone', 'removeMedia']],
+                ['custom', ['imageAttributes']],
+                ['remove', ['removeMedia']]
+            ],
+            link: [
+                ['link', ['linkDialogShow', 'unlink']]
+            ],
+            table: [
+                ['add', ['addRowDown', 'addRowUp', 'addColLeft', 'addColRight']],
+                ['delete', ['deleteRow', 'deleteCol', 'deleteTable']]
+            ],
+            air: [
+                ['color', ['color']],
+                ['font', ['bold', 'underline', 'clear']],
+                ['para', ['ul', 'paragraph']],
+                ['table', ['table']],
+                ['insert', ['link', 'picture']]
+            ]
+        },
+        dialogsInBody: true,
+    });
 
-    $(context).find('.select2').each(function () {
-        if (!$(this).hasClass('select2-hidden-accessible')) {
-            $(this).select2({ width: '100%' });
+});
+
+// Global remove button handler
+$(document).on('click', '.remove-file', function() {
+    const btn = $(this);
+    const filename = btn.data('filename');
+    const path = btn.data('path');
+    const model = btn.data('model');
+    const id = btn.data('id');
+    const col = btn.data('col');
+
+    if (!filename || !path || !model || !id || !col) return;
+
+    if(!confirm('Are you sure?')) return;
+
+    $.ajax({
+        url: '/admin/remove-file',
+        type: 'POST',
+        data: {
+            _token: $('meta[name="csrf-token"]').attr('content'),
+            filename: filename,
+            path: path,
+            model: model,
+            id: id,
+            col: col
+        },
+        success: function(res) {
+            btn.prev('img').remove();
+            btn.remove();  
+            success(res.message);
+        },
+        error: function(xhr) {
+            console.error(xhr.responseText);
+            pageTop();
+            if (xhr.responseJSON && xhr.responseJSON.errors)
+                error(Object.values(xhr.responseJSON.errors)[0][0]);
+            else
+                error();
         }
     });
-
-    $(context).find('.summernote').each(function () {
-
-        if ($(this).next('.note-editor').length) return;
-
-        $(this).summernote({
-            height: 300,
-
-            toolbar: [
-                ['style', ['style', 'bold', 'italic', 'underline', 'strikethrough', 'clear']],
-                ['font', ['fontname', 'fontsize', 'color', 'forecolor', 'backcolor', 'superscript', 'subscript']],
-                ['para', ['ul', 'ol', 'paragraph', 'height']],
-                ['insert', ['link', 'picture', 'video', 'table', 'hr']],
-                ['view', ['fullscreen', 'codeview', 'help']],
-                ['misc', ['undo', 'redo']]
-            ],
-
-            popover: {
-                image: [
-                    ['image', ['resizeFull', 'resizeHalf', 'resizeQuarter', 'resizeNone']],
-                    ['float', ['floatLeft', 'floatRight', 'floatNone']],
-                    ['remove', ['removeMedia']]
-                ],
-                link: [
-                    ['link', ['linkDialogShow', 'unlink']]
-                ],
-                table: [
-                    ['add', ['addRowDown', 'addRowUp', 'addColLeft', 'addColRight']],
-                    ['delete', ['deleteRow', 'deleteCol', 'deleteTable']]
-                ]
-            },
-
-            dialogsInBody: true,
-            disableDragAndDrop: false,
-            shortcuts: true
-        });
-    });
-}
+});
 
 let deleteUrl = '';
 let tableSelector = null;
 let deleteMethod = 'DELETE';
 
-$(document).on('click', '.deleteBtn', function () {
+$(document).on('click', '.deleteBtn', function() {
     deleteUrl = $(this).data('delete-url');
     tableSelector = $(this).data('table') || null;
     deleteMethod = $(this).data('method') || 'DELETE';
-    $('#confirmDeleteModal').modal('show');
+    $('#confirmModal').modal('show');
 });
 
-$('#confirmDeleteBtn').on('click', function () {
-
+$('#confirmDeleteBtn').on('click', function() {
     if (!deleteUrl) return;
 
     $.ajax({
@@ -113,99 +164,54 @@ $('#confirmDeleteBtn').on('click', function () {
         headers: {
             'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
         },
-        success: function (res) {
-            showSuccess(res.message ?? 'Deleted successfully!');
-            $('#confirmDeleteModal').modal('hide');
-            reloadTable(tableSelector);
+        success: function(response, textStatus, xhr) {
+            if (xhr.status === 200) {
+                showSuccess(response.message ?? 'Deleted successfully!');
+                $('#confirmModal').modal('hide');
+                reloadTable(tableSelector);
+            }
         },
-        error: function (xhr) {
-            showError(xhr.responseJSON?.message);
-            $('#confirmDeleteModal').modal('hide');
+        error: function(xhr) {
+            let message = xhr.responseJSON?.message ?? "Something went wrong!";
+            showError(message);
+            $('#confirmModal').modal('hide');
         }
     });
 });
 
-$(document).on('change', '.toggle-switch', function () {
+function reloadTable(tableSelector = null) {
+    let table;
 
-    let el = $(this);
+    if (tableSelector) {
+        table = $(tableSelector).DataTable();
+    } else {
+        table = $('table.dataTable:visible').DataTable();
+    }
 
-    $.ajax({
-        url: el.data('url'),
-        method: 'POST',
-        data: {
-            _token: $('meta[name="csrf-token"]').attr('content'),
-            id: el.data('id'),
-            status: el.prop('checked') ? 1 : 0,
-        },
+    if (table) {
+        table.ajax.reload(null, false);
+    }
+}
 
-        success: function (res) {
-            showSuccess(res.message ?? 'Updated');
-            reloadTable(el.data('table'));
-        },
-
-        error: function (xhr) {
-            el.prop('checked', !el.prop('checked'));
-            showError(xhr.responseJSON?.message);
-        }
-    });
+$(document).ajaxError(function(event, jqxhr, settings, thrownError) {
+    if (jqxhr.status === 403) {
+        let message = jqxhr.responseJSON?.message ?? "You don't have permission to perform this action";
+        showError(message);
+        return false;
+    }
 });
 
 window.showLoader = function () {
     Swal.fire({
         title: 'Loading',
+        html: '<p>Please wait...</p>',
         allowOutsideClick: false,
+        allowEscapeKey: false,
         didOpen: () => Swal.showLoading()
     });
 };
 
+// Hide loader (global)
 window.hideLoader = function () {
     Swal.close();
 };
-
-$(document).on('click', '.loader-btn', function () {
-    showLoader();
-});
-
-$(document).ajaxComplete(function () {
-    hideLoader();
-});
-
-$(document).on('click', '.editBtn', function () {
-    pageTop();
-});
-
-$(document).on('submit', '.spa-form', function (e) {
-    e.preventDefault();
-
-    var form     = $(this);
-    var url      = form.attr('action');
-    var formData = new FormData(this);
-
-    form.find('.summernote').each(function () {
-        var name = $(this).attr('name');
-        if (name) {
-            formData.set(name, $(this).summernote('code'));
-        }
-    });
-
-    $.ajax({
-        url:         url,
-        method:      'POST',
-        data:        formData,
-        contentType: false,
-        processData: false,
-        success: function (res) {
-            if (res.success) {
-                showSuccess(res.message ?? 'Saved successfully!');
-            }
-        },
-        error: function (xhr) {
-            if (xhr.status === 422) {
-                var first = Object.values(xhr.responseJSON.errors)[0][0];
-                showError(first);
-            } else {
-                showError(xhr.responseJSON?.message ?? 'Something went wrong.');
-            }
-        }
-    });
-});
