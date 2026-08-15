@@ -21,6 +21,23 @@ use Illuminate\Support\Facades\Route;
 | Public Routes
 |--------------------------------------------------------------------------
 */
+
+// HTTP Scheduler — hit this URL every 5 minutes from an external cron service
+// e.g. https://app.householdosapp.com/api/scheduler/cron
+Route::get('scheduler/cron', function () {
+    Artisan::call('notifications:send-reminders');
+    $taskOutput = Artisan::output();
+
+    Artisan::call('subscription:check-expiry');
+    $subOutput = Artisan::output();
+
+    return response()->json([
+        'success' => true,
+        'task_reminders' => trim($taskOutput),
+        'subscription_check' => trim($subOutput),
+    ]);
+});
+
 Route::get('config', [ConfigController::class, 'index']);
 Route::get('subscription/plans', [SubscriptionController::class, 'index']);
 

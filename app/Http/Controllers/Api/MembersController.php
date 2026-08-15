@@ -483,7 +483,7 @@ class MembersController extends Controller
 
         // Send approval notification to the member
         try {
-            NotificationService::sendToUser(
+            app(NotificationService::class)->sendToUser(
                 $targetMember->user_id,
                 'Welcome to the Family!',
                 'Your request to join ' . $household->name . ' has been approved.',
@@ -548,7 +548,7 @@ class MembersController extends Controller
 
         // Send rejection notification to the member
         try {
-            NotificationService::sendToUser(
+            app(NotificationService::class)->sendToUser(
                 $userId,
                 'Join Request Not Approved',
                 'Your request to join ' . $household->name . ' was not approved.',

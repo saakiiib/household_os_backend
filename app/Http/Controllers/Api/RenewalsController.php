@@ -149,6 +149,27 @@ class RenewalsController extends Controller
             ], 500);
         }
 
+        // Notify all household members about the new renewal
+        try {
+            $members = \App\Models\HouseholdMember::where('household_id', $household_id)
+                ->where('status', 'active')
+                ->where('user_id', '!=', Auth::id())
+                ->pluck('user_id')
+                ->all();
+
+            foreach ($members as $memberId) {
+                app(\App\Services\NotificationService::class)->sendToUser(
+                    $memberId,
+                    'New Renewal Added',
+                    "'{$renewal->title}' has been added — due " . ($renewal->due_date ? $renewal->due_date->format('d M Y') : 'soon'),
+                    'renewal_created',
+                    ['type' => 'renewal', 'id' => $renewal->id]
+                );
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send renewal creation notification: ' . $e->getMessage());
+        }
+
         $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
 
         return response()->json([

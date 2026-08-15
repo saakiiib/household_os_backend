@@ -160,13 +160,37 @@ class SendReminders extends Command
             $dueDate = $renewal->due_date->copy()->startOfDay();
             $diffDays = $today->diffInDays($dueDate, false);
 
-            // Get all household members
             $memberIds = HouseholdMember::where('household_id', $renewal->household_id)
                 ->where('status', 'active')
                 ->pluck('user_id')
                 ->all();
 
             if (empty($memberIds)) continue;
+
+            // Respect the reminder_before setting
+            $reminderDays = match($renewal->reminder_before ?? '7_days', '30_days' => 30, '14_days' => 14, '3_days' => 3, default => 7);
+
+            // Pre-due reminder: send once when within the reminder window
+            if ($diffDays <= $reminderDays && $diffDays > 1) {
+                foreach ($memberIds as $userId) {
+                    $alreadySent = \App\Models\Notification::where('user_id', $userId)
+                        ->where('type', 'renewal_reminder')
+                        ->where('data->id', $renewal->id)
+                        ->where('data->reminder_type', 'upcoming')
+                        ->whereDate('created_at', $today)
+                        ->exists();
+
+                    if (!$alreadySent) {
+                        app(NotificationService::class)->sendToUser(
+                            $userId,
+                            'Renewal reminder',
+                            "'{$renewal->title}' is due in {$diffDays} days",
+                            'renewal_reminder',
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'upcoming']
+                        );
+                    }
+                }
+            }
 
             // Day before due
             if ($diffDays == 1) {
@@ -207,6 +231,130 @@ class SendReminders extends Command
                             "'{$renewal->title}' is due today",
                             'renewal_reminder',
                             ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'due_today']
+                        );
+                    }
+                }
+            }
+
+            // Overdue escalation: remind every 3 days after due
+            if ($diffDays < 0 && abs($diffDays) % 3 == 0) {
+                foreach ($memberIds as $userId) {
+                    $alreadySent = \App\Models\Notification::where('user_id', $userId)
+                        ->where('type', 'renewal_reminder')
+                        ->where('data->id', $renewal->id)
+                        ->where('data->reminder_type', 'overdue')
+                        ->whereDate('created_at', $today)
+                        ->exists();
+
+                    if (!$alreadySent) {
+                        app(NotificationService::class)->sendToUser(
+                            $userId,
+                            'Renewal overdue',
+                            "'{$renewal->title}' was due {$renewal->due_date->format('d M Y')} — please complete it",
+                            'renewal_reminder',
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'overdue']
+                        );
+                    }
+                }
+            }
+        }
+
+        // Vehicle service date reminders
+        $this->sendVehicleServiceReminders();
+    }
+
+    private function sendVehicleServiceReminders(): void
+    {
+        $now = now();
+        $today = $now->copy()->startOfDay();
+
+        $services = \App\Models\RenewalVehicleService::with('renewal')
+            ->whereHas('renewal', function ($q) {
+                $q->where('status', 'pending');
+            })
+            ->where('service_date', '>=', $today->copy()->subDays(30))
+            ->get();
+
+        foreach ($services as $service) {
+            $renewal = $service->renewal;
+            if (!$renewal) continue;
+
+            $serviceDate = \Carbon\Carbon::parse($service->service_date)->startOfDay();
+            $diffDays = $today->diffInDays($serviceDate, false);
+
+            $memberIds = HouseholdMember::where('household_id', $renewal->household_id)
+                ->where('status', 'active')
+                ->pluck('user_id')
+                ->all();
+
+            if (empty($memberIds)) continue;
+
+            $typeLabel = str_replace('_', ' ', $service->service_type);
+
+            // Due today
+            if ($diffDays == 0) {
+                foreach ($memberIds as $userId) {
+                    $alreadySent = \App\Models\Notification::where('user_id', $userId)
+                        ->where('type', 'renewal_reminder')
+                        ->where('data->id', $renewal->id)
+                        ->where('data->reminder_type', 'service_due_today')
+                        ->where('data->service_type', $service->service_type)
+                        ->whereDate('created_at', $today)
+                        ->exists();
+
+                    if (!$alreadySent) {
+                        app(NotificationService::class)->sendToUser(
+                            $userId,
+                            ucfirst($typeLabel) . ' due today',
+                            "'{$renewal->title}' — {$typeLabel} is due today",
+                            'renewal_reminder',
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type]
+                        );
+                    }
+                }
+            }
+
+            // Day before
+            if ($diffDays == 1) {
+                foreach ($memberIds as $userId) {
+                    $alreadySent = \App\Models\Notification::where('user_id', $userId)
+                        ->where('type', 'renewal_reminder')
+                        ->where('data->id', $renewal->id)
+                        ->where('data->reminder_type', 'service_day_before')
+                        ->where('data->service_type', $service->service_type)
+                        ->whereDate('created_at', $today)
+                        ->exists();
+
+                    if (!$alreadySent) {
+                        app(NotificationService::class)->sendToUser(
+                            $userId,
+                            ucfirst($typeLabel) . ' due tomorrow',
+                            "'{$renewal->title}' — {$typeLabel} is due tomorrow",
+                            'renewal_reminder',
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_day_before', 'service_type' => $service->service_type]
+                        );
+                    }
+                }
+            }
+
+            // 7 days before
+            if ($diffDays == 7) {
+                foreach ($memberIds as $userId) {
+                    $alreadySent = \App\Models\Notification::where('user_id', $userId)
+                        ->where('type', 'renewal_reminder')
+                        ->where('data->id', $renewal->id)
+                        ->where('data->reminder_type', 'service_7_days')
+                        ->where('data->service_type', $service->service_type)
+                        ->whereDate('created_at', $today)
+                        ->exists();
+
+                    if (!$alreadySent) {
+                        app(NotificationService::class)->sendToUser(
+                            $userId,
+                            ucfirst($typeLabel) . ' in 7 days',
+                            "'{$renewal->title}' — {$typeLabel} is due in 7 days",
+                            'renewal_reminder',
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_7_days', 'service_type' => $service->service_type]
                         );
                     }
                 }
