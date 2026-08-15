@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Task;
-use App\Models\Document;
 use App\Models\Renewal;
 use App\Http\Controllers\Controller;
 use App\Models\HouseholdMember;
@@ -16,23 +15,30 @@ class SchedulerController extends Controller
 {
     public function run()
     {
-        $reminderResult = $this->sendReminders();
-        $subscriptionResult = $this->checkSubscriptionExpiry();
+        $results = [];
+
+        try {
+            $results['task_reminders'] = $this->sendTaskReminders();
+        } catch (\Throwable $e) {
+            $results['task_reminders'] = 'error: ' . $e->getMessage();
+        }
+
+        try {
+            $results['renewal_reminders'] = $this->sendRenewalReminders();
+        } catch (\Throwable $e) {
+            $results['renewal_reminders'] = 'error: ' . $e->getMessage();
+        }
+
+        try {
+            $results['subscription_check'] = $this->checkSubscriptionExpiry();
+        } catch (\Throwable $e) {
+            $results['subscription_check'] = 'error: ' . $e->getMessage();
+        }
 
         return response()->json([
             'success' => true,
-            'task_reminders' => $reminderResult,
-            'subscription_check' => $subscriptionResult,
+            'results' => $results,
         ]);
-    }
-
-    private function sendReminders(): string
-    {
-        $sent = 0;
-        $sent += $this->sendTaskReminders();
-        $sent += $this->sendDocumentReminders();
-        $sent += $this->sendRenewalReminders();
-        return "Sent {$sent} reminders";
     }
 
     private function sendTaskReminders(): int
@@ -43,7 +49,6 @@ class SchedulerController extends Controller
 
         $tasks = Task::where('status', '!=', 'completed')
             ->whereNotNull('due_date')
-            ->whereNotNull('reminder_before')
             ->whereNotNull('assigned_user_id')
             ->get();
 
@@ -51,110 +56,75 @@ class SchedulerController extends Controller
             $dueDate = $task->due_date->copy()->startOfDay();
             $diffDays = $today->diffInDays($dueDate, false);
 
-            $shouldRemind = false;
-            $timeLabel = '';
+            // Pre-due reminders (only if reminder_before is set)
+            if ($task->reminder_before) {
+                $shouldRemind = false;
+                $timeLabel = '';
 
-            switch ($task->reminder_before) {
-                case '15_minutes':
-                    if ($task->due_time) {
-                        $reminderTime = $dueDate->copy()->subMinutes(15);
-                        $shouldRemind = $now->gte($reminderTime) && $now->lt($dueDate->copy()->addMinutes(15));
-                        $timeLabel = 'in 15 minutes';
+                switch ($task->reminder_before) {
+                    case '15_minutes':
+                        if ($task->due_time) {
+                            $reminderTime = $dueDate->copy()->subMinutes(15);
+                            $shouldRemind = $now->gte($reminderTime) && $now->lt($dueDate->copy()->addMinutes(15));
+                            $timeLabel = 'in 15 minutes';
+                        }
+                        break;
+                    case '1_hour':
+                        $reminderTime = $dueDate->copy()->subHour();
+                        $shouldRemind = $now->gte($reminderTime) && $now->lt($dueDate->copy()->addHour());
+                        $timeLabel = 'in 1 hour';
+                        break;
+                    case '1_day':
+                        $shouldRemind = $diffDays <= 1 && $diffDays >= 0;
+                        $timeLabel = 'tomorrow';
+                        break;
+                    case '3_days':
+                        $shouldRemind = $diffDays <= 3 && $diffDays >= 0;
+                        $timeLabel = 'in 3 days';
+                        break;
+                    case '1_week':
+                        $shouldRemind = $diffDays <= 7 && $diffDays >= 0;
+                        $timeLabel = 'in 1 week';
+                        break;
+                }
+
+                if ($shouldRemind) {
+                    $alreadySent = \App\Models\Notification::where('user_id', $task->assigned_user_id)
+                        ->where('type', 'task_reminder')
+                        ->where('data->id', $task->id)
+                        ->where('data->reminder_type', 'upcoming')
+                        ->whereDate('created_at', $today)
+                        ->exists();
+
+                    if (!$alreadySent) {
+                        app(NotificationService::class)->sendToUser(
+                            $task->assigned_user_id,
+                            'Task reminder',
+                            "'{$task->title}' is due {$timeLabel}",
+                            'task_reminder',
+                            ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'upcoming']
+                        );
+                        $sent++;
                     }
-                    break;
-                case '1_hour':
-                    $reminderTime = $dueDate->copy()->subHour();
-                    $shouldRemind = $now->gte($reminderTime) && $now->lt($dueDate->copy()->addHour());
-                    $timeLabel = 'in 1 hour';
-                    break;
-                case '1_day':
-                    $shouldRemind = $diffDays <= 1 && $diffDays >= 0;
-                    $timeLabel = 'tomorrow';
-                    break;
-                case '3_days':
-                    $shouldRemind = $diffDays <= 3 && $diffDays >= 0;
-                    $timeLabel = 'in 3 days';
-                    break;
-                case '1_week':
-                    $shouldRemind = $diffDays <= 7 && $diffDays >= 0;
-                    $timeLabel = 'in 1 week';
-                    break;
+                }
             }
 
-            if ($shouldRemind) {
+            // Overdue notification — for ALL incomplete tasks past due date
+            if ($diffDays < 0) {
                 $alreadySent = \App\Models\Notification::where('user_id', $task->assigned_user_id)
                     ->where('type', 'task_reminder')
                     ->where('data->id', $task->id)
+                    ->where('data->reminder_type', 'overdue')
                     ->whereDate('created_at', $today)
                     ->exists();
 
                 if (!$alreadySent) {
                     app(NotificationService::class)->sendToUser(
                         $task->assigned_user_id,
-                        'Task reminder',
-                        "'{$task->title}' is due {$timeLabel}",
+                        'Task overdue',
+                        "'{$task->title}' was due {$task->due_date->format('d M Y')} — please complete it",
                         'task_reminder',
-                        ['type' => 'task', 'id' => $task->id]
-                    );
-                    $sent++;
-                }
-            }
-        }
-
-        return $sent;
-    }
-
-    private function sendDocumentReminders(): int
-    {
-        $now = now();
-        $today = $now->copy()->startOfDay();
-        $sent = 0;
-
-        $documents = Document::whereNotNull('due_date')
-            ->whereNotNull('reminder_before')
-            ->whereNotNull('created_by_user_id')
-            ->get();
-
-        foreach ($documents as $doc) {
-            $dueDate = $doc->due_date->copy()->startOfDay();
-            $diffDays = $today->diffInDays($dueDate, false);
-
-            $shouldRemind = false;
-            $timeLabel = '';
-
-            switch ($doc->reminder_before) {
-                case '1_day':
-                    $shouldRemind = $diffDays <= 1 && $diffDays >= 0;
-                    $timeLabel = 'tomorrow';
-                    break;
-                case '3_days':
-                    $shouldRemind = $diffDays <= 3 && $diffDays >= 0;
-                    $timeLabel = 'in 3 days';
-                    break;
-                case '1_week':
-                    $shouldRemind = $diffDays <= 7 && $diffDays >= 0;
-                    $timeLabel = 'in 1 week';
-                    break;
-                case '30_days':
-                    $shouldRemind = $diffDays <= 30 && $diffDays >= 0;
-                    $timeLabel = 'in 30 days';
-                    break;
-            }
-
-            if ($shouldRemind) {
-                $alreadySent = \App\Models\Notification::where('user_id', $doc->created_by_user_id)
-                    ->where('type', 'document_reminder')
-                    ->where('data->id', $doc->id)
-                    ->whereDate('created_at', $today)
-                    ->exists();
-
-                if (!$alreadySent) {
-                    app(NotificationService::class)->sendToUser(
-                        $doc->created_by_user_id,
-                        'Document reminder',
-                        "'{$doc->title}' — action needed {$timeLabel}",
-                        'document_reminder',
-                        ['type' => 'document', 'id' => $doc->id]
+                        ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'overdue']
                     );
                     $sent++;
                 }
