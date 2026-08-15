@@ -129,6 +129,49 @@ class SchedulerController extends Controller
                     $sent++;
                 }
             }
+
+            // Due today notification
+            if ($diffDays == 0) {
+                $alreadySent = \App\Models\Notification::where('user_id', $task->assigned_user_id)
+                    ->where('type', 'task_reminder')
+                    ->where('data->id', $task->id)
+                    ->where('data->reminder_type', 'due_today')
+                    ->whereDate('created_at', $today)
+                    ->exists();
+
+                if (!$alreadySent) {
+                    $timeLabel = $task->due_time ? 'today at ' . \Carbon\Carbon::parse($task->due_time)->format('g:i A') : 'today';
+                    app(NotificationService::class)->sendToUser(
+                        $task->assigned_user_id,
+                        'Task due today',
+                        "'{$task->title}' is due {$timeLabel}",
+                        'task_reminder',
+                        ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'due_today']
+                    );
+                    $sent++;
+                }
+            }
+
+            // Day before due notification (always sent, regardless of reminder_before)
+            if ($diffDays == 1) {
+                $alreadySent = \App\Models\Notification::where('user_id', $task->assigned_user_id)
+                    ->where('type', 'task_reminder')
+                    ->where('data->id', $task->id)
+                    ->where('data->reminder_type', 'day_before')
+                    ->whereDate('created_at', $today)
+                    ->exists();
+
+                if (!$alreadySent) {
+                    app(NotificationService::class)->sendToUser(
+                        $task->assigned_user_id,
+                        'Task due tomorrow',
+                        "'{$task->title}' is due tomorrow",
+                        'task_reminder',
+                        ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'day_before']
+                    );
+                    $sent++;
+                }
+            }
         }
 
         return $sent;
