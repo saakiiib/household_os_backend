@@ -15,26 +15,13 @@ use App\Http\Controllers\Api\ConfigController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\PaymentController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Artisan;
 
 /*
 |--------------------------------------------------------------------------
 | Public Routes
 |--------------------------------------------------------------------------
 */
-Route::get('scheduler/cron', function () {
-    Artisan::call('notifications:send-reminders');
-    $taskOutput = Artisan::output();
-
-    Artisan::call('subscription:check-expiry');
-    $subOutput = Artisan::output();
-
-    return response()->json([
-        'success' => true,
-        'task_reminders' => trim($taskOutput),
-        'subscription_check' => trim($subOutput),
-    ]);
-});
+Route::get('scheduler/cron', [\App\Http\Controllers\Api\SchedulerController::class, 'run']);
 
 Route::get('config', [ConfigController::class, 'index']);
 Route::get('subscription/plans', [SubscriptionController::class, 'index']);
