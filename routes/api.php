@@ -15,15 +15,13 @@ use App\Http\Controllers\Api\ConfigController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\PaymentController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Artisan;
 
 /*
 |--------------------------------------------------------------------------
 | Public Routes
 |--------------------------------------------------------------------------
 */
-
-// HTTP Scheduler — hit this URL every 5 minutes from an external cron service
-// e.g. https://app.householdosapp.com/api/scheduler/cron
 Route::get('scheduler/cron', function () {
     Artisan::call('notifications:send-reminders');
     $taskOutput = Artisan::output();
