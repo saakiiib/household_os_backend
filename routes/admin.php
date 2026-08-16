@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\PagesController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\HouseholdController;
 use App\Http\Controllers\Admin\TaskController;
 use App\Http\Controllers\Admin\DocumentController;
@@ -20,6 +21,10 @@ Route::get('/p/{page}/{id}', [PagesController::class, 'detail'])->name('admin.pa
     Route::get('/users', [UserController::class, 'index'])->name('admin.users.index');
     Route::get('/users/{user}', [UserController::class, 'show'])->name('admin.users.show');
     Route::patch('/users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('admin.users.toggleStatus');
+
+    Route::get('/admins', [AdminController::class, 'index'])->name('admin.admins.index');
+    Route::post('/admins', [AdminController::class, 'store'])->name('admin.admins.store');
+    Route::delete('/admins/{user}', [AdminController::class, 'destroy'])->name('admin.admins.destroy');
 
     Route::get('/households', [HouseholdController::class, 'index'])->name('admin.households.index');
     Route::get('/households/{household}', [HouseholdController::class, 'show'])->name('admin.households.show');

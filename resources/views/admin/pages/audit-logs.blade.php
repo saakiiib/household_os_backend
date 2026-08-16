@@ -19,15 +19,48 @@
     </div>
 
     <div class="row">
+        <div class="col-xl-3 col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex">
+                        <div class="flex-grow-1">
+                            <p class="text-muted mb-2 text-truncate">Total Entries</p>
+                            <h4 class="mb-0">{{ number_format($totalLogs) }}</h4>
+                        </div>
+                        <div class="avatar-sm">
+                            <span class="avatar-title bg-soft-primary text-primary rounded fs-3"><i class="ri-list-check-2"></i></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex">
+                        <div class="flex-grow-1">
+                            <p class="text-muted mb-2 text-truncate">Today</p>
+                            <h4 class="mb-0">{{ number_format($todayLogs) }}</h4>
+                        </div>
+                        <div class="avatar-sm">
+                            <span class="avatar-title bg-soft-info text-info rounded fs-3"><i class="ri-calendar-line"></i></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
         <div class="col-lg-12">
             <div class="card">
                 <div class="card-header align-items-center d-flex">
                     <h4 class="card-title mb-0 flex-grow-1">Activity</h4>
-                    <span class="badge bg-soft-primary fs-12">{{ $logs->total() ?? $logs->count() }} entries</span>
+                    <span class="badge bg-soft-primary fs-12">{{ number_format($totalLogs) }} entries</span>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-sm table-nowrap align-middle mb-0">
+                        <table id="audit-logs-table" class="table table-sm table-nowrap align-middle mb-0" style="width:100%">
                             <thead class="table-light">
                                 <tr>
                                     <th>Time</th>
@@ -37,32 +70,33 @@
                                     <th>Details</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                @forelse ($logs as $log)
-                                    <tr>
-                                        <td class="text-muted">{{ $log->created_at ? $log->created_at->format('d M Y H:i') : '—' }}</td>
-                                        <td class="fw-medium">{{ optional($log->causer)->name ?? 'System' }}</td>
-                                        <td>{{ $log->description ?? '—' }}</td>
-                                        <td>{{ class_basename($log->subject_type ?? '') }} #{{ $log->subject_id ?? '' }}</td>
-                                        <td>
-                                            <a href="{{ route('admin.page.detail', ['page' => 'audit-logs', 'id' => $log->id]) }}" class="btn btn-sm btn-soft-primary">View</a>
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="5" class="text-center text-muted">No audit events recorded yet</td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
                         </table>
                     </div>
-                    @if (method_exists($logs, 'links'))
-                        <div class="mt-3">{{ $logs->links() }}</div>
-                    @endif
                 </div>
             </div>
         </div>
     </div>
 
 </div>
+@endsection
+
+@section('script')
+<script>
+$(function () {
+    $('#audit-logs-table').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: "{{ route('admin.page', ['page' => 'audit-logs']) }}",
+        columns: [
+            { data: 'time', name: 'created_at', orderable: true, searchable: false },
+            { data: 'actor', name: 'causer_id', orderable: false, searchable: false },
+            { data: 'action_name', name: 'description', orderable: false, searchable: true },
+            { data: 'target', name: 'subject_type', orderable: false, searchable: false },
+            { data: 'details', name: 'details', orderable: false, searchable: false }
+        ],
+        order: [[0, 'desc']],
+        language: { emptyTable: 'No audit events recorded yet', zeroRecords: 'No matching events' }
+    });
+});
+</script>
 @endsection

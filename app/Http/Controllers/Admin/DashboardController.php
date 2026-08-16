@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Household;
 use App\Models\Subscription;
@@ -10,7 +11,6 @@ use App\Models\Payment;
 use App\Models\Task;
 use App\Models\Renewal;
 use App\Models\Document;
-use App\Models\DocumentFile;
 use App\Models\Invitation;
 use App\Models\ActivityLog;
 
@@ -30,17 +30,15 @@ class DashboardController extends Controller
         $tasksToday = Task::whereDate('due_date', now()->toDateString())->count();
         $renewalsDue = Renewal::where('status', '!=', 'completed')
             ->whereDate('due_date', '<=', now()->addDays(7)->toDateString())->count();
-        $openTickets = 0;
 
         $trend = [
             'households' => $this->monthOverMonth(Household::class),
             'users'      => $this->monthOverMonth(User::class),
             'revenue'    => $this->revenueTrend(),
-            'subscriptions' => 6.7,
-            'documents'  => 14.0,
-            'tasks'      => 4.2,
-            'renewals'   => -2.1,
-            'tickets'    => 3.6,
+            'subscriptions' => $this->monthOverMonth(Subscription::class),
+            'documents'  => $this->monthOverMonth(Document::class),
+            'tasks'      => $this->monthOverMonth(Task::class),
+            'renewals'   => $this->monthOverMonth(Renewal::class),
         ];
 
         $growthLabels = [];
@@ -67,17 +65,30 @@ class DashboardController extends Controller
 
         $recentActivities = ActivityLog::with('user')->latest()->take(8)->get();
 
+        $dbOk = true;
+        try {
+            DB::connection()->getPdo();
+        } catch (\Throwable $e) {
+            $dbOk = false;
+        }
+
+        $stripeOk = !empty(config('services.stripe.secret'));
+        $paypalOk = !empty(config('services.paypal.client_id'));
+        $mailOk = !empty(config('mail.mailers.smtp.host'))
+            && !empty(config('mail.mailers.smtp.username'))
+            && !empty(config('mail.mailers.smtp.password'));
+
         $health = [
-            ['label' => 'API', 'value' => '99.99%', 'status' => 'ok'],
-            ['label' => 'Database', 'value' => 'Healthy', 'status' => 'ok'],
-            ['label' => 'OCR Queue', 'value' => DocumentFile::count() . ' files', 'status' => 'ok'],
-            ['label' => 'Backups', 'value' => 'Completed', 'status' => 'ok'],
-            ['label' => 'Stripe', 'value' => 'Connected', 'status' => 'ok'],
+            ['label' => 'API', 'value' => 'Operational', 'status' => 'ok'],
+            ['label' => 'Database', 'value' => $dbOk ? 'Healthy' : 'Down', 'status' => $dbOk ? 'ok' : 'warning'],
+            ['label' => 'Stripe', 'value' => $stripeOk ? 'Connected' : 'Not configured', 'status' => $stripeOk ? 'ok' : 'warning'],
+            ['label' => 'PayPal', 'value' => $paypalOk ? 'Connected' : 'Not configured', 'status' => $paypalOk ? 'ok' : 'warning'],
+            ['label' => 'Email', 'value' => $mailOk ? 'Configured' : 'Not configured', 'status' => $mailOk ? 'ok' : 'warning'],
         ];
 
         return view('admin.pages.dashboard', compact(
             'totalHouseholds', 'totalUsers', 'activeSubscriptions', 'monthlyRevenue',
-            'totalRevenue', 'totalDocuments', 'tasksToday', 'renewalsDue', 'openTickets',
+            'totalRevenue', 'totalDocuments', 'tasksToday', 'renewalsDue',
             'trend', 'growthLabels', 'growthUsers', 'growthHouseholds',
             'revenueLabels', 'revenueSeries', 'recentActivities', 'health'
         ));

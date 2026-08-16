@@ -39,9 +39,14 @@ class HouseholdController extends Controller
                 ->make(true);
         }
 
-        return view('admin.pages.households', [
-            'households' => Household::withCount('members')->latest()->paginate(20),
-        ]);
+        $totalHouseholds = Household::count();
+        $totalMembers = Household::withCount('members')->get()->sum('members_count');
+        $activeHouseholds = Household::where('status', 'active')->count();
+        $archivedHouseholds = Household::where('status', 'archived')->count();
+
+        return view('admin.pages.households', compact(
+            'totalHouseholds', 'totalMembers', 'activeHouseholds', 'archivedHouseholds'
+        ));
     }
 
     public function show(Household $household)
@@ -76,7 +81,7 @@ class HouseholdController extends Controller
             'renewals_total' => $renewals->count(),
             'renewals_overdue' => $renewals->filter(fn($r) => $r->is_overdue)->count(),
             'documents_total' => $documents->count(),
-            'payments_total' => $household->payments->where('status', 'completed')->sum('amount'),
+            'payments_total' => $household->payments->where('status', 'succeeded')->sum('amount'),
         ];
 
         return view('admin.pages.household-show', compact('household', 'tasks', 'renewals', 'documents', 'stats'));

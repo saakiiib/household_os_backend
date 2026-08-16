@@ -31,9 +31,14 @@ class SubscriptionController extends Controller
                 ->make(true);
         }
 
-        return view('admin.pages.subscriptions', [
-            'subscriptions' => Subscription::with('plan', 'household')->latest()->paginate(20),
-        ]);
+        $totalSubscriptions = \App\Models\Subscription::count();
+        $activeSubscriptions = \App\Models\Subscription::where('status', 'active')->count();
+        $trialSubscriptions = \App\Models\Subscription::where('status', 'trial')->count();
+        $expiredSubscriptions = \App\Models\Subscription::where('status', 'expired')->count();
+
+        return view('admin.pages.subscriptions', compact(
+            'totalSubscriptions', 'activeSubscriptions', 'trialSubscriptions', 'expiredSubscriptions'
+        ));
     }
 
     public function show(Subscription $subscription)

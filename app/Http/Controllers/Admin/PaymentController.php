@@ -21,10 +21,10 @@ class PaymentController extends Controller
                     if (!$p->household) return 'N/A';
                     return '<a href="' . route('admin.households.show', $p->household) . '" class="text-body">' . e($p->household->name) . '</a>';
                 })
-                ->addColumn('amount_fmt', fn($p) => '$' . number_format($p->amount, 2))
+                ->addColumn('amount_fmt', fn($p) => '£' . number_format($p->amount, 2))
                 ->addColumn('gateway_fmt', fn($p) => ucfirst($p->gateway))
                 ->addColumn('status_badge', function ($p) {
-                    $cls = match($p->status) { 'completed' => 'success', 'failed' => 'danger', default => 'warning' };
+                    $cls = match($p->status) { 'succeeded' => 'success', 'failed' => 'danger', 'refunded' => 'info', default => 'warning' };
                     return '<span class="badge badge-soft-' . $cls . '">' . ucfirst($p->status) . '</span>';
                 })
                 ->addColumn('date_fmt', fn($p) => $p->created_at->format('d M Y'))
@@ -32,9 +32,14 @@ class PaymentController extends Controller
                 ->make(true);
         }
 
-        return view('admin.pages.payments', [
-            'payments' => Payment::with('user', 'household')->latest()->paginate(20),
-        ]);
+        $totalPayments = \App\Models\Payment::count();
+        $succeededPayments = \App\Models\Payment::where('status', 'succeeded')->count();
+        $failedPayments = \App\Models\Payment::where('status', 'failed')->count();
+        $refundedPayments = \App\Models\Payment::where('status', 'refunded')->count();
+
+        return view('admin.pages.payments', compact(
+            'totalPayments', 'succeededPayments', 'failedPayments', 'refundedPayments'
+        ));
     }
 
     public function show(Payment $payment)

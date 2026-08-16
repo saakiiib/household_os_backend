@@ -13,9 +13,6 @@
                         <p class="text-muted mb-0">A real-time view of platform growth, revenue, engagement, operations and risk.</p>
                     </div>
                     <div class="page-title-right d-flex gap-2 align-items-center">
-                        <span class="badge bg-soft-success text-success fs-12"><i class="ri-record-circle-line"></i> Live</span>
-                        <button class="btn btn-soft-primary btn-sm"><i class="ri-download-line"></i> Download report</button>
-                        <button class="btn btn-primary btn-sm"><i class="ri-megaphone-line"></i> Create announcement</button>
                     </div>
                 </div>
             </div>
@@ -31,11 +28,12 @@
                     ['label' => 'Documents Stored', 'value' => number_format($totalDocuments), 'icon' => 'ri-folder-line', 'key' => 'documents'],
                     ['label' => 'Tasks Today', 'value' => number_format($tasksToday), 'icon' => 'ri-task-line', 'key' => 'tasks'],
                     ['label' => 'Renewals Due', 'value' => number_format($renewalsDue), 'icon' => 'ri-refresh-line', 'key' => 'renewals'],
-                    ['label' => 'Open Tickets', 'value' => number_format($openTickets), 'icon' => 'ri-ticket-line', 'key' => 'tickets'],
                 ];
             @endphp
             @foreach ($kpis as $k)
-                @php($t = $trend[$k['key']])
+                @php
+                    $t = $trend[$k['key']];
+                @endphp
                 <div class="col-xl-3 col-md-6">
                     <div class="card">
                         <div class="card-body">
@@ -148,10 +146,13 @@
                     <div class="card-body">
                         <div class="vstack gap-3">
                             @foreach ($health as $h)
+                                @php
+                                    $ok = ($h['status'] ?? 'ok') === 'ok';
+                                @endphp
                                 <div class="d-flex align-items-center justify-content-between border-bottom pb-2">
                                     <span class="text-muted">{{ $h['label'] }}</span>
-                                    <span class="text-success fw-medium">
-                                        <i class="ri-checkbox-circle-line"></i> {{ $h['value'] }}
+                                    <span class="text-{{ $ok ? 'success' : 'warning' }} fw-medium">
+                                        <i class="ri-{{ $ok ? 'checkbox-circle' : 'error-warning' }}-line"></i> {{ $h['value'] }}
                                     </span>
                                 </div>
                             @endforeach

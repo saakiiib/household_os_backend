@@ -37,10 +37,12 @@
                                 </div>
                             </div>
                             <p class="mt-3 mb-0 text-muted fs-13">
-                                <span class="badge {{ $k['trend'] >= 0 ? 'bg-soft-success text-success' : 'bg-soft-danger text-danger' }}">
-                                    <i class="ri-arrow-{{ $k['trend'] >= 0 ? 'up' : 'down' }}-line"></i> {{ abs($k['trend']) }}%
+                                @php
+                                    $ok = ($k['status'] ?? 'ok') === 'ok';
+                                @endphp
+                                <span class="badge {{ $ok ? 'bg-soft-success text-success' : 'bg-soft-warning text-warning' }}">
+                                    <i class="ri-{{ $ok ? 'checkbox-circle' : 'error-warning' }}-line"></i> {{ $ok ? 'Operational' : 'Attention' }}
                                 </span>
-                                <span class="ms-1">vs last period</span>
                             </p>
                         </div>
                     </div>

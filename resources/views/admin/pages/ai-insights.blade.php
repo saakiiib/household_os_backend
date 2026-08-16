@@ -13,8 +13,17 @@
                         <p class="text-muted mb-0">Model activity, risk detection and automated intelligence signals.</p>
                     </div>
                     <div class="page-title-right d-flex gap-2 align-items-center">
-                        <span class="badge bg-soft-success text-success fs-12"><i class="ri-record-circle-line"></i> Live</span>
-                        <button class="btn btn-soft-primary btn-sm"><i class="ri-download-line"></i> Download report</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="alert alert-warning d-flex align-items-center mb-4" role="alert">
+                    <i class="ri-information-line fs-18 me-2"></i>
+                    <div>
+                        <strong>Demonstration data.</strong> These AI insights are computed from recent platform activity logs and are shown as illustrative examples — they are not produced by a live ML model.
                     </div>
                 </div>
             </div>
