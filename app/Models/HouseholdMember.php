@@ -3,16 +3,22 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 
-class HouseholdMember extends Model
+class HouseholdMember extends Pivot
 {
     use HasFactory;
+
+    protected $table = 'household_members';
+
+    public $incrementing = true;
 
     protected $guarded = [];
 
     protected $casts = [
         'joined_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     /**

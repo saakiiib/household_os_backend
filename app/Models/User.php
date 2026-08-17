@@ -29,6 +29,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function households()
     {
         return $this->belongsToMany(Household::class, 'household_members')
+                    ->using(\App\Models\HouseholdMember::class)
                     ->withPivot('role', 'status', 'joined_at')
                     ->withTimestamps();
     }
@@ -60,6 +61,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function activeHousehold()
     {
         return $this->belongsToMany(Household::class, 'household_members')
+                    ->using(\App\Models\HouseholdMember::class)
                     ->wherePivot('status', 'active')
                     ->withPivot('role', 'status', 'joined_at')
                     ->withTimestamps()

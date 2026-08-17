@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Notification;
 use App\Models\User;
 use Kreait\Firebase\Contract\Messaging;
+use Kreait\Firebase\Messaging\ApnsConfig;
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Messaging\Notification as FcmNotification;
 use Illuminate\Support\Facades\Log;
@@ -97,18 +98,39 @@ class NotificationService
         ]);
 
         $payload = array_merge($data, ['type' => $type]);
+        $payload = array_map(fn($v) => is_string($v) ? $v : (string) $v, $payload);
+
+        $apns = ApnsConfig::fromArray([
+            'payload' => [
+                'aps' => [
+                    'sound' => 'default',
+                    'badge' => 1,
+                ],
+            ],
+        ]);
 
         foreach (array_chunk($tokens, 500) as $chunk) {
             try {
                 $message = CloudMessage::new()
                     ->withNotification(FcmNotification::create($title, $body))
-                    ->withData($payload);
+                    ->withData($payload)
+                    ->withApnsConfig($apns);
                 $result = $this->messaging->sendMulticast($message, $chunk);
 
-                Log::info("NOTIFICATION: FCM sent successfully", [
+                Log::info("NOTIFICATION: FCM sent", [
                     'success' => $result->successes()->count(),
                     'failed'  => $result->failures()->count(),
                 ]);
+
+                foreach ($result->failures() as $failure) {
+                    Log::error("NOTIFICATION: FCM delivery failure", [
+                        'token'   => $failure->target()?->value(),
+                        'error'   => $failure->error()?->getMessage(),
+                        'response' => $failure->response() instanceof \Psr\Http\Message\ResponseInterface
+                            ? json_decode((string) $failure->response()->getBody(), true)
+                            : $failure->response(),
+                    ]);
+                }
             } catch (\Throwable $e) {
                 Log::error("NOTIFICATION: FCM Error: " . $e->getMessage());
             }
