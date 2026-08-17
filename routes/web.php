@@ -44,6 +44,7 @@ Route::get('/clean-db', function () {
         'renewal_vehicle_services',
         'sessions',
         'subscriptions',
+        'tasks',
         'users',
         'vehicles',
     ];
