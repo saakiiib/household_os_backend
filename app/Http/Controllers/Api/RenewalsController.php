@@ -4,11 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Renewal;
-use App\Models\RenewalVehicleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -117,14 +116,19 @@ class RenewalsController extends Controller
                 'status'             => 'pending',
             ]);
 
-            // Handle single document upload (no encryption)
             if ($request->hasFile('document')) {
                 $file = $request->file('document');
                 $filename = Str::random(32) . '.' . $file->getClientOriginalExtension();
-                $path = $file->storeAs('uploads/renewals', $filename);
+                $directory = public_path('uploads/renewals');
+
+                if (!File::isDirectory($directory)) {
+                    File::makeDirectory($directory, 0755, true);
+                }
+
+                $file->move($directory, $filename);
 
                 $renewal->update([
-                    'document_file_path'     => $path,
+                    'document_file_path'     => '/uploads/renewals/' . $filename,
                     'document_original_name' => $file->getClientOriginalName(),
                     'document_mime_type'     => $file->getMimeType(),
                 ]);
@@ -239,11 +243,10 @@ class RenewalsController extends Controller
                 'title', 'category', 'frequency', 'due_date', 'amount', 'reminder_before', 'notes', 'status',
             ]));
 
-            // Handle document removal
             if ($request->boolean('remove_document') && $renewal->document_file_path) {
-                $fullPath = storage_path('app/' . $renewal->document_file_path);
-                if (file_exists($fullPath)) {
-                    unlink($fullPath);
+                $fullPath = $renewal->documentFullPath();
+                if ($fullPath) {
+                    @unlink($fullPath);
                 }
                 $renewal->update([
                     'document_file_path'     => null,
@@ -252,22 +255,26 @@ class RenewalsController extends Controller
                 ]);
             }
 
-            // Handle single document upload (no encryption)
             if ($request->hasFile('document')) {
-                // Delete old file if replacing
                 if ($renewal->document_file_path) {
-                    $oldPath = storage_path('app/' . $renewal->document_file_path);
-                    if (file_exists($oldPath)) {
-                        unlink($oldPath);
+                    $oldFull = $renewal->documentFullPath();
+                    if ($oldFull) {
+                        @unlink($oldFull);
                     }
                 }
 
                 $file = $request->file('document');
                 $filename = Str::random(32) . '.' . $file->getClientOriginalExtension();
-                $path = $file->storeAs('uploads/renewals', $filename);
+                $directory = public_path('uploads/renewals');
+
+                if (!File::isDirectory($directory)) {
+                    File::makeDirectory($directory, 0755, true);
+                }
+
+                $file->move($directory, $filename);
 
                 $renewal->update([
-                    'document_file_path'     => $path,
+                    'document_file_path'     => '/uploads/renewals/' . $filename,
                     'document_original_name' => $file->getClientOriginalName(),
                     'document_mime_type'     => $file->getMimeType(),
                 ]);
@@ -309,14 +316,6 @@ class RenewalsController extends Controller
     {
         $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
 
-        // Delete the file from disk
-        if ($renewal->document_file_path) {
-            $fullPath = storage_path('app/' . $renewal->document_file_path);
-            if (file_exists($fullPath)) {
-                unlink($fullPath);
-            }
-        }
-
         $renewal->delete();
 
         return response()->json([
@@ -339,9 +338,9 @@ class RenewalsController extends Controller
             ], 404);
         }
 
-        $fullPath = storage_path('app/' . $renewal->document_file_path);
+        $fullPath = $renewal->documentFullPath();
 
-        if (!file_exists($fullPath)) {
+        if (!$fullPath) {
             return response()->json([
                 'success' => false,
                 'message' => 'Document file not found on server',

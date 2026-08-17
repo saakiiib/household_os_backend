@@ -92,14 +92,24 @@ class Renewal extends Model
         return !empty($this->document_file_path);
     }
 
+    public function documentFullPath(): ?string
+    {
+        if (empty($this->document_file_path)) {
+            return null;
+        }
+
+        $path = public_path(ltrim($this->document_file_path, '/'));
+
+        return is_file($path) ? $path : null;
+    }
+
     protected static function booted(): void
     {
         static::deleted(function (Renewal $renewal) {
-            if ($renewal->document_file_path) {
-                $fullPath = storage_path('app/' . $renewal->document_file_path);
-                if (file_exists($fullPath)) {
-                    unlink($fullPath);
-                }
+            $fullPath = $renewal->documentFullPath();
+
+            if ($fullPath) {
+                @unlink($fullPath);
             }
         });
     }
