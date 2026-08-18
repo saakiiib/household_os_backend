@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Models\HouseholdMember;
 use App\Models\Subscription;
 use App\Models\RenewalVehicleService;
+use App\Models\User;
 use App\Services\NotificationService;
 use App\Notifications\SubscriptionExpiryNotification;
 use App\Console\Commands\SendDailyDigest;
@@ -16,6 +17,10 @@ class SchedulerController extends Controller
 {
     public function run()
     {
+        if (request('test') === '1') {
+            return $this->sendTestNotification();
+        }
+
         $results = [];
 
         try {
@@ -541,5 +546,32 @@ class SchedulerController extends Controller
         $cmd = app(SendDailyDigest::class);
         $cmd->handle();
         return "Sent {$period} digest";
+    }
+
+    private function sendTestNotification()
+    {
+        $users = User::whereNotNull('fcm_token')->where('status', 'active')->get();
+
+        if ($users->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'No active users with FCM tokens']);
+        }
+
+        $sent = 0;
+        foreach ($users as $user) {
+            app(NotificationService::class)->sendToUser(
+                $user->id,
+                'Test Notification',
+                'HouseholdOS notifications are working!',
+                'test_notification',
+                ['type' => 'test'],
+                'normal'
+            );
+            $sent++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Test notification sent to {$sent} user(s)",
+        ]);
     }
 }
