@@ -35,6 +35,8 @@ class SocialAuthController extends Controller
             $googleUser['email'],
             $googleUser['name'] ?? '',
             $googleUser['picture'] ?? null,
+            $request->input('first_name'),
+            $request->input('last_name'),
         );
     }
 
@@ -62,6 +64,9 @@ class SocialAuthController extends Controller
             $appleUser['sub'],
             $appleUser['email'],
             $appleUser['name'] ?? '',
+            null,
+            $request->input('first_name'),
+            $request->input('last_name'),
         );
     }
 
@@ -69,7 +74,7 @@ class SocialAuthController extends Controller
      * Find existing user by provider/provider_id, or create a new one.
      * Returns the same response format as the regular login endpoint.
      */
-    private function findOrCreateSocialUser(string $provider, string $providerId, string $email, string $name, ?string $avatar = null)
+    private function findOrCreateSocialUser(string $provider, string $providerId, string $email, string $name, ?string $avatar = null, ?string $firstName = null, ?string $lastName = null)
     {
         // Check if user exists by provider + provider_id
         $user = User::where('provider', $provider)
@@ -77,20 +82,41 @@ class SocialAuthController extends Controller
             ->first();
 
         if (!$user) {
-            // Check if user exists by email (they might have registered with email/password before)
+            // Check if user exists by email
             $user = User::where('email', $email)->first();
 
             if ($user) {
-                // Link the social provider to existing account
-                $user->update([
+                // User exists with a different social provider — block
+                if (!empty($user->provider) && $user->provider !== $provider) {
+                    $providerName = ucfirst($user->provider);
+                    return response()->json([
+                        'success' => false,
+                        'message' => "An account with this email already exists. Please login with {$providerName}.",
+                    ], 409);
+                }
+
+                // User exists with email/password (no provider) — link this social provider
+                $updates = [
                     'provider' => $provider,
                     'provider_id' => $providerId,
-                ]);
+                ];
+
+                // Fill empty names from social provider data
+                if (empty($user->first_name) && $firstName) {
+                    $updates['first_name'] = $firstName;
+                }
+                if (empty($user->last_name) && $lastName) {
+                    $updates['last_name'] = $lastName;
+                }
+
+                $user->update($updates);
             } else {
-                // Create new user
-                $nameParts = explode(' ', $name, 2);
-                $firstName = $nameParts[0] ?? '';
-                $lastName = $nameParts[1] ?? '';
+                // Create new user — prefer passed-in names, fallback to token name
+                if (!$firstName || !$lastName) {
+                    $nameParts = explode(' ', $name, 2);
+                    $firstName = $firstName ?? $nameParts[0] ?? '';
+                    $lastName = $lastName ?? $nameParts[1] ?? '';
+                }
 
                 $user = User::create([
                     'email'         => $email,
