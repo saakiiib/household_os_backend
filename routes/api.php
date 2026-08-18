@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::get('scheduler/cron', [\App\Http\Controllers\Api\SchedulerController::class, 'run']);
+Route::get('scheduler/digest/{period}', [\App\Http\Controllers\Api\SchedulerController::class, 'sendDigest']);
 
 Route::get('config', [ConfigController::class, 'index']);
 Route::get('subscription/plans', [SubscriptionController::class, 'index']);

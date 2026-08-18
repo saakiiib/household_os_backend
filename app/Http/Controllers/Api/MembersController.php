@@ -488,7 +488,8 @@ class MembersController extends Controller
                 'Welcome to the Family!',
                 'Your request to join ' . $household->name . ' has been approved.',
                 'member_approved',
-                ['household_id' => $household->id, 'household_name' => $household->name]
+                ['household_id' => $household->id, 'household_name' => $household->name],
+                'normal'
             );
         } catch (\Throwable $e) {
             \Log::error('Failed to send approval notification: ' . $e->getMessage());
@@ -553,7 +554,8 @@ class MembersController extends Controller
                 'Join Request Not Approved',
                 'Your request to join ' . $household->name . ' was not approved.',
                 'member_rejected',
-                ['household_id' => $household->id, 'household_name' => $household->name]
+                ['household_id' => $household->id, 'household_name' => $household->name],
+                'normal'
             );
         } catch (\Throwable $e) {
             \Log::error('Failed to send rejection notification: ' . $e->getMessage());

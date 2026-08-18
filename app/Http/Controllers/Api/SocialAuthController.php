@@ -86,27 +86,15 @@ class SocialAuthController extends Controller
             $user = User::where('email', $email)->first();
 
             if ($user) {
-                // User exists with a different social provider — block
-                if (!empty($user->provider) && $user->provider !== $provider) {
-                    $providerName = ucfirst($user->provider);
-                    return response()->json([
-                        'success' => false,
-                        'message' => "An account with this email already exists. Please login with {$providerName}.",
-                    ], 409);
-                }
-
-                // User exists with email/password (no provider) — link this social provider
+                // User exists — link this social provider only, keep existing name/email
                 $updates = [
                     'provider' => $provider,
                     'provider_id' => $providerId,
                 ];
 
-                // Fill empty names from social provider data
-                if (empty($user->first_name) && $firstName) {
-                    $updates['first_name'] = $firstName;
-                }
-                if (empty($user->last_name) && $lastName) {
-                    $updates['last_name'] = $lastName;
+                // Update avatar only if user doesn't have one yet
+                if ($avatar && empty($user->avatar)) {
+                    $updates['avatar'] = $avatar;
                 }
 
                 $user->update($updates);

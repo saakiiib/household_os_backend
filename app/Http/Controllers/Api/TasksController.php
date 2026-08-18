@@ -124,7 +124,8 @@ class TasksController extends Controller
                 'New task assigned',
                 'You have been assigned: ' . $task->title,
                 'task_assigned',
-                ['type' => 'task', 'id' => $task->id]
+                ['type' => 'task', 'id' => $task->id],
+                'high'
             );
         } catch (\Throwable $e) {
             \Log::error("TASK STORE: Notification failed: " . $e->getMessage());
@@ -214,7 +215,8 @@ class TasksController extends Controller
                     'Task reassigned',
                     'You have been assigned: ' . $task->title,
                     'task_assigned',
-                    ['type' => 'task', 'id' => $task->id]
+                    ['type' => 'task', 'id' => $task->id],
+                    'high'
                 );
             } catch (\Throwable $e) {
                 \Log::error("TASK UPDATE: Notification failed: " . $e->getMessage());

@@ -16,8 +16,14 @@ class NotificationService
 
     /**
      * Send notification to a single user (in-app + FCM push).
+     *
+     * Priority levels: 'critical' | 'high' | 'normal' | 'low'
+     *   critical — overdue, subscription expiry, security alerts
+     *   high     — due today, day-before reminders
+     *   normal   — upcoming reminders, daily digests
+     *   low      — weekly summaries, tips
      */
-    public function sendToUser(int $userId, string $title, string $body, string $type, array $data = []): void
+    public function sendToUser(int $userId, string $title, string $body, string $type, array $data = [], string $priority = 'normal'): void
     {
         $user = User::find($userId);
         if (!$user) {
@@ -26,14 +32,15 @@ class NotificationService
         }
 
         Log::info("NOTIFICATION: Sending to user {$userId} ({$user->email})", [
-            'title' => $title,
-            'body'  => $body,
-            'type'  => $type,
-            'data'  => $data,
+            'title'    => $title,
+            'body'     => $body,
+            'type'     => $type,
+            'priority' => $priority,
+            'data'     => $data,
         ]);
 
-        $this->saveToDb($userId, $title, $body, $type, $data);
-        $this->sendFcm([$user], $title, $body, $type, $data);
+        $this->saveToDb($userId, $title, $body, $type, $data, $priority);
+        $this->sendFcm([$user], $title, $body, $type, $data, $priority);
 
         Log::info("NOTIFICATION: Done for user {$userId}");
     }
@@ -41,20 +48,21 @@ class NotificationService
     /**
      * Send notification to multiple users (in-app + FCM push).
      */
-    public function sendToUsers(array $userIds, string $title, string $body, string $type, array $data = []): void
+    public function sendToUsers(array $userIds, string $title, string $body, string $type, array $data = [], string $priority = 'normal'): void
     {
         $users = User::whereIn('id', $userIds)->get();
 
         Log::info("NOTIFICATION: Sending to " . $users->count() . " users", [
-            'user_ids' => $userIds,
-            'title'    => $title,
-            'type'     => $type,
+            'user_ids'  => $userIds,
+            'title'     => $title,
+            'type'      => $type,
+            'priority'  => $priority,
         ]);
 
         foreach ($users as $user) {
-            $this->saveToDb($user->id, $title, $body, $type, $data);
+            $this->saveToDb($user->id, $title, $body, $type, $data, $priority);
         }
-        $this->sendFcm($users->all(), $title, $body, $type, $data);
+        $this->sendFcm($users->all(), $title, $body, $type, $data, $priority);
 
         Log::info("NOTIFICATION: Done for " . $users->count() . " users");
     }
@@ -62,14 +70,15 @@ class NotificationService
     /**
      * Save notification to database only (for in-app display).
      */
-    private function saveToDb(int $userId, string $title, string $body, string $type, array $data): void
+    private function saveToDb(int $userId, string $title, string $body, string $type, array $data, string $priority = 'normal'): void
     {
         Notification::create([
-            'user_id' => $userId,
-            'title'   => $title,
-            'body'    => $body,
-            'type'    => $type,
-            'data'    => $data,
+            'user_id'  => $userId,
+            'title'    => $title,
+            'body'     => $body,
+            'type'     => $type,
+            'priority' => $priority,
+            'data'     => $data,
         ]);
 
         Log::info("NOTIFICATION: Saved to DB for user {$userId}");
@@ -78,7 +87,7 @@ class NotificationService
     /**
      * Send FCM push notification to devices.
      */
-    private function sendFcm(array $users, string $title, string $body, string $type, array $data): void
+    private function sendFcm(array $users, string $title, string $body, string $type, array $data, string $priority = 'normal'): void
     {
         $tokens = collect($users)
             ->filter(fn($u) => !empty($u->fcm_token))
@@ -111,11 +120,19 @@ class NotificationService
 
         foreach (array_chunk($tokens, 500) as $chunk) {
             try {
-                $message = CloudMessage::new()
+                $messageBuilder = CloudMessage::new()
                     ->withNotification(FcmNotification::create($title, $body))
                     ->withData($payload)
                     ->withApnsConfig($apns);
-                $result = $this->messaging->sendMulticast($message, $chunk);
+
+                if (in_array($priority, ['critical', 'high'])) {
+                    $messageBuilder = $messageBuilder->withAndroidConfig([
+                        'priority' => 'high',
+                        'ttl' => '86400s',
+                    ]);
+                }
+
+                $result = $this->messaging->sendMulticast($messageBuilder, $chunk);
 
                 Log::info("NOTIFICATION: FCM sent", [
                     'success' => $result->successes()->count(),

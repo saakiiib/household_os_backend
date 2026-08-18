@@ -860,7 +860,8 @@ class AuthController extends Controller
                 [
                     'household_id' => $household->id,
                     'user_id' => $newUser->id,
-                ]
+                ],
+                'high'
             );
         } catch (\Throwable $e) {
             \Log::error('Failed to send join request notification: ' . $e->getMessage());

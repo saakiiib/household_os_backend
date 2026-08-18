@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Models\Task;
-use App\Models\Document;
 use App\Models\Renewal;
 use App\Models\HouseholdMember;
 use App\Services\NotificationService;
@@ -17,7 +16,6 @@ class SendReminders extends Command
     public function handle(): int
     {
         $this->sendTaskReminders();
-        $this->sendDocumentReminders();
         $this->sendRenewalReminders();
 
         $this->info('Reminders sent successfully.');
@@ -84,63 +82,8 @@ class SendReminders extends Command
                         'Task reminder',
                         "'{$task->title}' is due {$timeLabel}",
                         'task_reminder',
-                        ['type' => 'task', 'id' => $task->id]
-                    );
-                }
-            }
-        }
-    }
-
-    private function sendDocumentReminders(): void
-    {
-        $now = now();
-
-        $documents = Document::whereNotNull('due_date')
-            ->whereNotNull('reminder_before')
-            ->whereNotNull('created_by_user_id')
-            ->get();
-
-        foreach ($documents as $doc) {
-            $dueDate = $doc->due_date->copy()->startOfDay();
-            $today = $now->copy()->startOfDay();
-            $diffDays = $today->diffInDays($dueDate, false);
-
-            $shouldRemind = false;
-            $timeLabel = '';
-
-            switch ($doc->reminder_before) {
-                case '1_day':
-                    $shouldRemind = $diffDays <= 1 && $diffDays >= 0;
-                    $timeLabel = 'tomorrow';
-                    break;
-                case '3_days':
-                    $shouldRemind = $diffDays <= 3 && $diffDays >= 0;
-                    $timeLabel = 'in 3 days';
-                    break;
-                case '1_week':
-                    $shouldRemind = $diffDays <= 7 && $diffDays >= 0;
-                    $timeLabel = 'in 1 week';
-                    break;
-                case '30_days':
-                    $shouldRemind = $diffDays <= 30 && $diffDays >= 0;
-                    $timeLabel = 'in 30 days';
-                    break;
-            }
-
-            if ($shouldRemind) {
-                $alreadySent = \App\Models\Notification::where('user_id', $doc->created_by_user_id)
-                    ->where('type', 'document_reminder')
-                    ->where('data->id', $doc->id)
-                    ->whereDate('created_at', $today)
-                    ->exists();
-
-                if (!$alreadySent) {
-                    app(NotificationService::class)->sendToUser(
-                        $doc->created_by_user_id,
-                        'Document reminder',
-                        "'{$doc->title}' — action needed {$timeLabel}",
-                        'document_reminder',
-                        ['type' => 'document', 'id' => $doc->id]
+                        ['type' => 'task', 'id' => $task->id],
+                        'normal'
                     );
                 }
             }
@@ -168,7 +111,12 @@ class SendReminders extends Command
             if (empty($memberIds)) continue;
 
             // Respect the reminder_before setting
-            $reminderDays = match($renewal->reminder_before ?? '7_days', '30_days' => 30, '14_days' => 14, '3_days' => 3, default => 7);
+            $reminderDays = match($renewal->reminder_before ?? '7_days') {
+                '30_days' => 30,
+                '14_days' => 14,
+                '3_days' => 3,
+                default => 7,
+            };
 
             // Pre-due reminder: send once when within the reminder window
             if ($diffDays <= $reminderDays && $diffDays > 1) {
@@ -186,7 +134,8 @@ class SendReminders extends Command
                             'Renewal reminder',
                             "'{$renewal->title}' is due in {$diffDays} days",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'upcoming']
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'upcoming'],
+                            'normal'
                         );
                     }
                 }
@@ -208,7 +157,8 @@ class SendReminders extends Command
                             'Renewal due tomorrow',
                             "'{$renewal->title}' is due tomorrow",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'day_before']
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'day_before'],
+                            'high'
                         );
                     }
                 }
@@ -230,7 +180,8 @@ class SendReminders extends Command
                             'Renewal due today',
                             "'{$renewal->title}' is due today",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'due_today']
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'due_today'],
+                            'critical'
                         );
                     }
                 }
@@ -252,7 +203,8 @@ class SendReminders extends Command
                             'Renewal overdue',
                             "'{$renewal->title}' was due {$renewal->due_date->format('d M Y')} — please complete it",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'overdue']
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'overdue'],
+                            'critical'
                         );
                     }
                 }
@@ -308,7 +260,8 @@ class SendReminders extends Command
                             ucfirst($typeLabel) . ' due today',
                             "'{$renewal->title}' — {$typeLabel} is due today",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type]
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type],
+                            'critical'
                         );
                     }
                 }
@@ -331,7 +284,8 @@ class SendReminders extends Command
                             ucfirst($typeLabel) . ' due tomorrow',
                             "'{$renewal->title}' — {$typeLabel} is due tomorrow",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_day_before', 'service_type' => $service->service_type]
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_day_before', 'service_type' => $service->service_type],
+                            'high'
                         );
                     }
                 }
@@ -354,7 +308,8 @@ class SendReminders extends Command
                             ucfirst($typeLabel) . ' in 7 days',
                             "'{$renewal->title}' — {$typeLabel} is due in 7 days",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_7_days', 'service_type' => $service->service_type]
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_7_days', 'service_type' => $service->service_type],
+                            'normal'
                         );
                     }
                 }

@@ -10,6 +10,7 @@ use App\Models\Subscription;
 use App\Models\RenewalVehicleService;
 use App\Services\NotificationService;
 use App\Notifications\SubscriptionExpiryNotification;
+use App\Console\Commands\SendDailyDigest;
 
 class SchedulerController extends Controller
 {
@@ -35,10 +36,31 @@ class SchedulerController extends Controller
             $results['subscription_check'] = 'error: ' . $e->getMessage();
         }
 
+        try {
+            $results['daily_digest'] = $this->sendDailyDigest();
+        } catch (\Throwable $e) {
+            $results['daily_digest'] = 'error: ' . $e->getMessage();
+        }
+
         return response()->json([
             'success' => true,
             'results' => $results,
         ]);
+    }
+
+    public function sendDigest(string $period)
+    {
+        if (!in_array($period, ['morning', 'midday', 'evening'])) {
+            return response()->json(['error' => 'Invalid period. Use: morning, midday, evening'], 400);
+        }
+
+        try {
+            $cmd = app(SendDailyDigest::class);
+            $cmd->handle();
+            return response()->json(['success' => true, 'period' => $period]);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     private function sendTaskReminders(): int
@@ -102,7 +124,8 @@ class SchedulerController extends Controller
                             'Task reminder',
                             "'{$task->title}' is due {$timeLabel}",
                             'task_reminder',
-                            ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'upcoming']
+                            ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'upcoming'],
+                            'normal'
                         );
                         $sent++;
                     }
@@ -124,7 +147,8 @@ class SchedulerController extends Controller
                         'Task overdue',
                         "'{$task->title}' was due {$task->due_date->format('d M Y')} — please complete it",
                         'task_reminder',
-                        ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'overdue']
+                        ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'overdue'],
+                        'critical'
                     );
                     $sent++;
                 }
@@ -146,7 +170,8 @@ class SchedulerController extends Controller
                         'Task due today',
                         "'{$task->title}' is due {$timeLabel}",
                         'task_reminder',
-                        ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'due_today']
+                        ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'due_today'],
+                        'high'
                     );
                     $sent++;
                 }
@@ -167,7 +192,8 @@ class SchedulerController extends Controller
                         'Task due tomorrow',
                         "'{$task->title}' is due tomorrow",
                         'task_reminder',
-                        ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'day_before']
+                        ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'day_before'],
+                        'high'
                     );
                     $sent++;
                 }
@@ -221,7 +247,8 @@ class SchedulerController extends Controller
                             'Renewal reminder',
                             "'{$renewal->title}' is due in {$diffDays} days",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'upcoming']
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'upcoming'],
+                            'normal'
                         );
                         $sent++;
                     }
@@ -244,7 +271,8 @@ class SchedulerController extends Controller
                             'Renewal due tomorrow',
                             "'{$renewal->title}' is due tomorrow",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'day_before']
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'day_before'],
+                            'high'
                         );
                         $sent++;
                     }
@@ -267,7 +295,8 @@ class SchedulerController extends Controller
                             'Renewal due today',
                             "'{$renewal->title}' is due today",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'due_today']
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'due_today'],
+                            'critical'
                         );
                         $sent++;
                     }
@@ -290,7 +319,8 @@ class SchedulerController extends Controller
                             'Renewal overdue',
                             "'{$renewal->title}' was due {$renewal->due_date->format('d M Y')} — please complete it",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'overdue']
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'overdue'],
+                            'critical'
                         );
                         $sent++;
                     }
@@ -349,7 +379,8 @@ class SchedulerController extends Controller
                             ucfirst($typeLabel) . ' due today',
                             "'{$renewal->title}' — {$typeLabel} is due today",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type]
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type],
+                            'critical'
                         );
                         $sent++;
                     }
@@ -372,7 +403,8 @@ class SchedulerController extends Controller
                             ucfirst($typeLabel) . ' due tomorrow',
                             "'{$renewal->title}' — {$typeLabel} is due tomorrow",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_day_before', 'service_type' => $service->service_type]
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_day_before', 'service_type' => $service->service_type],
+                            'high'
                         );
                         $sent++;
                     }
@@ -395,7 +427,8 @@ class SchedulerController extends Controller
                             ucfirst($typeLabel) . ' in 7 days',
                             "'{$renewal->title}' — {$typeLabel} is due in 7 days",
                             'renewal_reminder',
-                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_7_days', 'service_type' => $service->service_type]
+                            ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_7_days', 'service_type' => $service->service_type],
+                            'normal'
                         );
                         $sent++;
                     }
@@ -487,5 +520,26 @@ class SchedulerController extends Controller
         }
 
         return "Handled {$handled} subscription transitions";
+    }
+
+    private function sendDailyDigest(): string
+    {
+        $hour = (int) now()->format('H');
+
+        // Only send during specific time windows
+        // Morning: 8:00–11:59, Midday: 13:00–16:59, Evening: 19:00–22:59
+        if ($hour >= 8 && $hour < 12) {
+            $period = 'morning';
+        } elseif ($hour >= 13 && $hour < 17) {
+            $period = 'midday';
+        } elseif ($hour >= 19 && $hour < 23) {
+            $period = 'evening';
+        } else {
+            return "Outside digest window (hour {$hour}) — skipping";
+        }
+
+        $cmd = app(SendDailyDigest::class);
+        $cmd->handle();
+        return "Sent {$period} digest";
     }
 }
