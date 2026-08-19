@@ -48,11 +48,13 @@ class SchedulerController extends Controller
             $results['daily_digest'] = 'error: ' . $e->getMessage();
         }
 
-        try {
-            $results['hourly'] = $this->sendHourly();
-        } catch (\Throwable $e) {
-            $results['hourly'] = 'error: ' . $e->getMessage();
-        }
+        // Hourly "tasks due in the next hour" notification — currently disabled.
+        // Uncomment this block to re-enable it.
+        // try {
+        //     $results['hourly'] = $this->sendHourly();
+        // } catch (\Throwable $e) {
+        //     $results['hourly'] = 'error: ' . $e->getMessage();
+        // }
 
         return response()->json([
             'success' => true,
