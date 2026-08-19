@@ -72,6 +72,9 @@ class SendDailyDigest extends Command
                 $message['body'],
                 "daily_digest_{$period}",
                 [
+                    'module' => 'digest',
+                    'action_type' => 'digest',
+                    'action_id' => null,
                     'period' => $period,
                     'tasks_count' => $message['tasks_count'] ?? 0,
                     'renewals_count' => $message['renewals_count'] ?? 0,

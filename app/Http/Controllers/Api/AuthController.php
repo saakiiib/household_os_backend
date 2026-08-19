@@ -858,10 +858,15 @@ class AuthController extends Controller
                 "{$userName} has requested to join {$household->name}.",
                 'join_request',
                 [
+                    'module' => 'household',
+                    'action_type' => 'household',
+                    'action_id' => $household->id,
                     'type' => 'household',
                     'id' => $household->id,
                     'household_id' => $household->id,
                     'user_id' => $newUser->id,
+                    'user_email' => $newUser->email,
+                    'user_name' => $newUser->name ?? $newUser->email,
                 ],
                 'high'
             );

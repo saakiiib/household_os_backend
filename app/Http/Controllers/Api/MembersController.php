@@ -82,6 +82,7 @@ class MembersController extends Controller
                 return [
                     'id' => $invitation->id,
                     'user_id' => null,
+                    'email' => $invitation->invited_email,
                     'user' => [
                         'id' => null,
                         'email' => $invitation->invited_email,
@@ -210,7 +211,18 @@ class MembersController extends Controller
                     'Household Invitation',
                     ($inviter->name ?? $inviter->email) . ' invited you to join ' . $household->name,
                     'invitation',
-                    ['type' => 'invitation', 'id' => $invitation->id, 'household_id' => $household->id, 'invitation_token' => $invitation->token],
+                    [
+                        'module' => 'household',
+                        'action_type' => 'household',
+                        'action_id' => $household->id,
+                        'type' => 'invitation',
+                        'id' => $invitation->id,
+                        'household_id' => $household->id,
+                        'household_name' => $household->name,
+                        'invited_email' => $invitation->invited_email,
+                        'inviter_name' => $inviter->name ?? $inviter->email,
+                        'invitation_token' => $invitation->token,
+                    ],
                     'high'
                 );
             } catch (\Throwable $e) {
@@ -331,7 +343,17 @@ class MembersController extends Controller
                     'New Join Request',
                     ($user->name ?? $user->email) . ' accepted the invitation to join ' . $invitation->household->name,
                     'join_request',
-                    ['type' => 'household', 'id' => $invitation->household_id, 'household_id' => $invitation->household_id, 'user_id' => $user->id],
+                    [
+                        'module' => 'household',
+                        'action_type' => 'household',
+                        'action_id' => $invitation->household_id,
+                        'type' => 'household',
+                        'id' => $invitation->household_id,
+                        'household_id' => $invitation->household_id,
+                        'user_id' => $user->id,
+                        'user_email' => $user->email,
+                        'user_name' => $user->name ?? $user->email,
+                    ],
                     'high'
                 );
             }
@@ -453,7 +475,17 @@ class MembersController extends Controller
                 'Removed from Household',
                 'You have been removed from ' . ($household->name ?? 'your household'),
                 'member_removed',
-                ['type' => 'household', 'id' => $household_id, 'household_id' => $household_id],
+                [
+                    'module' => 'household',
+                    'action_type' => 'household',
+                    'action_id' => $household_id,
+                    'type' => 'household',
+                    'id' => $household_id,
+                    'household_id' => $household_id,
+                    'household_name' => $household->name ?? null,
+                    'user_email' => $targetMember->user?->email,
+                    'user_name' => $targetMember->user?->name,
+                ],
                 'high'
             );
         } catch (\Throwable $e) {
@@ -542,7 +574,17 @@ class MembersController extends Controller
                 'Welcome to the Family!',
                 'Your request to join ' . $household->name . ' has been approved.',
                 'member_approved',
-                ['type' => 'household', 'id' => $household->id, 'household_id' => $household->id, 'household_name' => $household->name],
+                [
+                    'module' => 'household',
+                    'action_type' => 'household',
+                    'action_id' => $household->id,
+                    'type' => 'household',
+                    'id' => $household->id,
+                    'household_id' => $household->id,
+                    'household_name' => $household->name,
+                    'user_email' => $targetMember->user?->email,
+                    'user_name' => $targetMember->user?->name,
+                ],
                 'normal'
             );
         } catch (\Throwable $e) {
@@ -608,7 +650,17 @@ class MembersController extends Controller
                 'Join Request Not Approved',
                 'Your request to join ' . $household->name . ' was not approved.',
                 'member_rejected',
-                ['type' => 'household', 'id' => $household->id, 'household_id' => $household->id, 'household_name' => $household->name],
+                [
+                    'module' => 'household',
+                    'action_type' => 'household',
+                    'action_id' => $household->id,
+                    'type' => 'household',
+                    'id' => $household->id,
+                    'household_id' => $household->id,
+                    'household_name' => $household->name,
+                    'user_email' => User::find($userId)?->email,
+                    'user_name' => User::find($userId)?->name,
+                ],
                 'normal'
             );
         } catch (\Throwable $e) {

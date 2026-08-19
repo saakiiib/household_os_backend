@@ -141,7 +141,12 @@ class SendHourlyNotification extends Command
             $title,
             $body,
             $type,
-            array_merge(['kind' => 'hourly'], $data),
+            array_merge([
+                'kind' => 'hourly',
+                'module' => 'task',
+                'action_type' => 'task',
+                'action_id' => null,
+            ], $data),
             'normal'
         );
     }

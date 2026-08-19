@@ -372,6 +372,39 @@ class HouseholdController extends Controller
             ]
         );
 
+        // Notify household admins about the new join request (mirrors acceptInvitation)
+        try {
+            $user = Auth::user();
+            $adminIds = HouseholdMember::where('household_id', $household->id)
+                ->where('role', 'admin')
+                ->where('status', 'active')
+                ->pluck('user_id')
+                ->toArray();
+
+            if (!empty($adminIds)) {
+                app(\App\Services\NotificationService::class)->sendToUsers(
+                    $adminIds,
+                    'New Join Request',
+                    ($user->name ?? $user->email) . ' requested to join ' . $household->name,
+                    'join_request',
+                    [
+                        'module' => 'household',
+                        'action_type' => 'household',
+                        'action_id' => $household->id,
+                        'type' => 'household',
+                        'id' => $household->id,
+                        'household_id' => $household->id,
+                        'user_id' => $user->id,
+                        'user_email' => $user->email,
+                        'user_name' => $user->name ?? $user->email,
+                    ],
+                    'high'
+                );
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send join request notification to admins: ' . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Join request submitted. Waiting for approval from household admin.',
@@ -486,7 +519,18 @@ class HouseholdController extends Controller
                     'Member Left',
                     ($user->name ?? $user->email) . ' has left ' . ($household->name ?? 'the household'),
                     'member_left',
-                    ['type' => 'household', 'id' => $householdId, 'household_id' => $householdId, 'user_id' => $user->id],
+                    [
+                        'module' => 'household',
+                        'action_type' => 'household',
+                        'action_id' => $householdId,
+                        'type' => 'household',
+                        'id' => $householdId,
+                        'operation' => 'leave',
+                        'household_id' => $householdId,
+                        'user_id' => $user->id,
+                        'user_email' => $user->email,
+                        'user_name' => $user->name ?? $user->email,
+                    ],
                     'normal'
                 );
             }

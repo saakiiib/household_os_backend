@@ -106,31 +106,43 @@ class NotificationService
             'tokens_count' => count($tokens),
         ]);
 
-        $payload = array_merge($data, ['notification_type' => $type]);
+        $payload = array_merge($data, ['notification_type' => $type, 'priority' => $priority]);
         $payload = array_map(fn($v) => is_string($v) ? $v : (string) $v, $payload);
+
+        // iOS (APNS) is the primary target: vary the sound per priority.
+        // 'default' uses the system sound; drop in named .aiff files in the
+        // iOS app bundle (e.g. critical.aiff) and map them here for distinct tones.
+        $iosSound = match ($priority) {
+            'critical' => 'default',
+            'high' => 'default',
+            'low' => 'default',
+            default => 'default',
+        };
 
         $apns = ApnsConfig::fromArray([
             'payload' => [
                 'aps' => [
-                    'sound' => 'default',
+                    'sound' => $iosSound,
                     'badge' => 1,
                 ],
             ],
         ]);
+
+        // Android: keep it working by using the channel the app already
+        // creates ('household_os'). Per-priority Android channels are not used.
+        $androidChannel = 'household_os';
 
         foreach (array_chunk($tokens, 500) as $chunk) {
             try {
                 $messageBuilder = CloudMessage::new()
                     ->withNotification(FcmNotification::create($title, $body))
                     ->withData($payload)
-                    ->withApnsConfig($apns);
-
-                if (in_array($priority, ['critical', 'high'])) {
-                    $messageBuilder = $messageBuilder->withAndroidConfig([
-                        'priority' => 'high',
+                    ->withApnsConfig($apns)
+                    ->withAndroidConfig([
+                        'priority' => in_array($priority, ['critical', 'high']) ? 'high' : 'normal',
+                        'channel_id' => $androidChannel,
                         'ttl' => '86400s',
                     ]);
-                }
 
                 $result = $this->messaging->sendMulticast($messageBuilder, $chunk);
 

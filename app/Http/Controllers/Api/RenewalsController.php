@@ -167,7 +167,15 @@ class RenewalsController extends Controller
                     'New Renewal Added',
                     "'{$renewal->title}' has been added — due " . ($renewal->due_date ? $renewal->due_date->format('d M Y') : 'soon'),
                     'renewal_created',
-                    ['type' => 'renewal', 'id' => $renewal->id],
+                    [
+                        'module' => 'renewal',
+                        'action_type' => 'renewal',
+                        'action_id' => $renewal->id,
+                        'type' => 'renewal',
+                        'id' => $renewal->id,
+                        'household_id' => $household_id,
+                        'title' => $renewal->title,
+                    ],
                     'normal'
                 );
             }

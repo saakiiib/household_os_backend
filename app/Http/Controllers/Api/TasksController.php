@@ -124,7 +124,13 @@ class TasksController extends Controller
                 'New task assigned',
                 'You have been assigned: ' . $task->title,
                 'task_assigned',
-                ['type' => 'task', 'id' => $task->id],
+                [
+                    'module' => 'task',
+                    'action_type' => 'task',
+                    'action_id' => $task->id,
+                    'type' => 'task',
+                    'id' => $task->id,
+                ],
                 'high'
             );
         } catch (\Throwable $e) {
@@ -215,7 +221,13 @@ class TasksController extends Controller
                     'Task reassigned',
                     'You have been assigned: ' . $task->title,
                     'task_assigned',
-                    ['type' => 'task', 'id' => $task->id],
+                    [
+                        'module' => 'task',
+                        'action_type' => 'task',
+                        'action_id' => $task->id,
+                        'type' => 'task',
+                        'id' => $task->id,
+                    ],
                     'high'
                 );
             } catch (\Throwable $e) {
