@@ -39,15 +39,6 @@ class SendDailyDigest extends Command
         $sent = 0;
 
         foreach ($users as $user) {
-            $alreadySent = \App\Models\Notification::where('user_id', $user->id)
-                ->where('type', "daily_digest_{$period}")
-                ->whereDate('created_at', now()->toDateString())
-                ->exists();
-
-            if ($alreadySent) {
-                continue;
-            }
-
             $memberHouseholdIds = HouseholdMember::where('user_id', $user->id)
                 ->where('status', 'active')
                 ->pluck('household_id')

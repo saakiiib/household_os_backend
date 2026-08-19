@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Services\NotificationService;
 use App\Notifications\SubscriptionExpiryNotification;
 use App\Console\Commands\SendDailyDigest;
+use App\Console\Commands\SendHourlyNotification;
 
 class SchedulerController extends Controller
 {
@@ -47,25 +48,22 @@ class SchedulerController extends Controller
             $results['daily_digest'] = 'error: ' . $e->getMessage();
         }
 
+        try {
+            $results['hourly'] = $this->sendHourly();
+        } catch (\Throwable $e) {
+            $results['hourly'] = 'error: ' . $e->getMessage();
+        }
+
         return response()->json([
             'success' => true,
             'results' => $results,
         ]);
     }
 
-    public function sendDigest(string $period)
+    private function sendHourly(): string
     {
-        if (!in_array($period, ['morning', 'midday', 'evening'])) {
-            return response()->json(['error' => 'Invalid period. Use: morning, midday, evening'], 400);
-        }
-
-        try {
-            $cmd = app(SendDailyDigest::class);
-            $cmd->handle();
-            return response()->json(['success' => true, 'period' => $period]);
-        } catch (\Throwable $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
-        }
+        app(SendHourlyNotification::class)->handle();
+        return 'Hourly notifications sent';
     }
 
     private function sendTaskReminders(): int
@@ -531,21 +529,16 @@ class SchedulerController extends Controller
     {
         $hour = (int) now()->format('H');
 
-        // Only send during specific time windows
-        // Morning: 8:00–11:59, Midday: 13:00–16:59, Evening: 19:00–22:59
-        if ($hour >= 8 && $hour < 12) {
-            $period = 'morning';
-        } elseif ($hour >= 13 && $hour < 17) {
-            $period = 'midday';
-        } elseif ($hour >= 19 && $hour < 23) {
-            $period = 'evening';
-        } else {
-            return "Outside digest window (hour {$hour}) — skipping";
+        // Only send the daily digest at its 3 scheduled hours (London time),
+        // so it still goes out exactly 3x/day even though this route may be
+        // called every hour for the hourly notification.
+        if (!in_array($hour, [8, 12, 20], true)) {
+            return "Digest not scheduled this hour (hour {$hour}) — skipping";
         }
 
         $cmd = app(SendDailyDigest::class);
         $cmd->handle();
-        return "Sent {$period} digest";
+        return 'Digest sent';
     }
 
     private function sendTestNotification()
