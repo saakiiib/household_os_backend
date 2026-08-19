@@ -9,6 +9,7 @@ use App\Models\Document;
 use App\Models\HouseholdMember;
 use App\Services\NotificationService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 class SendDailyDigest extends Command
 {
@@ -39,6 +40,15 @@ class SendDailyDigest extends Command
         $sent = 0;
 
         foreach ($users as $user) {
+            // Only send once per user per period per day, even if the cron
+            // route is called every minute. The controller already restricts
+            // this command to the 8/12/20 hours, so this yields exactly 3/day.
+            $dayKey = 'digest:' . $period . ':' . $user->id . ':' . now()->toDateString();
+            if (Cache::has($dayKey)) {
+                continue;
+            }
+            Cache::put($dayKey, true, now()->endOfDay());
+
             $memberHouseholdIds = HouseholdMember::where('user_id', $user->id)
                 ->where('status', 'active')
                 ->pluck('household_id')

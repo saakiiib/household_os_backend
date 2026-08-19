@@ -8,6 +8,7 @@ use App\Models\HouseholdMember;
 use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 class SendHourlyNotification extends Command
 {
@@ -26,6 +27,14 @@ class SendHourlyNotification extends Command
         $sent = 0;
 
         foreach ($users as $user) {
+            // Only send once per user per hour, even if the cron route
+            // is called every minute.
+            $hourKey = 'hourly:' . $user->id . ':' . now()->format('Y-m-d-H');
+            if (Cache::has($hourKey)) {
+                continue;
+            }
+            Cache::put($hourKey, true, now()->endOfHour());
+
             $householdIds = HouseholdMember::where('user_id', $user->id)
                 ->where('status', 'active')
                 ->pluck('household_id')
