@@ -106,7 +106,7 @@ class NotificationService
             'tokens_count' => count($tokens),
         ]);
 
-        $payload = array_merge($data, ['type' => $type]);
+        $payload = array_merge($data, ['notification_type' => $type]);
         $payload = array_map(fn($v) => is_string($v) ? $v : (string) $v, $payload);
 
         $apns = ApnsConfig::fromArray([

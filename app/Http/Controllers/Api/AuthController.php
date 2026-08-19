@@ -852,12 +852,14 @@ class AuthController extends Controller
 
             $userName = $newUser->name ?? $newUser->email;
 
-            \App\Services\NotificationService::sendToUsers(
+            app(\App\Services\NotificationService::class)->sendToUsers(
                 $adminMembers,
                 'New Join Request',
                 "{$userName} has requested to join {$household->name}.",
                 'join_request',
                 [
+                    'type' => 'household',
+                    'id' => $household->id,
                     'household_id' => $household->id,
                     'user_id' => $newUser->id,
                 ],

@@ -201,6 +201,23 @@ class MembersController extends Controller
             $emailSent = false;
         }
 
+        // Send in-app/push notification to invited user if they have an account
+        if ($invitedUser) {
+            try {
+                $inviter = Auth::user();
+                app(NotificationService::class)->sendToUser(
+                    $invitedUser->id,
+                    'Household Invitation',
+                    ($inviter->name ?? $inviter->email) . ' invited you to join ' . $household->name,
+                    'invitation',
+                    ['type' => 'invitation', 'id' => $invitation->id, 'household_id' => $household->id, 'invitation_token' => $invitation->token],
+                    'high'
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Failed to send invitation notification: ' . $e->getMessage());
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => $emailSent
@@ -299,6 +316,28 @@ class MembersController extends Controller
             'accepted_at' => now(),
             'accepted_by_user_id' => $user->id,
         ]);
+
+        // Notify household admins about the new join request
+        try {
+            $adminIds = HouseholdMember::where('household_id', $invitation->household_id)
+                ->where('role', 'admin')
+                ->where('status', 'active')
+                ->pluck('user_id')
+                ->toArray();
+
+            if (!empty($adminIds)) {
+                app(NotificationService::class)->sendToUsers(
+                    $adminIds,
+                    'New Join Request',
+                    ($user->name ?? $user->email) . ' accepted the invitation to join ' . $invitation->household->name,
+                    'join_request',
+                    ['type' => 'household', 'id' => $invitation->household_id, 'household_id' => $invitation->household_id, 'user_id' => $user->id],
+                    'high'
+                );
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send join request notification to admins: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,
@@ -406,6 +445,21 @@ class MembersController extends Controller
 
         $targetMember->update(['status' => 'removed']);
 
+        // Notify the removed member
+        try {
+            $household = Household::find($household_id);
+            app(NotificationService::class)->sendToUser(
+                $targetMember->user_id,
+                'Removed from Household',
+                'You have been removed from ' . ($household->name ?? 'your household'),
+                'member_removed',
+                ['type' => 'household', 'id' => $household_id, 'household_id' => $household_id],
+                'high'
+            );
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send member removed notification: ' . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Member removed from household successfully',
@@ -488,7 +542,7 @@ class MembersController extends Controller
                 'Welcome to the Family!',
                 'Your request to join ' . $household->name . ' has been approved.',
                 'member_approved',
-                ['household_id' => $household->id, 'household_name' => $household->name],
+                ['type' => 'household', 'id' => $household->id, 'household_id' => $household->id, 'household_name' => $household->name],
                 'normal'
             );
         } catch (\Throwable $e) {
@@ -554,7 +608,7 @@ class MembersController extends Controller
                 'Join Request Not Approved',
                 'Your request to join ' . $household->name . ' was not approved.',
                 'member_rejected',
-                ['household_id' => $household->id, 'household_name' => $household->name],
+                ['type' => 'household', 'id' => $household->id, 'household_id' => $household->id, 'household_name' => $household->name],
                 'normal'
             );
         } catch (\Throwable $e) {

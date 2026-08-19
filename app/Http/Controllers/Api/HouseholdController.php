@@ -471,6 +471,29 @@ class HouseholdController extends Controller
 
         $membership->delete();
 
+        // Notify remaining admins that a member left
+        try {
+            $adminIds = HouseholdMember::where('household_id', $householdId)
+                ->where('role', 'admin')
+                ->where('status', 'active')
+                ->pluck('user_id')
+                ->toArray();
+
+            if (!empty($adminIds)) {
+                $household = Household::find($householdId);
+                app(\App\Services\NotificationService::class)->sendToUsers(
+                    $adminIds,
+                    'Member Left',
+                    ($user->name ?? $user->email) . ' has left ' . ($household->name ?? 'the household'),
+                    'member_left',
+                    ['type' => 'household', 'id' => $householdId, 'household_id' => $householdId, 'user_id' => $user->id],
+                    'normal'
+                );
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Failed to send member left notification: ' . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'You have left the household.',
