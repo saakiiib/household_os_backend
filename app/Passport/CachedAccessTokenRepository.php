@@ -12,17 +12,18 @@ class CachedAccessTokenRepository extends PassportAccessTokenRepository
      */
     public function isAccessTokenRevoked(string $tokenId): bool
     {
-        return Cache::remember('passport_token_revoked:' . $tokenId, 300, function () use ($tokenId) {
+        // Use the FILE cache store explicitly. If CACHE_STORE were "database",
+        // caching token checks here would add MORE MySQL queries per request
+        // (cache read + token lookup + cache write) and multiply the DB load
+        // that causes the "Operation not permitted" [2002] freeze.
+        return Cache::store('file')->remember('passport_token_revoked:' . $tokenId, 300, function () use ($tokenId) {
             return parent::isAccessTokenRevoked($tokenId);
         });
     }
 
-    /**
-     * Revoke access token and clear the revocation cache immediately.
-     */
     public function revokeAccessToken(string $tokenId): void
     {
         parent::revokeAccessToken($tokenId);
-        Cache::forget('passport_token_revoked:' . $tokenId);
+        Cache::store('file')->forget('passport_token_revoked:' . $tokenId);
     }
 }

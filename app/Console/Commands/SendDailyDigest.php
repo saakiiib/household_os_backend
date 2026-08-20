@@ -52,11 +52,11 @@ class SendDailyDigest extends Command
         // flag was never set, so the next cron tick re-sent the digest —
         // spamming notifications and hammering the DB until MySQL froze.
         if (!$this->isForced) {
-            if (Cache::has($globalRunKey)) {
+            if (Cache::store('file')->has($globalRunKey)) {
                 \Illuminate\Support\Facades\Log::info("DIGEST: {$period} digest already processed today — skipping.");
                 return 0;
             }
-            Cache::put($globalRunKey, true, $londonNow->copy()->endOfDay());
+            Cache::store('file')->put($globalRunKey, true, $londonNow->copy()->endOfDay());
         }
 
         \Illuminate\Support\Facades\Log::info("DIGEST: Starting {$period} digest run.");
@@ -70,7 +70,7 @@ class SendDailyDigest extends Command
         $todayStr = now('Europe/London')->toDateString();
         $pendingUsers = $users->filter(function ($user) use ($period, $todayStr) {
             $dayKey = 'digest:' . $period . ':' . $user->id . ':' . $todayStr;
-            return !Cache::has($dayKey);
+            return !Cache::store('file')->has($dayKey);
         });
 
         if ($pendingUsers->isEmpty()) {
@@ -98,7 +98,7 @@ class SendDailyDigest extends Command
             if (empty($memberHouseholdIds)) {
                 \Illuminate\Support\Facades\Log::info("DIGEST: User {$user->id} has no active household memberships. Sending default greeting.");
                 $this->sendNoHouseholdMessage($user, $period);
-                Cache::put($dayKey, true, now('Europe/London')->endOfDay());
+                Cache::store('file')->put($dayKey, true, now('Europe/London')->endOfDay());
                 $sent++;
                 continue;
             }
@@ -128,7 +128,7 @@ class SendDailyDigest extends Command
                 'low'
             );
 
-            Cache::put($dayKey, true, now('Europe/London')->endOfDay());
+            Cache::store('file')->put($dayKey, true, now('Europe/London')->endOfDay());
             $sent++;
         }
 

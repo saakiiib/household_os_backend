@@ -16,7 +16,7 @@ class SchedulerController extends Controller
         // Prevent overlapping cron runs. If a previous run is still in progress
         // (e.g. stuck on a slow Firebase call) we skip this tick instead of
         // stacking more DB connections — that pile-up is what freezes MySQL.
-        $lock = \Illuminate\Support\Facades\Cache::lock('scheduler:cron:run', 300);
+        $lock = \Illuminate\Support\Facades\Cache::store('file')->lock('scheduler:cron:run', 300);
         if (!$lock->get()) {
             \Illuminate\Support\Facades\Log::info('SCHEDULER: Another cron run is still in progress — skipping to avoid DB overload.');
             return response()->json(['success' => true, 'skipped' => 'locked']);
@@ -90,8 +90,8 @@ class SchedulerController extends Controller
         \Illuminate\Support\Facades\Log::info("SCHEDULER: Checking daily digest schedule. Current London hour: {$hour}, forced: " . ($isForced ? 'yes' : 'no'));
 
         if (!$isForced) {
-            // Send daily digest at scheduled hours: 8 AM (morning), 12 PM (midday), 5 PM (afternoon), 9 PM (evening)
-            if (!in_array($hour, [8, 12, 17, 21], true)) {
+            // Send daily digest at scheduled hours: 9 AM (morning), 2 PM / 14:00 (midday), 5 PM / 17:00 (afternoon), 8 PM / 20:00 (evening)
+            if (!in_array($hour, [9, 14, 17, 20], true)) {
                 $msg = "Digest not scheduled this hour (hour {$hour}) — skipping";
                 \Illuminate\Support\Facades\Log::info("SCHEDULER: {$msg}");
                 return $msg;

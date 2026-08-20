@@ -15,20 +15,26 @@ class AppServiceProvider extends ServiceProvider
         // overlapping cron ticks) exhausting MySQL connections — which is what
         // produces the "Operation not permitted" [2002] freeze.
         $this->app->singleton(\Kreait\Firebase\Contract\Messaging::class, function ($app) {
-            $credentialsPath = $app->basePath(env('GOOGLE_APPLICATION_CREDENTIALS'));
+            try {
+                $credentialsPath = $app->basePath(env('GOOGLE_APPLICATION_CREDENTIALS'));
 
-            $httpOptions = \Kreait\Firebase\Http\HttpClientOptions::default()
-                ->withTimeout(10)
-                ->withConnectTimeout(5);
+                $httpOptions = \Kreait\Firebase\Http\HttpClientOptions::default()
+                    ->withTimeout(10)
+                    ->withConnectTimeout(5);
 
-            $factory = new \Kreait\Firebase\Factory();
-            if ($credentialsPath && is_file($credentialsPath)) {
-                $factory = $factory->withServiceAccount($credentialsPath);
+                $factory = new \Kreait\Firebase\Factory();
+                if ($credentialsPath && is_file($credentialsPath)) {
+                    $factory = $factory->withServiceAccount($credentialsPath);
+                }
+
+                return $factory
+                    ->withHttpClientOptions($httpOptions)
+                    ->createMessaging();
+            } catch (\Throwable $e) {
+                // Fallback to the default, known-working Messaging client so
+                // notifications are never blocked by a binding/options failure.
+                return (new \Kreait\Firebase\Factory())->createMessaging();
             }
-
-            return $factory
-                ->withHttpClientOptions($httpOptions)
-                ->createMessaging();
         });
 
         $this->app->singleton(NotificationService::class, function ($app) {

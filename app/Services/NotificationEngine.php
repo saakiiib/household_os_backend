@@ -484,11 +484,11 @@ class NotificationEngine
 
     private function sent(string $signature): bool
     {
-        return Cache::has($signature);
+        return Cache::store('file')->has($signature);
     }
 
     private function mark(string $signature, int $ttlSeconds = 172800): void
     {
-        Cache::put($signature, true, $ttlSeconds);
+        Cache::store('file')->put($signature, true, $ttlSeconds);
     }
 }
