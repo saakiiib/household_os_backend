@@ -67,17 +67,32 @@ class SchedulerController extends Controller
 
     private function sendDailyDigest(): string
     {
-        $hour = (int) now()->format('H');
+        $now = now('Europe/London');
+        $hour = (int) $now->format('H');
+        $minute = (int) $now->format('i');
 
-        // Only send the daily digest at its 3 scheduled hours (London time),
-        // so it still goes out exactly 3x/day even though this route may be
-        // called every hour for the hourly notification.
-        if (!in_array($hour, [8, 12, 20], true)) {
-            return "Digest not scheduled this hour (hour {$hour}) — skipping";
+        // Allow manual testing via ?force=1 or ?digest=morning
+        $isForced = request('force') == '1' || request('digest') !== null;
+
+        if (!$isForced) {
+            if ($hour === 8 && $minute < 30) {
+                return "Morning digest scheduled for 08:30 (current London time: {$now->format('H:i')}) — skipping";
+            }
+
+            if (!in_array($hour, [8, 12, 20], true)) {
+                return "Digest not scheduled this hour (hour {$hour}) — skipping";
+            }
         }
 
-        $cmd = app(SendDailyDigest::class);
-        $cmd->handle();
+        if (request('digest')) {
+            \Illuminate\Support\Facades\Artisan::call('notifications:send-daily-digest', [
+                '--period' => request('digest'),
+            ]);
+        } else {
+            $cmd = app(SendDailyDigest::class);
+            $cmd->handle();
+        }
+
         return 'Digest sent';
     }
 
