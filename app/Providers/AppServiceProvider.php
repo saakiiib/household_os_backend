@@ -17,10 +17,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(\Kreait\Firebase\Contract\Messaging::class, function ($app) {
             $credentialsPath = $app->basePath(env('GOOGLE_APPLICATION_CREDENTIALS'));
 
-            $httpClient = new \GuzzleHttp\Client([
-                'timeout' => 10,
-                'connect_timeout' => 5,
-            ]);
+            $httpOptions = new \Kreait\Firebase\Http\HttpClientOptions();
+            $httpOptions = $httpOptions
+                ->withTimeout(10)
+                ->withConnectTimeout(5);
 
             $factory = new \Kreait\Firebase\Factory();
             if ($credentialsPath && is_file($credentialsPath)) {
@@ -28,7 +28,7 @@ class AppServiceProvider extends ServiceProvider
             }
 
             return $factory
-                ->withHttpClient($httpClient)
+                ->withHttpClientOptions($httpOptions)
                 ->createMessaging();
         });
 
