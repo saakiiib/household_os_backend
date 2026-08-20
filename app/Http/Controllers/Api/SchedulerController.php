@@ -85,8 +85,8 @@ class SchedulerController extends Controller
         \Illuminate\Support\Facades\Log::info("SCHEDULER: Checking daily digest schedule. Current London hour: {$hour}, forced: " . ($isForced ? 'yes' : 'no'));
 
         if (!$isForced) {
-            // Send daily digest at scheduled hours: 9 AM (morning), 2 PM / 14:00 (midday), 5 PM / 17:00 (afternoon), 8 PM / 20:00 (evening)
-            if (!in_array($hour, [9, 14, 17, 20], true)) {
+            // Send daily digest at scheduled hours: 8 AM (morning), 12 PM (midday), 5 PM (afternoon), 9 PM (evening)
+            if (!in_array($hour, [8, 12, 17, 21], true)) {
                 $msg = "Digest not scheduled this hour (hour {$hour}) — skipping";
                 \Illuminate\Support\Facades\Log::info("SCHEDULER: {$msg}");
                 return $msg;

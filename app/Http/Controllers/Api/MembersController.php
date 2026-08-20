@@ -322,7 +322,16 @@ class MembersController extends Controller
             ]
         );
 
-        // Update invitation status
+        // Update invitation status (and any duplicate pending invitations for this email)
+        Invitation::where('household_id', $invitation->household_id)
+            ->where('invited_email', $user->email)
+            ->where('status', 'pending')
+            ->update([
+                'status' => 'accepted',
+                'accepted_at' => now(),
+                'accepted_by_user_id' => $user->id,
+            ]);
+
         $invitation->update([
             'status' => 'accepted',
             'accepted_at' => now(),

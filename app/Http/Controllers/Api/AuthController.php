@@ -412,9 +412,38 @@ class AuthController extends Controller
             ], 200);
         }
 
+        // Auto-mark invitations as accepted if user is already an active or pending member of that household
+        $userMemberships = HouseholdMember::where('user_id', $user->id)
+            ->whereIn('status', ['active', 'pending'])
+            ->get();
+
+        $activeHouseholdIds = $userMemberships->where('status', 'active')->pluck('household_id')->all();
+        $allMemberHouseholdIds = $userMemberships->pluck('household_id')->all();
+
+        if (!empty($activeHouseholdIds)) {
+            Invitation::whereIn('household_id', $activeHouseholdIds)
+                ->where('invited_email', $user->email)
+                ->where('status', 'pending')
+                ->update([
+                    'status' => 'accepted',
+                    'accepted_at' => now(),
+                    'accepted_by_user_id' => $user->id,
+                ]);
+        }
+
+        // If user already belongs to an active household, don't prompt them with new invitations
+        if (!empty($activeHouseholdIds)) {
+            Log::info('pendingInvitations: user already in active household, skipping prompt', ['user_id' => $user->id]);
+            return response()->json([
+                'success' => true,
+                'data' => null,
+            ], 200);
+        }
+
         $query = Invitation::with(['household', 'invitedBy'])
             ->where('invited_email', $user->email)
             ->where('status', 'pending')
+            ->whereNotIn('household_id', $allMemberHouseholdIds)
             ->where(function ($query) {
                 $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
@@ -434,7 +463,7 @@ class AuthController extends Controller
             'status' => $invitation?->status,
         ]);
 
-        if (!$invitation) {
+        if (!$invitation || $invitation->household?->status !== 'active') {
             return response()->json([
                 'success' => true,
                 'data' => null,

@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Cache;
 class SendDailyDigest extends Command
 {
     protected $signature = 'notifications:send-daily-digest {--period=}';
-    protected $description = 'Send daily digest notifications: morning (9am), midday (2pm), evening (8pm)';
+    protected $description = 'Send daily digest notifications: morning (8am), midday (12pm), afternoon (5pm), evening (9pm)';
 
     private ?string $forcedPeriod = null;
 
@@ -38,11 +38,6 @@ class SendDailyDigest extends Command
         }
 
         \Illuminate\Support\Facades\Log::info("DIGEST: Starting {$period} digest run.");
-        // NOTE: $this->info() crashes when run from HTTP context (no Artisan output object).
-        // Use Log::info() instead for HTTP-triggered runs.
-        if ($this->output) {
-            $this->info("Sending {$period} digest...");
-        }
 
         $users = User::whereNotNull('fcm_token')
             ->where('status', 'active')
@@ -104,9 +99,6 @@ class SendDailyDigest extends Command
         }
 
         \Illuminate\Support\Facades\Log::info("DIGEST: {$sent} {$period} digest notification(s) sent.");
-        if ($this->output) {
-            $this->info("{$sent} {$period} digest notifications sent.");
-        }
         return 0;
     }
 

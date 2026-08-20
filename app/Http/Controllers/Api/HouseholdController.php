@@ -376,6 +376,19 @@ class HouseholdController extends Controller
             ]
         );
 
+        // Mark any pending invitation for this user/email as accepted
+        $user = Auth::user();
+        if ($user && $user->email) {
+            Invitation::where('household_id', $household->id)
+                ->where('invited_email', $user->email)
+                ->where('status', 'pending')
+                ->update([
+                    'status' => 'accepted',
+                    'accepted_at' => now(),
+                    'accepted_by_user_id' => $userId,
+                ]);
+        }
+
         // Notify household admins about the new join request (mirrors acceptInvitation)
         try {
             $user = Auth::user();
