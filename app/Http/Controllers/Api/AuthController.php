@@ -851,11 +851,13 @@ class AuthController extends Controller
             if (empty($adminMembers)) return;
 
             $userName = $newUser->name ?? $newUser->email;
+            $userEmail = $newUser->email;
+            $notificationMessage = "{$userName} ({$userEmail}) has requested to join {$household->name}.";
 
             app(\App\Services\NotificationService::class)->sendToUsers(
                 $adminMembers,
                 'New Join Request',
-                "{$userName} has requested to join {$household->name}.",
+                $notificationMessage,
                 'join_request',
                 [
                     'module' => 'household',
@@ -865,8 +867,8 @@ class AuthController extends Controller
                     'id' => $household->id,
                     'household_id' => $household->id,
                     'user_id' => $newUser->id,
-                    'user_email' => $newUser->email,
-                    'user_name' => $newUser->name ?? $newUser->email,
+                    'user_email' => $userEmail,
+                    'user_name' => $userName,
                 ],
                 'high'
             );

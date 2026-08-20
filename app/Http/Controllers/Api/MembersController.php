@@ -338,10 +338,14 @@ class MembersController extends Controller
                 ->toArray();
 
             if (!empty($adminIds)) {
+                $userName = $user->name ?? $user->email;
+                $userEmail = $user->email;
+                $notificationMessage = $userName . ' (' . $userEmail . ') accepted the invitation to join ' . $invitation->household->name;
+
                 app(NotificationService::class)->sendToUsers(
                     $adminIds,
                     'New Join Request',
-                    ($user->name ?? $user->email) . ' accepted the invitation to join ' . $invitation->household->name,
+                    $notificationMessage,
                     'join_request',
                     [
                         'module' => 'household',
@@ -351,8 +355,8 @@ class MembersController extends Controller
                         'id' => $invitation->household_id,
                         'household_id' => $invitation->household_id,
                         'user_id' => $user->id,
-                        'user_email' => $user->email,
-                        'user_name' => $user->name ?? $user->email,
+                        'user_email' => $userEmail,
+                        'user_name' => $userName,
                     ],
                     'high'
                 );

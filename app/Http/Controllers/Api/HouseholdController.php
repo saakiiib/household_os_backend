@@ -382,10 +382,14 @@ class HouseholdController extends Controller
                 ->toArray();
 
             if (!empty($adminIds)) {
+                $userName = $user->name ?? $user->email;
+                $userEmail = $user->email;
+                $notificationMessage = $userName . ' (' . $userEmail . ') requested to join ' . $household->name;
+
                 app(\App\Services\NotificationService::class)->sendToUsers(
                     $adminIds,
                     'New Join Request',
-                    ($user->name ?? $user->email) . ' requested to join ' . $household->name,
+                    $notificationMessage,
                     'join_request',
                     [
                         'module' => 'household',
@@ -395,8 +399,8 @@ class HouseholdController extends Controller
                         'id' => $household->id,
                         'household_id' => $household->id,
                         'user_id' => $user->id,
-                        'user_email' => $user->email,
-                        'user_name' => $user->name ?? $user->email,
+                        'user_email' => $userEmail,
+                        'user_name' => $userName,
                     ],
                     'high'
                 );
