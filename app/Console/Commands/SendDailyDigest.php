@@ -38,7 +38,11 @@ class SendDailyDigest extends Command
         }
 
         \Illuminate\Support\Facades\Log::info("DIGEST: Starting {$period} digest run.");
-        $this->info("Sending {$period} digest...");
+        // NOTE: $this->info() crashes when run from HTTP context (no Artisan output object).
+        // Use Log::info() instead for HTTP-triggered runs.
+        if ($this->output) {
+            $this->info("Sending {$period} digest...");
+        }
 
         $users = User::whereNotNull('fcm_token')
             ->where('status', 'active')
@@ -99,7 +103,10 @@ class SendDailyDigest extends Command
             $sent++;
         }
 
-        $this->info("{$sent} {$period} digest notifications sent.");
+        \Illuminate\Support\Facades\Log::info("DIGEST: {$sent} {$period} digest notification(s) sent.");
+        if ($this->output) {
+            $this->info("{$sent} {$period} digest notifications sent.");
+        }
         return 0;
     }
 
