@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\CategoriesController;
 use App\Http\Controllers\Api\ConfigController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\AppleIapController;
+use App\Http\Controllers\Api\GoogleIapController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -37,6 +39,12 @@ Route::get('subscription/paypal-capture', function () {
 // Payment webhooks (public, no auth)
 Route::post('subscription/stripe/webhook', [PaymentController::class, 'stripeWebhook']);
 Route::post('subscription/paypal/webhook', [PaymentController::class, 'paypalWebhook']);
+
+// Apple IAP webhook (public, no auth - Apple sends these directly)
+Route::post('subscription/apple/webhook', [AppleIapController::class, 'webhook']);
+
+// Google Play RTDN webhook (public, no auth - Google Pub/Sub sends these)
+Route::post('subscription/google/webhook', [GoogleIapController::class, 'webhook']);
 
 /*
 |--------------------------------------------------------------------------
@@ -172,6 +180,12 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     Route::get('subscription/history', [SubscriptionController::class, 'history']);
     Route::post('subscription/paypal/capture', [PaymentController::class, 'paypalCapture']);
     Route::post('subscription/stripe/confirm', [PaymentController::class, 'stripeConfirm']);
+
+    // Apple IAP
+    Route::post('subscription/apple/verify', [AppleIapController::class, 'verify']);
+
+    // Google Play IAP
+    Route::post('subscription/google/verify', [GoogleIapController::class, 'verify']);
 });
 
 // Stripe return URLs (public, matched by WebView)

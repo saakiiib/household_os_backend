@@ -25,6 +25,11 @@ class Subscription extends Model
         'stripe_subscription_id',
         'stripe_customer_id',
         'paypal_subscription_id',
+        'apple_product_id',
+        'apple_original_transaction_id',
+        'apple_receipt_data',
+        'google_product_id',
+        'google_order_id',
         'metadata',
     ];
 

@@ -13,6 +13,8 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Household Tasks',
                 'slug' => 'household_tasks',
+                'apple_product_id' => 'com.householdosapp.household.tasks',
+                'google_product_id' => 'com.householdosapp.household.tasks',
                 'description' => 'Manage household obligations, assignments and recurring chores.',
                 'monthly_price' => 2.99,
                 'annual_price' => 29.99,
@@ -32,6 +34,8 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Renewals',
                 'slug' => 'renewals',
+                'apple_product_id' => 'com.householdosapp.household.renewals',
+                'google_product_id' => 'com.householdosapp.household.renewals',
                 'description' => 'Track insurance, MOT, tax and warranty renewals before they expire.',
                 'monthly_price' => 2.99,
                 'annual_price' => 29.99,
@@ -42,7 +46,7 @@ class SubscriptionPlanSeeder extends Seeder
                     'Renewal chain tracking',
                     'Vehicle service records',
                     'Total cost tracking',
-                    'Overdue & days-until-due计算',
+                    'Overdue & days-until-due calculation',
                     'Complete & renew flow',
                 ],
                 'is_popular' => false,
@@ -51,6 +55,8 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Document Locker',
                 'slug' => 'document_locker',
+                'apple_product_id' => 'com.householdosapp.household.documents',
+                'google_product_id' => 'com.householdosapp.household.documents',
                 'description' => 'Securely store and manage important household documents.',
                 'monthly_price' => 2.99,
                 'annual_price' => 29.99,
@@ -70,6 +76,8 @@ class SubscriptionPlanSeeder extends Seeder
             [
                 'name' => 'Household Premium',
                 'slug' => 'household_premium',
+                'apple_product_id' => 'com.householdosapp.household.premium',
+                'google_product_id' => 'com.householdosapp.household.premium',
                 'description' => 'All modules included. The complete HouseholdOS experience.',
                 'monthly_price' => 5.99,
                 'annual_price' => 59.99,

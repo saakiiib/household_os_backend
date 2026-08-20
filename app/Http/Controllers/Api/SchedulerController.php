@@ -85,8 +85,8 @@ class SchedulerController extends Controller
         \Illuminate\Support\Facades\Log::info("SCHEDULER: Checking daily digest schedule. Current London hour: {$hour}, forced: " . ($isForced ? 'yes' : 'no'));
 
         if (!$isForced) {
-            // Send daily digest at scheduled hours: 9 AM (morning), 2 PM / 14:00 (midday), 8 PM / 20:00 (evening)
-            if (!in_array($hour, [9, 14, 20], true)) {
+            // Send daily digest at scheduled hours: 9 AM (morning), 2 PM / 14:00 (midday), 5 PM / 17:00 (afternoon), 8 PM / 20:00 (evening)
+            if (!in_array($hour, [9, 14, 17, 20], true)) {
                 $msg = "Digest not scheduled this hour (hour {$hour}) — skipping";
                 \Illuminate\Support\Facades\Log::info("SCHEDULER: {$msg}");
                 return $msg;
@@ -99,9 +99,8 @@ class SchedulerController extends Controller
                 '--period' => request('digest'),
             ]);
         } else {
-            \Illuminate\Support\Facades\Log::info("SCHEDULER: Triggering SendDailyDigest handle()");
-            $cmd = app(SendDailyDigest::class);
-            $cmd->handle();
+            \Illuminate\Support\Facades\Log::info("SCHEDULER: Triggering SendDailyDigest via Artisan command");
+            \Illuminate\Support\Facades\Artisan::call('notifications:send-daily-digest');
         }
 
         return 'Digest sent';

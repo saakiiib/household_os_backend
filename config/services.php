@@ -57,6 +57,12 @@ return [
         'client_id' => env('APPLE_CLIENT_ID'),
         'team_id'   => env('APPLE_TEAM_ID'),
         'key_path'  => env('APPLE_KEY_PATH', storage_path('apple/AuthKey.p8')),
+        'shared_secret' => env('APPLE_SHARED_SECRET', ''),
+    ],
+
+    'google_play' => [
+        'package_name' => env('GOOGLE_PLAY_PACKAGE_NAME', 'com.householdosapp.household'),
+        'service_account_json' => env('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON', ''),
     ],
 
 ];

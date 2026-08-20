@@ -9,6 +9,8 @@ class SubscriptionPlan extends Model
     protected $fillable = [
         'name',
         'slug',
+        'apple_product_id',
+        'google_product_id',
         'description',
         'monthly_price',
         'annual_price',

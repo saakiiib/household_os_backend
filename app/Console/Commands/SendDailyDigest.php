@@ -18,14 +18,16 @@ class SendDailyDigest extends Command
 
     public function handle(): int
     {
-        $period = $this->option('period');
+        $period = $this->option('period') ?: null;
 
         if (!$period) {
             $hour = (int) now('Europe/London')->format('H');
             if ($hour < 12) {
                 $period = 'morning';
-            } elseif ($hour < 17) {
+            } elseif ($hour < 16) {
                 $period = 'midday';
+            } elseif ($hour < 19) {
+                $period = 'afternoon';
             } else {
                 $period = 'evening';
             }
@@ -67,6 +69,7 @@ class SendDailyDigest extends Command
             $message = match ($period) {
                 'morning' => $this->buildMorningDigest($user, $memberHouseholdIds),
                 'midday' => $this->buildMiddayDigest($user, $memberHouseholdIds),
+                'afternoon' => $this->buildAfternoonDigest($user, $memberHouseholdIds),
                 'evening' => $this->buildEveningDigest($user, $memberHouseholdIds),
             };
 
@@ -108,6 +111,10 @@ class SendDailyDigest extends Command
             'midday' => [
                 'title' => "Midday check-in, {$name} 👋",
                 'body' => "No household yet? Join one or create your own to get the most out of HouseholdOS. We're here when you're ready!",
+            ],
+            'afternoon' => [
+                'title' => "Afternoon check-in, {$name} 🌤️",
+                'body' => "Hope your afternoon is going well! Join or create a household to get organized.",
             ],
             'evening' => [
                 'title' => "Good evening, {$name} 🌙",
@@ -331,6 +338,14 @@ class SendDailyDigest extends Command
             'overdue_count' => $totalOverdue,
             'completed_count' => $completedToday,
         ];
+    }
+
+    private function buildAfternoonDigest(User $user, array $householdIds): array
+    {
+        $res = $this->buildMiddayDigest($user, $householdIds);
+        $name = $user->first_name ?: 'there';
+        $res['title'] = "Afternoon update, {$name} 🌤️";
+        return $res;
     }
 
     private function buildEveningDigest(User $user, array $householdIds): array
