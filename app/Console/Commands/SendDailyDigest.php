@@ -21,7 +21,7 @@ class SendDailyDigest extends Command
         $period = $this->option('period');
 
         if (!$period) {
-            $hour = (int) now()->format('H');
+            $hour = (int) now('Europe/London')->format('H');
             if ($hour < 12) {
                 $period = 'morning';
             } elseif ($hour < 17) {
@@ -43,11 +43,10 @@ class SendDailyDigest extends Command
             // Only send once per user per period per day, even if the cron
             // route is called every minute. The controller already restricts
             // this command to the 8/12/20 hours, so this yields exactly 3/day.
-            $dayKey = 'digest:' . $period . ':' . $user->id . ':' . now()->toDateString();
+            $dayKey = 'digest:' . $period . ':' . $user->id . ':' . now('Europe/London')->toDateString();
             if (Cache::has($dayKey)) {
                 continue;
             }
-            Cache::put($dayKey, true, now()->endOfDay());
 
             $memberHouseholdIds = HouseholdMember::where('user_id', $user->id)
                 ->where('status', 'active')
@@ -56,6 +55,7 @@ class SendDailyDigest extends Command
 
             if (empty($memberHouseholdIds)) {
                 $this->sendNoHouseholdMessage($user, $period);
+                Cache::put($dayKey, true, now('Europe/London')->endOfDay());
                 $sent++;
                 continue;
             }
@@ -84,6 +84,7 @@ class SendDailyDigest extends Command
                 'low'
             );
 
+            Cache::put($dayKey, true, now('Europe/London')->endOfDay());
             $sent++;
         }
 
@@ -125,7 +126,7 @@ class SendDailyDigest extends Command
     private function buildMorningDigest(User $user, array $householdIds): array
     {
         $name = $user->first_name ?: 'there';
-        $today = now()->startOfDay();
+        $today = now('Europe/London')->startOfDay();
 
         $todayTasks = Task::whereIn('household_id', $householdIds)
             ->where('status', '!=', 'completed')
@@ -169,7 +170,7 @@ class SendDailyDigest extends Command
         $totalOverdue = $overdueTasks + $overdueRenewals;
         $totalUpcoming = $upcomingTasks + $upcomingRenewals;
 
-        $dayOfWeek = now()->format('l');
+        $dayOfWeek = now('Europe/London')->format('l');
         $greeting = $this->getTimeGreeting($dayOfWeek);
 
         if ($totalDueToday == 0 && $totalOverdue == 0 && $totalUpcoming == 0) {
@@ -239,7 +240,7 @@ class SendDailyDigest extends Command
     private function buildMiddayDigest(User $user, array $householdIds): array
     {
         $name = $user->first_name ?: 'there';
-        $today = now()->startOfDay();
+        $today = now('Europe/London')->startOfDay();
 
         $completedToday = Task::whereIn('household_id', $householdIds)
             ->where('status', 'completed')
@@ -331,7 +332,7 @@ class SendDailyDigest extends Command
     private function buildEveningDigest(User $user, array $householdIds): array
     {
         $name = $user->first_name ?: 'there';
-        $today = now()->startOfDay();
+        $today = now('Europe/London')->startOfDay();
 
         $completedToday = Task::whereIn('household_id', $householdIds)
             ->where('status', 'completed')
