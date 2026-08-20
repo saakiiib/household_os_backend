@@ -151,7 +151,7 @@ class NotificationService
                     'failed'  => $result->failures()->count(),
                 ]);
 
-                foreach ($result->failures() as $failure) {
+                foreach ($result->failures()->getItems() as $failure) {
                     $token = $failure->target()?->value();
                     $errorMsg = $failure->error()?->getMessage();
 
