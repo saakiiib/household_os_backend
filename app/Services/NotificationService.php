@@ -152,13 +152,18 @@ class NotificationService
                 ]);
 
                 foreach ($result->failures() as $failure) {
-                    Log::error("NOTIFICATION: FCM delivery failure", [
-                        'token'   => $failure->target()?->value(),
-                        'error'   => $failure->error()?->getMessage(),
-                        'response' => $failure->response() instanceof \Psr\Http\Message\ResponseInterface
-                            ? json_decode((string) $failure->response()->getBody(), true)
-                            : $failure->response(),
+                    $token = $failure->target()?->value();
+                    $errorMsg = $failure->error()?->getMessage();
+
+                    Log::info("NOTIFICATION: FCM delivery failure", [
+                        'token' => $token,
+                        'error' => $errorMsg,
                     ]);
+
+                    if ($token) {
+                        User::where('fcm_token', $token)->update(['fcm_token' => null]);
+                        Log::info("NOTIFICATION: Cleared invalid FCM token for user — device must re-register.");
+                    }
                 }
             } catch (\Throwable $e) {
                 Log::error("NOTIFICATION: FCM Error: " . $e->getMessage());
