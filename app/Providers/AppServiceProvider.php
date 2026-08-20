@@ -3,7 +3,10 @@
 namespace App\Providers;
 
 use App\Services\NotificationService;
+use App\Support\CachedAccessTokenRepository;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\ServiceProvider;
+use League\OAuth2\Server\Repositories\AccessTokenRepositoryInterface;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -11,6 +14,10 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(NotificationService::class, function ($app) {
             return new NotificationService($app->make(\Kreait\Firebase\Contract\Messaging::class));
+        });
+
+        $this->app->extend(AccessTokenRepositoryInterface::class, function ($repository) {
+            return new CachedAccessTokenRepository($repository, Cache::store('file'));
         });
 
         // Keep Blade's compiled view cache out of the project directory.
