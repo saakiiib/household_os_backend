@@ -14,24 +14,11 @@ use Illuminate\Support\Facades\Cache;
 class SendDailyDigest extends Command
 {
     protected $signature = 'notifications:send-daily-digest {--period=}';
-    protected $description = 'Send daily digest notifications: morning (8am), midday (12pm), afternoon (5pm), evening (9pm)';
-
-    private ?string $forcedPeriod = null;
-    private bool $isForced = false;
-
-    public function setPeriod(string $period): void
-    {
-        $this->forcedPeriod = $period;
-    }
-
-    public function setForced(bool $forced): void
-    {
-        $this->isForced = $forced;
-    }
+    protected $description = 'Send daily digest notifications: morning (9am), midday (2pm), afternoon (5pm), evening (8pm)';
 
     public function handle(): int
     {
-        $period = $this->forcedPeriod ?? $this->option('period') ?? null;
+        $period = $this->option('period') ?? null;
 
         if (!$period) {
             $hour = (int) now('Europe/London')->format('H');
@@ -51,21 +38,19 @@ class SendDailyDigest extends Command
         // successful run; if the digest threw (e.g. "writeln() on null") the
         // flag was never set, so the next cron tick re-sent the digest —
         // spamming notifications and hammering the DB until MySQL froze.
-        if (!$this->isForced) {
-            if (Cache::store('file')->has($globalRunKey)) {
-                \Illuminate\Support\Facades\Log::info("DIGEST: {$period} digest already processed today — skipping.");
-                return 0;
-            }
-            Cache::store('file')->put($globalRunKey, true, $londonNow->copy()->endOfDay());
+        if (Cache::store('file')->has($globalRunKey)) {
+            $this->info("DIGEST: {$period} digest already processed today — skipping.");
+            return 0;
         }
+        Cache::store('file')->put($globalRunKey, true, $londonNow->copy()->endOfDay());
 
-        \Illuminate\Support\Facades\Log::info("DIGEST: Starting {$period} digest run.");
+        $this->info("DIGEST: Starting {$period} digest run.");
 
         $users = User::whereNotNull('fcm_token')
             ->where('status', 'active')
             ->get();
 
-        \Illuminate\Support\Facades\Log::info("DIGEST: Found " . $users->count() . " active user(s) with non-null FCM token.");
+        $this->info("DIGEST: Found " . $users->count() . " active user(s) with non-null FCM token.");
 
         $todayStr = now('Europe/London')->toDateString();
         $pendingUsers = $users->filter(function ($user) use ($period, $todayStr) {
@@ -74,7 +59,7 @@ class SendDailyDigest extends Command
         });
 
         if ($pendingUsers->isEmpty()) {
-            \Illuminate\Support\Facades\Log::info("DIGEST: All users already received {$period} digest today.");
+            $this->info("DIGEST: All users already received {$period} digest today.");
             return 0;
         }
 
@@ -89,14 +74,14 @@ class SendDailyDigest extends Command
         foreach ($pendingUsers as $user) {
             $dayKey = 'digest:' . $period . ':' . $user->id . ':' . $todayStr;
 
-            \Illuminate\Support\Facades\Log::info("DIGEST: Processing {$period} digest for user {$user->id} ({$user->email})...");
+            $this->info("DIGEST: Processing {$period} digest for user {$user->id} ({$user->email})...");
 
             $memberHouseholdIds = isset($membersByUserId[$user->id])
                 ? $membersByUserId[$user->id]->pluck('household_id')->all()
                 : [];
 
             if (empty($memberHouseholdIds)) {
-                \Illuminate\Support\Facades\Log::info("DIGEST: User {$user->id} has no active household memberships. Sending default greeting.");
+                $this->info("DIGEST: User {$user->id} has no active household memberships. Sending default greeting.");
                 $this->sendNoHouseholdMessage($user, $period);
                 Cache::store('file')->put($dayKey, true, now('Europe/London')->endOfDay());
                 $sent++;
@@ -132,7 +117,7 @@ class SendDailyDigest extends Command
             $sent++;
         }
 
-        \Illuminate\Support\Facades\Log::info("DIGEST: {$sent} {$period} digest notification(s) sent.");
+        $this->info("DIGEST: {$sent} {$period} digest notification(s) sent.");
         return 0;
     }
 

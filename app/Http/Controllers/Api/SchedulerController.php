@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\NotificationEngine;
-use App\Console\Commands\SendDailyDigest;
 use App\Console\Commands\SendHourlyNotification;
 
 class SchedulerController extends Controller

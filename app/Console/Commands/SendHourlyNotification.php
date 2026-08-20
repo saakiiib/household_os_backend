@@ -117,7 +117,7 @@ class SendHourlyNotification extends Command
             $sent++;
         }
 
-        \Illuminate\Support\Facades\Log::info("HOURLY: {$sent} hourly notification(s) sent.");
+        $this->info("HOURLY: {$sent} hourly notification(s) sent.");
         return 0;
     }
 
