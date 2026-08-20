@@ -31,22 +31,25 @@ class SendDailyDigest extends Command
             }
         }
 
+        \Illuminate\Support\Facades\Log::info("DIGEST: Starting {$period} digest run.");
         $this->info("Sending {$period} digest...");
 
         $users = User::whereNotNull('fcm_token')
             ->where('status', 'active')
             ->get();
 
+        \Illuminate\Support\Facades\Log::info("DIGEST: Found " . $users->count() . " active user(s) with non-null FCM token.");
+
         $sent = 0;
 
         foreach ($users as $user) {
-            // Only send once per user per period per day, even if the cron
-            // route is called every minute. The controller already restricts
-            // this command to the 8/12/20 hours, so this yields exactly 3/day.
             $dayKey = 'digest:' . $period . ':' . $user->id . ':' . now('Europe/London')->toDateString();
             if (Cache::has($dayKey)) {
+                \Illuminate\Support\Facades\Log::info("DIGEST: Skipping user {$user->id} ({$user->email}) — already sent today (cache key {$dayKey} exists).");
                 continue;
             }
+
+            \Illuminate\Support\Facades\Log::info("DIGEST: Processing {$period} digest for user {$user->id} ({$user->email})...");
 
             $memberHouseholdIds = HouseholdMember::where('user_id', $user->id)
                 ->where('status', 'active')
@@ -54,6 +57,7 @@ class SendDailyDigest extends Command
                 ->all();
 
             if (empty($memberHouseholdIds)) {
+                \Illuminate\Support\Facades\Log::info("DIGEST: User {$user->id} has no active household memberships. Sending default greeting.");
                 $this->sendNoHouseholdMessage($user, $period);
                 Cache::put($dayKey, true, now('Europe/London')->endOfDay());
                 $sent++;

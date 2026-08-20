@@ -13,6 +13,9 @@ class SchedulerController extends Controller
 {
     public function run()
     {
+        $now = now('Europe/London');
+        \Illuminate\Support\Facades\Log::info("SCHEDULER: Cron route triggered at {$now->format('Y-m-d H:i:s')} London time.");
+
         if (request('test') === '1') {
             return $this->sendTestNotification();
         }
@@ -25,24 +28,28 @@ class SchedulerController extends Controller
             $results['task_reminders'] = $engine->runTasks();
         } catch (\Throwable $e) {
             $results['task_reminders'] = 'error: ' . $e->getMessage();
+            \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running task reminders: " . $e->getMessage());
         }
 
         try {
             $results['renewal_reminders'] = $engine->runRenewals();
         } catch (\Throwable $e) {
             $results['renewal_reminders'] = 'error: ' . $e->getMessage();
+            \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running renewal reminders: " . $e->getMessage());
         }
 
         try {
             $results['subscription_check'] = $engine->runSubscription();
         } catch (\Throwable $e) {
             $results['subscription_check'] = 'error: ' . $e->getMessage();
+            \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running subscription checks: " . $e->getMessage());
         }
 
         try {
             $results['daily_digest'] = $this->sendDailyDigest();
         } catch (\Throwable $e) {
             $results['daily_digest'] = 'error: ' . $e->getMessage();
+            \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running daily digest: " . $e->getMessage());
         }
 
         // Hourly "tasks due in the next hour" notification — currently disabled.
@@ -52,6 +59,8 @@ class SchedulerController extends Controller
         // } catch (\Throwable $e) {
         //     $results['hourly'] = 'error: ' . $e->getMessage();
         // }
+
+        \Illuminate\Support\Facades\Log::info("SCHEDULER: Completed cron run", ['results' => $results]);
 
         return response()->json([
             'success' => true,
@@ -69,26 +78,28 @@ class SchedulerController extends Controller
     {
         $now = now('Europe/London');
         $hour = (int) $now->format('H');
-        $minute = (int) $now->format('i');
 
         // Allow manual testing via ?force=1 or ?digest=morning
         $isForced = request('force') == '1' || request('digest') !== null;
 
-        if (!$isForced) {
-            if ($hour === 8 && $minute < 30) {
-                return "Morning digest scheduled for 08:30 (current London time: {$now->format('H:i')}) — skipping";
-            }
+        \Illuminate\Support\Facades\Log::info("SCHEDULER: Checking daily digest schedule. Current London hour: {$hour}, forced: " . ($isForced ? 'yes' : 'no'));
 
-            if (!in_array($hour, [8, 12, 20], true)) {
-                return "Digest not scheduled this hour (hour {$hour}) — skipping";
+        if (!$isForced) {
+            // Send daily digest at scheduled hours: 9 AM (morning), 2 PM / 14:00 (midday), 8 PM / 20:00 (evening)
+            if (!in_array($hour, [9, 14, 20], true)) {
+                $msg = "Digest not scheduled this hour (hour {$hour}) — skipping";
+                \Illuminate\Support\Facades\Log::info("SCHEDULER: {$msg}");
+                return $msg;
             }
         }
 
         if (request('digest')) {
+            \Illuminate\Support\Facades\Log::info("SCHEDULER: Triggering digest via Artisan command for period: " . request('digest'));
             \Illuminate\Support\Facades\Artisan::call('notifications:send-daily-digest', [
                 '--period' => request('digest'),
             ]);
         } else {
+            \Illuminate\Support\Facades\Log::info("SCHEDULER: Triggering SendDailyDigest handle()");
             $cmd = app(SendDailyDigest::class);
             $cmd->handle();
         }

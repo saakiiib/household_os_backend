@@ -140,8 +140,10 @@ class NotificationService
                     ->withApnsConfig($apns)
                     ->withAndroidConfig([
                         'priority' => in_array($priority, ['critical', 'high']) ? 'high' : 'normal',
-                        'channel_id' => $androidChannel,
                         'ttl' => '86400s',
+                        'notification' => [
+                            'channel_id' => $androidChannel,
+                        ],
                     ]);
 
                 $result = $this->messaging->sendMulticast($messageBuilder, $chunk);
@@ -151,14 +153,19 @@ class NotificationService
                     'failed'  => $result->failures()->count(),
                 ]);
 
-                foreach ($result->failures() as $failure) {
+                foreach ($result->failures()->getItems() as $failure) {
+                    $token = $failure->target()?->value();
+                    $errorMsg = $failure->error()?->getMessage();
+
                     Log::error("NOTIFICATION: FCM delivery failure", [
-                        'token'   => $failure->target()?->value(),
-                        'error'   => $failure->error()?->getMessage(),
-                        'response' => $failure->response() instanceof \Psr\Http\Message\ResponseInterface
-                            ? json_decode((string) $failure->response()->getBody(), true)
-                            : $failure->response(),
+                        'token' => $token,
+                        'error' => $errorMsg,
                     ]);
+
+                    if ($token && ($failure->error() instanceof \Kreait\Firebase\Exception\Messaging\NotFound || str_contains((string)$errorMsg, 'NotRegistered') || str_contains((string)$errorMsg, 'UNREGISTERED'))) {
+                        User::where('fcm_token', $token)->update(['fcm_token' => null]);
+                        Log::warning("NOTIFICATION: Cleared expired/unregistered FCM token for token: {$token}");
+                    }
                 }
             } catch (\Throwable $e) {
                 Log::error("NOTIFICATION: FCM Error: " . $e->getMessage());
