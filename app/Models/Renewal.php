@@ -18,17 +18,6 @@ class Renewal extends Model
 
     protected $appends = ['has_document'];
 
-    const CATEGORIES = [
-        'home_insurance',
-        'vehicles',
-        'identity',
-        'finance',
-        'utilities',
-        'medical',
-        'emergency',
-        'other',
-    ];
-
     public function household()
     {
         return $this->belongsTo(Household::class);
@@ -37,6 +26,11 @@ class Renewal extends Model
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function assignedUser()
+    {
+        return $this->belongsTo(User::class, 'assigned_user_id');
     }
 
     public function vehicle()

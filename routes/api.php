@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\RenewalsController;
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\VehiclesController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\CategoriesController;
 use App\Http\Controllers\Api\ConfigController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\PaymentController;
@@ -148,6 +149,12 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
         Route::get('vehicles/{vehicle_id}', [VehiclesController::class, 'show']);
         Route::patch('vehicles/{vehicle_id}', [VehiclesController::class, 'update']);
         Route::delete('vehicles/{vehicle_id}', [VehiclesController::class, 'destroy']);
+
+        // Categories
+        Route::get('categories', [CategoriesController::class, 'index']);
+        Route::post('categories', [CategoriesController::class, 'store']);
+        Route::delete('categories/{category_id}', [CategoriesController::class, 'destroy']);
+        Route::post('categories/seed', [CategoriesController::class, 'seed']);
     });
 
     // Notifications

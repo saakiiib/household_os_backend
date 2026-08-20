@@ -8,6 +8,7 @@ use App\Models\HouseholdMember;
 use App\Models\Invitation;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
+use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -108,6 +109,9 @@ class HouseholdController extends Controller
                 'expires_at' => $trialEnd->copy()->addDays(3),
             ]);
         }
+
+        // Seed default categories for this household
+        app(CategoriesController::class)->seed($household->id);
 
         return response()->json([
             'success' => true,

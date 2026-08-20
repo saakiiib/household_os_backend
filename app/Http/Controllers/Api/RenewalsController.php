@@ -59,7 +59,8 @@ class RenewalsController extends Controller
             'title'             => 'required|string|max:255',
             'renewal_type'      => 'required|in:standard,vehicle',
             'vehicle_id'        => 'required_if:renewal_type,vehicle|nullable|exists:vehicles,id',
-            'category'          => 'nullable|in:' . implode(',', Renewal::CATEGORIES),
+            'category'          => 'nullable|string|max:100',
+            'assigned_user_id'  => 'nullable|exists:users,id',
             'frequency'         => 'required|in:monthly,quarterly,annual',
             'due_date'          => 'required_if:renewal_type,standard|nullable|date',
             'amount'            => 'nullable|numeric|min:0',
@@ -108,6 +109,7 @@ class RenewalsController extends Controller
                 'vehicle_id'         => $request->vehicle_id,
                 'title'              => $request->title,
                 'category'           => $request->category,
+                'assigned_user_id'   => $request->assigned_user_id,
                 'frequency'          => $request->frequency,
                 'due_date'           => $request->due_date,
                 'amount'             => $request->amount,
@@ -222,7 +224,8 @@ class RenewalsController extends Controller
 
         $validator = Validator::make($request->all(), [
             'title'             => 'sometimes|string|max:255',
-            'category'          => 'nullable|in:' . implode(',', Renewal::CATEGORIES),
+            'category'          => 'nullable|string|max:100',
+            'assigned_user_id'  => 'nullable|exists:users,id',
             'frequency'         => 'sometimes|in:monthly,quarterly,annual',
             'due_date'          => 'sometimes|date',
             'amount'            => 'nullable|numeric|min:0',
@@ -249,7 +252,7 @@ class RenewalsController extends Controller
 
         try {
             $renewal->update($request->only([
-                'title', 'category', 'frequency', 'due_date', 'amount', 'reminder_before', 'notes', 'status',
+                'title', 'category', 'assigned_user_id', 'frequency', 'due_date', 'amount', 'reminder_before', 'notes', 'status',
             ]));
 
             if ($request->boolean('remove_document') && $renewal->document_file_path) {
@@ -481,6 +484,12 @@ class RenewalsController extends Controller
                 'id'    => $renewal->createdBy->id,
                 'name'  => $renewal->createdBy->name,
                 'email' => $renewal->createdBy->email,
+            ] : null,
+            'assigned_user_id'  => $renewal->assigned_user_id,
+            'assigned_user'     => $renewal->assignedUser ? [
+                'id'    => $renewal->assignedUser->id,
+                'name'  => $renewal->assignedUser->name,
+                'email' => $renewal->assignedUser->email,
             ] : null,
             'vehicle'           => $renewal->vehicle ? [
                 'id'    => $renewal->vehicle->id,

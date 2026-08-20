@@ -37,6 +37,7 @@ class SocialAuthController extends Controller
             $googleUser['picture'] ?? null,
             $request->input('first_name'),
             $request->input('last_name'),
+            $googleUser['email_verified'] ?? false,
         );
     }
 
@@ -67,6 +68,7 @@ class SocialAuthController extends Controller
             null,
             $request->input('first_name'),
             $request->input('last_name'),
+            true,
         );
     }
 
@@ -74,7 +76,7 @@ class SocialAuthController extends Controller
      * Find existing user by provider/provider_id, or create a new one.
      * Returns the same response format as the regular login endpoint.
      */
-    private function findOrCreateSocialUser(string $provider, string $providerId, string $email, string $name, ?string $avatar = null, ?string $firstName = null, ?string $lastName = null)
+    private function findOrCreateSocialUser(string $provider, string $providerId, string $email, string $name, ?string $avatar = null, ?string $firstName = null, ?string $lastName = null, bool $emailVerified = false)
     {
         // Check if user exists by provider + provider_id
         $user = User::where('provider', $provider)
@@ -95,6 +97,13 @@ class SocialAuthController extends Controller
                 // Update avatar only if user doesn't have one yet
                 if ($avatar && empty($user->avatar)) {
                     $updates['avatar'] = $avatar;
+                }
+
+                // If the social provider already verified this email, mark it verified
+                // so the user isn't later blocked from the password login (which requires
+                // a verified email). Prevents the "verify email before logging in" 403.
+                if ($emailVerified && is_null($user->email_verified_at)) {
+                    $updates['email_verified_at'] = now();
                 }
 
                 $user->update($updates);
@@ -192,10 +201,11 @@ class SocialAuthController extends Controller
         }
 
         return [
-            'sub'     => $data['sub'],
-            'email'   => $data['email'],
-            'name'    => $data['name'] ?? '',
-            'picture' => $data['picture'] ?? null,
+            'sub'            => $data['sub'],
+            'email'          => $data['email'],
+            'email_verified' => filter_var($data['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            'name'           => $data['name'] ?? '',
+            'picture'        => $data['picture'] ?? null,
         ];
     }
 

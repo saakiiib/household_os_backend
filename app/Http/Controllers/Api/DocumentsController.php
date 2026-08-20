@@ -25,10 +25,21 @@ class DocumentsController extends Controller
      */
     public function index(Request $request, $household_id)
     {
-        $query = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files'])
+        $userId = Auth::id();
+
+        $query = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id'])
             ->where('household_id', $household_id);
 
-        // Text search — title, description, category, created by name
+        // Visibility filter: only show documents the user can see
+        $query->where(function ($q) use ($userId) {
+            $q->where('visibility', 'all')
+              ->orWhere('created_by_user_id', $userId)
+              ->orWhereHas('allowedMembers', function ($uq) use ($userId) {
+                  $uq->where('users.id', $userId);
+              });
+        });
+
+        // Text search
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -54,7 +65,7 @@ class DocumentsController extends Controller
         }
 
         $documents = $query->orderBy('created_at', 'desc')->get()
-            ->map(fn($doc) => $this->formatDocument($doc));
+            ->map(fn($doc) => $this->formatDocument($doc, $userId));
 
         return response()->json([
             'success' => true,
@@ -64,15 +75,17 @@ class DocumentsController extends Controller
 
     /**
      * POST /api/households/{household_id}/documents
-     * Creates document + files in a single DB transaction.
      */
     public function store(Request $request, $household_id)
     {
         $validator = Validator::make($request->all(), [
             'title'             => 'required|string|max:255',
-            'category'          => 'required|in:' . implode(',', Document::CATEGORIES),
+            'category'          => 'required|string|max:100',
             'description'       => 'nullable|string|max:2000',
             'due_date'          => 'nullable|date',
+            'visibility'        => 'nullable|in:all,specific',
+            'allowed_user_ids'  => 'nullable|array',
+            'allowed_user_ids.*' => 'integer|exists:users,id',
         ]);
 
         if ($validator->fails()) {
@@ -83,7 +96,14 @@ class DocumentsController extends Controller
             ], 422);
         }
 
-        // Get files and normalize to array
+        $visibility = $request->input('visibility', 'all');
+        $allowedUserIds = $request->input('allowed_user_ids', []);
+
+        // If visibility is 'all', ignore allowed_user_ids
+        if ($visibility === 'all') {
+            $allowedUserIds = [];
+        }
+
         $files = [];
         if ($request->hasFile('files')) {
             $raw = $request->file('files');
@@ -133,7 +153,13 @@ class DocumentsController extends Controller
                 'category'           => $request->category,
                 'description'        => $request->description,
                 'due_date'           => $request->due_date,
+                'visibility'         => $visibility,
             ]);
+
+            // Attach allowed members for 'specific' visibility
+            if ($visibility === 'specific' && !empty($allowedUserIds)) {
+                $document->allowedMembers()->sync($allowedUserIds);
+            }
 
             foreach ($files as $file) {
                 $path = $this->fileService->encryptAndStore($file, 'documents');
@@ -166,12 +192,12 @@ class DocumentsController extends Controller
             ], 500);
         }
 
-        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files']);
+        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id']);
 
         return response()->json([
             'success' => true,
             'message' => 'Document created successfully',
-            'data' => $this->formatDocument($document),
+            'data' => $this->formatDocument($document, Auth::id()),
         ], 201);
     }
 
@@ -180,13 +206,22 @@ class DocumentsController extends Controller
      */
     public function show($household_id, $document_id)
     {
-        $document = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files'])
+        $userId = Auth::id();
+
+        $document = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id'])
             ->where('household_id', $household_id)
             ->findOrFail($document_id);
 
+        if (!$document->canUserView($userId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to view this document.',
+            ], 403);
+        }
+
         return response()->json([
             'success' => true,
-            'data' => $this->formatDocument($document),
+            'data' => $this->formatDocument($document, $userId),
         ]);
     }
 
@@ -199,9 +234,12 @@ class DocumentsController extends Controller
 
         $validator = Validator::make($request->all(), [
             'title'             => 'sometimes|string|max:255',
-            'category'          => 'sometimes|in:' . implode(',', Document::CATEGORIES),
+            'category'          => 'sometimes|string|max:100',
             'description'       => 'nullable|string|max:2000',
             'due_date'          => 'nullable|date',
+            'visibility'        => 'nullable|in:all,specific',
+            'allowed_user_ids'  => 'nullable|array',
+            'allowed_user_ids.*' => 'integer|exists:users,id',
         ]);
 
         if ($validator->fails()) {
@@ -212,16 +250,33 @@ class DocumentsController extends Controller
             ], 422);
         }
 
-        $document->update($request->only([
-            'title', 'category', 'description', 'due_date',
-        ]));
+        $updateData = $request->only(['title', 'category', 'description', 'due_date']);
 
-        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files']);
+        if ($request->has('visibility')) {
+            $updateData['visibility'] = $request->visibility;
+
+            // If switching to 'all', detach all allowed members
+            if ($request->visibility === 'all') {
+                $document->allowedMembers()->detach();
+            }
+        }
+
+        $document->update($updateData);
+
+        // Update allowed members for 'specific' visibility
+        if ($request->has('visibility') && $request->visibility === 'specific') {
+            $allowedUserIds = $request->input('allowed_user_ids', []);
+            $document->allowedMembers()->sync($allowedUserIds);
+        } elseif ($request->has('allowed_user_ids') && $document->visibility === 'specific') {
+            $document->allowedMembers()->sync($request->allowed_user_ids);
+        }
+
+        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id']);
 
         return response()->json([
             'success' => true,
             'message' => 'Document updated successfully',
-            'data' => $this->formatDocument($document),
+            'data' => $this->formatDocument($document, Auth::id()),
         ]);
     }
 
@@ -239,6 +294,7 @@ class DocumentsController extends Controller
                 $this->fileService->delete($file->file_path);
             }
 
+            $document->allowedMembers()->detach();
             $document->delete();
 
             DB::commit();
@@ -260,7 +316,6 @@ class DocumentsController extends Controller
 
     /**
      * POST /api/households/{household_id}/documents/{document_id}/files
-     * Upload one or more encrypted files with DB transaction.
      */
     public function uploadFiles(Request $request, $household_id, $document_id)
     {
@@ -385,7 +440,6 @@ class DocumentsController extends Controller
 
     /**
      * GET /api/households/{household_id}/documents/{document_id}/files/{file_id}/download
-     * Decrypt and serve the file.
      */
     public function downloadFile($household_id, $document_id, $file_id)
     {
@@ -411,7 +465,7 @@ class DocumentsController extends Controller
 
     // ==================== FORMAT HELPERS ====================
 
-    private function formatDocument(Document $doc): array
+    private function formatDocument(Document $doc, int $currentUserId): array
     {
         return [
             'id'                => $doc->id,
@@ -420,6 +474,8 @@ class DocumentsController extends Controller
             'category'          => $doc->category,
             'description'       => $doc->description,
             'due_date'          => $doc->due_date instanceof \DateTimeInterface ? $doc->due_date->format('Y-m-d') : $doc->due_date,
+            'visibility'        => $doc->visibility,
+            'allowed_user_ids'  => $doc->allowedMembers->pluck('id'),
             'created_by_user_id'=> $doc->created_by_user_id,
             'created_by'        => $doc->createdBy ? [
                 'id'    => $doc->createdBy->id,

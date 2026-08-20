@@ -103,4 +103,12 @@ class Household extends Model
     {
         return $this->hasMany(Payment::class);
     }
+
+    /**
+     * Get all categories for this household.
+     */
+    public function categories()
+    {
+        return $this->hasMany(Category::class);
+    }
 }

@@ -15,17 +15,6 @@ class Document extends Model
         'due_date' => 'date',
     ];
 
-    const CATEGORIES = [
-        'home_insurance',
-        'vehicles',
-        'identity',
-        'finance',
-        'utilities',
-        'medical',
-        'emergency',
-        'other',
-    ];
-
     public function household()
     {
         return $this->belongsTo(Household::class);
@@ -39,6 +28,24 @@ class Document extends Model
     public function files()
     {
         return $this->hasMany(DocumentFile::class);
+    }
+
+    public function allowedMembers()
+    {
+        return $this->belongsToMany(User::class, 'document_allowed_members', 'document_id', 'user_id');
+    }
+
+    /**
+     * Check if a user can view this document.
+     */
+    public function canUserView(int $userId): bool
+    {
+        if ($this->visibility === 'all') {
+            return true;
+        }
+
+        return $this->allowedMembers()->where('user_id', $userId)->exists()
+            || $this->created_by_user_id === $userId;
     }
 
     public function getIsOverdueAttribute(): bool
