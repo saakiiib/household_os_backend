@@ -159,14 +159,24 @@ class NotificationEngine
             ->whereNotNull('due_date')
             ->get();
 
+        if ($renewals->isEmpty()) {
+            $sent += $this->runVehicleServices($today);
+            return "Renewal reminders: {$sent} sent";
+        }
+
+        $householdIds = $renewals->pluck('household_id')->unique()->all();
+        $membersByHousehold = HouseholdMember::whereIn('household_id', $householdIds)
+            ->where('status', 'active')
+            ->get()
+            ->groupBy('household_id');
+
         foreach ($renewals as $renewal) {
             $dueDate = $renewal->due_date->copy()->startOfDay();
             $diffDays = $today->diffInDays($dueDate, false);
 
-            $memberIds = HouseholdMember::where('household_id', $renewal->household_id)
-                ->where('status', 'active')
-                ->pluck('user_id')
-                ->all();
+            $memberIds = isset($membersByHousehold[$renewal->household_id])
+                ? $membersByHousehold[$renewal->household_id]->pluck('user_id')->all()
+                : [];
 
             if (empty($memberIds)) {
                 continue;
@@ -270,6 +280,16 @@ class NotificationEngine
             ->where('service_date', '>=', $today->copy()->subDays(30))
             ->get();
 
+        if ($services->isEmpty()) {
+            return 0;
+        }
+
+        $householdIds = $services->pluck('renewal.household_id')->filter()->unique()->all();
+        $membersByHousehold = HouseholdMember::whereIn('household_id', $householdIds)
+            ->where('status', 'active')
+            ->get()
+            ->groupBy('household_id');
+
         foreach ($services as $service) {
             $renewal = $service->renewal;
             if (!$renewal) {
@@ -280,10 +300,9 @@ class NotificationEngine
             $serviceDt = $serviceDate->copy();
             $diffDays = $today->diffInDays($serviceDt, false);
 
-            $memberIds = HouseholdMember::where('household_id', $renewal->household_id)
-                ->where('status', 'active')
-                ->pluck('user_id')
-                ->all();
+            $memberIds = isset($membersByHousehold[$renewal->household_id])
+                ? $membersByHousehold[$renewal->household_id]->pluck('user_id')->all()
+                : [];
 
             if (empty($memberIds)) {
                 continue;

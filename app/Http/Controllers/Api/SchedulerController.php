@@ -62,6 +62,9 @@ class SchedulerController extends Controller
 
         \Illuminate\Support\Facades\Log::info("SCHEDULER: Completed cron run", ['results' => $results]);
 
+        // Explicitly disconnect DB so MySQL connection is released immediately
+        \Illuminate\Support\Facades\DB::disconnect();
+
         return response()->json([
             'success' => true,
             'results' => $results,
