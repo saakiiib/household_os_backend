@@ -9,29 +9,6 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // Bind the Firebase Messaging client with an explicit HTTP timeout so a
-        // slow or unreachable FCM endpoint cannot block the cron request for
-        // minutes and hold its MySQL connection open (a contributor to the DB
-        // "freeze"). Without this, sendMulticast() can hang until the OS/network
-        // timeout, overlapping with the next cron tick.
-        $this->app->singleton(\Kreait\Firebase\Contract\Messaging::class, function ($app) {
-            $credentialsPath = $app->basePath(env('GOOGLE_APPLICATION_CREDENTIALS'));
-
-            $httpOptions = new \Kreait\Firebase\Http\HttpClientOptions();
-            $httpOptions = $httpOptions
-                ->withTimeout(10)
-                ->withConnectTimeout(5);
-
-            $factory = new \Kreait\Firebase\Factory();
-            if ($credentialsPath && is_file($credentialsPath)) {
-                $factory = $factory->withServiceAccount($credentialsPath);
-            }
-
-            return $factory
-                ->withHttpClientOptions($httpOptions)
-                ->createMessaging();
-        });
-
         $this->app->singleton(NotificationService::class, function ($app) {
             return new NotificationService($app->make(\Kreait\Firebase\Contract\Messaging::class));
         });
