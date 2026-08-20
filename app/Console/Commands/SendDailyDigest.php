@@ -17,10 +17,16 @@ class SendDailyDigest extends Command
     protected $description = 'Send daily digest notifications: morning (8am), midday (12pm), afternoon (5pm), evening (9pm)';
 
     private ?string $forcedPeriod = null;
+    private bool $isForced = false;
 
     public function setPeriod(string $period): void
     {
         $this->forcedPeriod = $period;
+    }
+
+    public function setForced(bool $forced): void
+    {
+        $this->isForced = $forced;
     }
 
     public function handle(): int
@@ -37,6 +43,22 @@ class SendDailyDigest extends Command
             };
         }
 
+        $londonNow = now('Europe/London');
+        $globalRunKey = 'digest_global_run:' . $period . ':' . $londonNow->toDateString();
+
+        // Mark this period as processed for today BEFORE sending anything.
+        // Previously the flag was set by the caller only after a full
+        // successful run; if the digest threw (e.g. "writeln() on null") the
+        // flag was never set, so the next cron tick re-sent the digest —
+        // spamming notifications and hammering the DB until MySQL froze.
+        if (!$this->isForced) {
+            if (Cache::has($globalRunKey)) {
+                \Illuminate\Support\Facades\Log::info("DIGEST: {$period} digest already processed today — skipping.");
+                return 0;
+            }
+            Cache::put($globalRunKey, true, $londonNow->copy()->endOfDay());
+        }
+
         \Illuminate\Support\Facades\Log::info("DIGEST: Starting {$period} digest run.");
 
         $users = User::whereNotNull('fcm_token')
@@ -45,21 +67,33 @@ class SendDailyDigest extends Command
 
         \Illuminate\Support\Facades\Log::info("DIGEST: Found " . $users->count() . " active user(s) with non-null FCM token.");
 
+        $todayStr = now('Europe/London')->toDateString();
+        $pendingUsers = $users->filter(function ($user) use ($period, $todayStr) {
+            $dayKey = 'digest:' . $period . ':' . $user->id . ':' . $todayStr;
+            return !Cache::has($dayKey);
+        });
+
+        if ($pendingUsers->isEmpty()) {
+            \Illuminate\Support\Facades\Log::info("DIGEST: All users already received {$period} digest today.");
+            return 0;
+        }
+
+        $userIds = $pendingUsers->pluck('id')->all();
+        $membersByUserId = HouseholdMember::whereIn('user_id', $userIds)
+            ->where('status', 'active')
+            ->get()
+            ->groupBy('user_id');
+
         $sent = 0;
 
-        foreach ($users as $user) {
-            $dayKey = 'digest:' . $period . ':' . $user->id . ':' . now('Europe/London')->toDateString();
-            if (Cache::has($dayKey)) {
-                \Illuminate\Support\Facades\Log::info("DIGEST: Skipping user {$user->id} ({$user->email}) — already sent today (cache key {$dayKey} exists).");
-                continue;
-            }
+        foreach ($pendingUsers as $user) {
+            $dayKey = 'digest:' . $period . ':' . $user->id . ':' . $todayStr;
 
             \Illuminate\Support\Facades\Log::info("DIGEST: Processing {$period} digest for user {$user->id} ({$user->email})...");
 
-            $memberHouseholdIds = HouseholdMember::where('user_id', $user->id)
-                ->where('status', 'active')
-                ->pluck('household_id')
-                ->all();
+            $memberHouseholdIds = isset($membersByUserId[$user->id])
+                ? $membersByUserId[$user->id]->pluck('household_id')->all()
+                : [];
 
             if (empty($memberHouseholdIds)) {
                 \Illuminate\Support\Facades\Log::info("DIGEST: User {$user->id} has no active household memberships. Sending default greeting.");

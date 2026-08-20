@@ -13,62 +13,64 @@ class SchedulerController extends Controller
 {
     public function run()
     {
-        $now = now('Europe/London');
-        \Illuminate\Support\Facades\Log::info("SCHEDULER: Cron route triggered at {$now->format('Y-m-d H:i:s')} London time.");
-
-        if (request('test') === '1') {
-            return $this->sendTestNotification();
-        }
-
-        $results = [];
-
-        $engine = app(NotificationEngine::class);
-
-        try {
-            $results['task_reminders'] = $engine->runTasks();
-        } catch (\Throwable $e) {
-            $results['task_reminders'] = 'error: ' . $e->getMessage();
-            \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running task reminders: " . $e->getMessage());
+        // Prevent overlapping cron runs. If a previous run is still in progress
+        // (e.g. stuck on a slow Firebase call) we skip this tick instead of
+        // stacking more DB connections — that pile-up is what freezes MySQL.
+        $lock = \Illuminate\Support\Facades\Cache::lock('scheduler:cron:run', 300);
+        if (!$lock->get()) {
+            \Illuminate\Support\Facades\Log::info('SCHEDULER: Another cron run is still in progress — skipping to avoid DB overload.');
+            return response()->json(['success' => true, 'skipped' => 'locked']);
         }
 
         try {
-            $results['renewal_reminders'] = $engine->runRenewals();
-        } catch (\Throwable $e) {
-            $results['renewal_reminders'] = 'error: ' . $e->getMessage();
-            \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running renewal reminders: " . $e->getMessage());
+            $now = now('Europe/London');
+            \Illuminate\Support\Facades\Log::info("SCHEDULER: Cron route triggered at {$now->format('Y-m-d H:i:s')} London time.");
+
+            if (request('test') === '1') {
+                return $this->sendTestNotification();
+            }
+
+            $results = [];
+
+            $engine = app(NotificationEngine::class);
+
+            try {
+                $results['task_reminders'] = $engine->runTasks();
+            } catch (\Throwable $e) {
+                $results['task_reminders'] = 'error: ' . $e->getMessage();
+                \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running task reminders: " . $e->getMessage());
+            }
+
+            try {
+                $results['renewal_reminders'] = $engine->runRenewals();
+            } catch (\Throwable $e) {
+                $results['renewal_reminders'] = 'error: ' . $e->getMessage();
+                \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running renewal reminders: " . $e->getMessage());
+            }
+
+            try {
+                $results['subscription_check'] = $engine->runSubscription();
+            } catch (\Throwable $e) {
+                $results['subscription_check'] = 'error: ' . $e->getMessage();
+                \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running subscription checks: " . $e->getMessage());
+            }
+
+            try {
+                $results['daily_digest'] = $this->sendDailyDigest();
+            } catch (\Throwable $e) {
+                $results['daily_digest'] = 'error: ' . $e->getMessage();
+                \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running daily digest: " . $e->getMessage());
+            }
+
+            \Illuminate\Support\Facades\Log::info("SCHEDULER: Completed cron run", ['results' => $results]);
+
+            return response()->json([
+                'success' => true,
+                'results' => $results,
+            ]);
+        } finally {
+            $lock->release();
         }
-
-        try {
-            $results['subscription_check'] = $engine->runSubscription();
-        } catch (\Throwable $e) {
-            $results['subscription_check'] = 'error: ' . $e->getMessage();
-            \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running subscription checks: " . $e->getMessage());
-        }
-
-        try {
-            $results['daily_digest'] = $this->sendDailyDigest();
-        } catch (\Throwable $e) {
-            $results['daily_digest'] = 'error: ' . $e->getMessage();
-            \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running daily digest: " . $e->getMessage());
-        }
-
-        // Hourly "tasks due in the next hour" notification — currently disabled.
-        // Uncomment this block to re-enable it.
-        // try {
-        //     $results['hourly'] = $this->sendHourly();
-        // } catch (\Throwable $e) {
-        //     $results['hourly'] = 'error: ' . $e->getMessage();
-        // }
-
-        \Illuminate\Support\Facades\Log::info("SCHEDULER: Completed cron run", ['results' => $results]);
-
-        // Explicitly disconnect DB so MySQL connection is released immediately
-        \Illuminate\Support\Facades\DB::disconnect();
-
-        return response()->json([
-            'success' => true,
-            'results' => $results,
-        ]);
     }
 
     private function sendHourly(): string
@@ -108,7 +110,14 @@ class SchedulerController extends Controller
         };
 
         \Illuminate\Support\Facades\Log::info("SCHEDULER: Triggering digest for period: {$period}");
+
+        // The command is invoked directly (not through Artisan), so its
+        // console output is null. Bind a NullOutput so any $this->info()/
+        // $this->line() call inside the command cannot throw
+        // "Call to a member function writeln() on null".
         $command = app(SendDailyDigest::class);
+        $command->setOutput(new \Symfony\Component\Console\Output\NullOutput());
+        $command->setForced($isForced);
         $command->setPeriod($period);
         $command->handle();
 
