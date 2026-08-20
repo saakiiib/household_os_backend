@@ -16,21 +16,25 @@ class SendDailyDigest extends Command
     protected $signature = 'notifications:send-daily-digest {--period=}';
     protected $description = 'Send daily digest notifications: morning (9am), midday (2pm), evening (8pm)';
 
+    private ?string $forcedPeriod = null;
+
+    public function setPeriod(string $period): void
+    {
+        $this->forcedPeriod = $period;
+    }
+
     public function handle(): int
     {
-        $period = $this->option('period') ?: null;
+        $period = $this->forcedPeriod ?? $this->option('period') ?? null;
 
         if (!$period) {
             $hour = (int) now('Europe/London')->format('H');
-            if ($hour < 12) {
-                $period = 'morning';
-            } elseif ($hour < 16) {
-                $period = 'midday';
-            } elseif ($hour < 19) {
-                $period = 'afternoon';
-            } else {
-                $period = 'evening';
-            }
+            $period = match (true) {
+                $hour < 12  => 'morning',
+                $hour < 16  => 'midday',
+                $hour < 19  => 'afternoon',
+                default     => 'evening',
+            };
         }
 
         \Illuminate\Support\Facades\Log::info("DIGEST: Starting {$period} digest run.");

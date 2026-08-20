@@ -93,15 +93,21 @@ class SchedulerController extends Controller
             }
         }
 
-        if (request('digest')) {
-            \Illuminate\Support\Facades\Log::info("SCHEDULER: Triggering digest via Artisan command for period: " . request('digest'));
-            \Illuminate\Support\Facades\Artisan::call('notifications:send-daily-digest', [
-                '--period' => request('digest'),
-            ]);
-        } else {
-            \Illuminate\Support\Facades\Log::info("SCHEDULER: Triggering SendDailyDigest via Artisan command");
-            \Illuminate\Support\Facades\Artisan::call('notifications:send-daily-digest');
-        }
+        // Determine the period explicitly and run the command directly
+        // (same pattern as sendHourly). Using Artisan::call() from HTTP
+        // context doesn't properly bootstrap the command, causing
+        // "Call to a member function getOption() on null".
+        $period = request('digest') ?: match (true) {
+            $hour < 12  => 'morning',
+            $hour < 16  => 'midday',
+            $hour < 19  => 'afternoon',
+            default     => 'evening',
+        };
+
+        \Illuminate\Support\Facades\Log::info("SCHEDULER: Triggering digest for period: {$period}");
+        $command = app(SendDailyDigest::class);
+        $command->setPeriod($period);
+        $command->handle();
 
         return 'Digest sent';
     }
