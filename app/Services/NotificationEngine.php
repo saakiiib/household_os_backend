@@ -36,6 +36,8 @@ class NotificationEngine
             ->whereNotNull('assigned_user_id')
             ->get();
 
+        \Illuminate\Support\Facades\Log::info("ENGINE: Task check — " . $tasks->count() . " active tasks found.");
+
         foreach ($tasks as $task) {
             $dueDate = $task->due_date->copy()->startOfDay();
             $diffDays = $today->diffInDays($dueDate, false);
@@ -158,6 +160,8 @@ class NotificationEngine
         $renewals = Renewal::where('status', 'pending')
             ->whereNotNull('due_date')
             ->get();
+
+        \Illuminate\Support\Facades\Log::info("ENGINE: Renewal check — " . $renewals->count() . " pending renewals found.");
 
         if ($renewals->isEmpty()) {
             $sent += $this->runVehicleServices($today);

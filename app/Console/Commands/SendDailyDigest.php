@@ -14,40 +14,43 @@ use Illuminate\Support\Facades\Cache;
 class SendDailyDigest extends Command
 {
     protected $signature = 'notifications:send-daily-digest {--period=}';
-    protected $description = 'Send daily digest notifications: morning (9am), midday (2pm), evening (8pm)';
+    protected $description = 'Send daily digest notifications: morning (8am), midday (12pm), afternoon (5pm), evening (8pm)';
 
     public function handle(): int
     {
         $period = $this->option('period');
 
         if (!$period) {
-            $hour = (int) now()->format('H');
+            $hour = (int) now('Europe/London')->format('H');
             if ($hour < 12) {
                 $period = 'morning';
-            } elseif ($hour < 17) {
+            } elseif ($hour < 16) {
                 $period = 'midday';
+            } elseif ($hour < 19) {
+                $period = 'afternoon';
             } else {
                 $period = 'evening';
             }
         }
 
-        $this->info("Sending {$period} digest...");
+        $this->info("DIGEST: Starting {$period} digest run.");
 
         $users = User::whereNotNull('fcm_token')
             ->where('status', 'active')
             ->get();
 
+        $this->info("DIGEST: Found " . $users->count() . " active user(s) with non-null FCM token.");
+
         $sent = 0;
 
         foreach ($users as $user) {
-            // Only send once per user per period per day, even if the cron
-            // route is called every minute. The controller already restricts
-            // this command to the 8/12/20 hours, so this yields exactly 3/day.
-            $dayKey = 'digest:' . $period . ':' . $user->id . ':' . now()->toDateString();
+            $dayKey = 'digest:' . $period . ':' . $user->id . ':' . now('Europe/London')->toDateString();
             if (Cache::has($dayKey)) {
+                $this->info("DIGEST: User {$user->id} ({$user->email}) already received {$period} digest today — skipping.");
                 continue;
             }
-            Cache::put($dayKey, true, now()->endOfDay());
+
+            $this->info("DIGEST: Processing {$period} digest for user {$user->id} ({$user->email})...");
 
             $memberHouseholdIds = HouseholdMember::where('user_id', $user->id)
                 ->where('status', 'active')
@@ -55,14 +58,19 @@ class SendDailyDigest extends Command
                 ->all();
 
             if (empty($memberHouseholdIds)) {
+                $this->info("DIGEST: User {$user->id} has no active household. Sending default greeting.");
                 $this->sendNoHouseholdMessage($user, $period);
+                Cache::put($dayKey, true, now('Europe/London')->endOfDay());
                 $sent++;
                 continue;
             }
 
+            $this->info("DIGEST: User {$user->id} has " . count($memberHouseholdIds) . " household(s). Building digest...");
+
             $message = match ($period) {
                 'morning' => $this->buildMorningDigest($user, $memberHouseholdIds),
                 'midday' => $this->buildMiddayDigest($user, $memberHouseholdIds),
+                'afternoon' => $this->buildAfternoonDigest($user, $memberHouseholdIds),
                 'evening' => $this->buildEveningDigest($user, $memberHouseholdIds),
             };
 
@@ -84,10 +92,11 @@ class SendDailyDigest extends Command
                 'low'
             );
 
+            Cache::put($dayKey, true, now('Europe/London')->endOfDay());
             $sent++;
         }
 
-        $this->info("{$sent} {$period} digest notifications sent.");
+        $this->info("DIGEST: {$sent} {$period} digest notification(s) sent.");
         return 0;
     }
 
@@ -103,6 +112,10 @@ class SendDailyDigest extends Command
             'midday' => [
                 'title' => "Midday check-in, {$name} 👋",
                 'body' => "No household yet? Join one or create your own to get the most out of HouseholdOS. We're here when you're ready!",
+            ],
+            'afternoon' => [
+                'title' => "Afternoon check-in, {$name} 🌤️",
+                'body' => "Hope your afternoon is going well! Join or create a household to get organized.",
             ],
             'evening' => [
                 'title' => "Good evening, {$name} 🌙",
@@ -326,6 +339,14 @@ class SendDailyDigest extends Command
             'overdue_count' => $totalOverdue,
             'completed_count' => $completedToday,
         ];
+    }
+
+    private function buildAfternoonDigest(User $user, array $householdIds): array
+    {
+        $res = $this->buildMiddayDigest($user, $householdIds);
+        $name = $user->first_name ?: 'there';
+        $res['title'] = "Afternoon update, {$name} 🌤️";
+        return $res;
     }
 
     private function buildEveningDigest(User $user, array $householdIds): array
