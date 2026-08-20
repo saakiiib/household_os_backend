@@ -117,7 +117,7 @@ class SendHourlyNotification extends Command
             $sent++;
         }
 
-        $this->info("HOURLY: {$sent} hourly notification(s) sent.");
+        $this->info("{$sent} hourly notifications sent.");
         return 0;
     }
 

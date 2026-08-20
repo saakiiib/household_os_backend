@@ -6,70 +6,57 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\NotificationEngine;
+use App\Console\Commands\SendDailyDigest;
 use App\Console\Commands\SendHourlyNotification;
 
 class SchedulerController extends Controller
 {
     public function run()
     {
-        // Prevent overlapping cron runs. If a previous run is still in progress
-        // (e.g. stuck on a slow Firebase call) we skip this tick instead of
-        // stacking more DB connections — that pile-up is what freezes MySQL.
-        $lock = \Illuminate\Support\Facades\Cache::store('file')->lock('scheduler:cron:run', 300);
-        if (!$lock->get()) {
-            \Illuminate\Support\Facades\Log::info('SCHEDULER: Another cron run is still in progress — skipping to avoid DB overload.');
-            return response()->json(['success' => true, 'skipped' => 'locked']);
+        if (request('test') === '1') {
+            return $this->sendTestNotification();
+        }
+
+        $results = [];
+
+        $engine = app(NotificationEngine::class);
+
+        try {
+            $results['task_reminders'] = $engine->runTasks();
+        } catch (\Throwable $e) {
+            $results['task_reminders'] = 'error: ' . $e->getMessage();
         }
 
         try {
-            $now = now('Europe/London');
-            \Illuminate\Support\Facades\Log::info("SCHEDULER: Cron route triggered at {$now->format('Y-m-d H:i:s')} London time.");
-
-            if (request('test') === '1') {
-                return $this->sendTestNotification();
-            }
-
-            $results = [];
-
-            $engine = app(NotificationEngine::class);
-
-            try {
-                $results['task_reminders'] = $engine->runTasks();
-            } catch (\Throwable $e) {
-                $results['task_reminders'] = 'error: ' . $e->getMessage();
-                \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running task reminders: " . $e->getMessage());
-            }
-
-            try {
-                $results['renewal_reminders'] = $engine->runRenewals();
-            } catch (\Throwable $e) {
-                $results['renewal_reminders'] = 'error: ' . $e->getMessage();
-                \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running renewal reminders: " . $e->getMessage());
-            }
-
-            try {
-                $results['subscription_check'] = $engine->runSubscription();
-            } catch (\Throwable $e) {
-                $results['subscription_check'] = 'error: ' . $e->getMessage();
-                \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running subscription checks: " . $e->getMessage());
-            }
-
-            try {
-                $results['daily_digest'] = $this->sendDailyDigest();
-            } catch (\Throwable $e) {
-                $results['daily_digest'] = 'error: ' . $e->getMessage();
-                \Illuminate\Support\Facades\Log::error("SCHEDULER: Error running daily digest: " . $e->getMessage());
-            }
-
-            \Illuminate\Support\Facades\Log::info("SCHEDULER: Completed cron run", ['results' => $results]);
-
-            return response()->json([
-                'success' => true,
-                'results' => $results,
-            ]);
-        } finally {
-            $lock->release();
+            $results['renewal_reminders'] = $engine->runRenewals();
+        } catch (\Throwable $e) {
+            $results['renewal_reminders'] = 'error: ' . $e->getMessage();
         }
+
+        try {
+            $results['subscription_check'] = $engine->runSubscription();
+        } catch (\Throwable $e) {
+            $results['subscription_check'] = 'error: ' . $e->getMessage();
+        }
+
+        try {
+            $results['daily_digest'] = $this->sendDailyDigest();
+        } catch (\Throwable $e) {
+            $results['daily_digest'] = 'error: ' . $e->getMessage();
+        }
+
+        // Hourly "tasks due in the next hour" notification — currently disabled.
+        // Uncomment this block to re-enable it.
+        // try {
+        //     $results['hourly'] = $this->sendHourly();
+        // } catch (\Throwable $e) {
+        //     $results['hourly'] = 'error: ' . $e->getMessage();
+        // }
+
+        return response()->json([
+            'success' => true,
+            'results' => $results,
+        ]);
     }
 
     private function sendHourly(): string
@@ -80,33 +67,17 @@ class SchedulerController extends Controller
 
     private function sendDailyDigest(): string
     {
-        $now = now('Europe/London');
-        $hour = (int) $now->format('H');
+        $hour = (int) now()->format('H');
 
-        // Allow manual testing via ?force=1 or ?digest=morning
-        $isForced = request('force') == '1' || request('digest') !== null;
-
-        \Illuminate\Support\Facades\Log::info("SCHEDULER: Checking daily digest schedule. Current London hour: {$hour}, forced: " . ($isForced ? 'yes' : 'no'));
-
-        if (!$isForced) {
-            // Send daily digest at scheduled hours: 9 AM (morning), 2 PM / 14:00 (midday), 5 PM / 17:00 (afternoon), 8 PM / 20:00 (evening)
-            if (!in_array($hour, [9, 14, 17, 20], true)) {
-                $msg = "Digest not scheduled this hour (hour {$hour}) — skipping";
-                \Illuminate\Support\Facades\Log::info("SCHEDULER: {$msg}");
-                return $msg;
-            }
+        // Only send the daily digest at its 3 scheduled hours (London time),
+        // so it still goes out exactly 3x/day even though this route may be
+        // called every hour for the hourly notification.
+        if (!in_array($hour, [8, 12, 20], true)) {
+            return "Digest not scheduled this hour (hour {$hour}) — skipping";
         }
 
-        if (request('digest')) {
-            \Illuminate\Support\Facades\Log::info("SCHEDULER: Triggering digest via Artisan command for period: " . request('digest'));
-            \Illuminate\Support\Facades\Artisan::call('notifications:send-daily-digest', [
-                '--period' => request('digest'),
-            ]);
-        } else {
-            \Illuminate\Support\Facades\Log::info("SCHEDULER: Triggering SendDailyDigest via Artisan command");
-            \Illuminate\Support\Facades\Artisan::call('notifications:send-daily-digest');
-        }
-
+        $cmd = app(SendDailyDigest::class);
+        $cmd->handle();
         return 'Digest sent';
     }
 
