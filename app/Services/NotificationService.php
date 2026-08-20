@@ -140,8 +140,10 @@ class NotificationService
                     ->withApnsConfig($apns)
                     ->withAndroidConfig([
                         'priority' => in_array($priority, ['critical', 'high']) ? 'high' : 'normal',
-                        'channel_id' => $androidChannel,
                         'ttl' => '86400s',
+                        'notification' => [
+                            'channel_id' => $androidChannel,
+                        ],
                     ]);
 
                 $result = $this->messaging->sendMulticast($messageBuilder, $chunk);
