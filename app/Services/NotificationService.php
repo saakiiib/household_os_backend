@@ -51,7 +51,7 @@ class NotificationService
         // FCM is queued so the web request releases its DB connection instead
         // of holding it open during the (slow) FCM HTTP call.
         try {
-            SendFcmNotification::dispatch($userId, $title, $body, $type, $data, $priority);
+            SendFcmNotification::dispatch([$userId], $title, $body, $type, $data, $priority);
         } catch (\Throwable $e) {
             Log::error("NOTIFICATION: Failed to dispatch FCM job for user {$userId}: " . $e->getMessage());
         }

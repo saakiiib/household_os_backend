@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\SendNotificationJob;
+use App\Services\NotificationService;
 use App\Models\Renewal;
 use App\Models\HouseholdMember;
 use App\Models\Subscription;
@@ -71,7 +71,7 @@ class CriticalCheckCommand extends Command
                 ->exists();
 
             if (!$alreadySent) {
-                SendNotificationJob::dispatch(
+                app(NotificationService::class)->sendToUser(
                     $task->assigned_user_id,
                     'Task overdue',
                     "'{$task->title}' was due {$task->due_date->format('d M Y')} — please complete it",
@@ -106,7 +106,7 @@ class CriticalCheckCommand extends Command
 
             if (!$alreadySent) {
                 $timeLabel = $task->due_time ? 'today at ' . \Carbon\Carbon::parse($task->due_time)->format('g:i A') : 'today';
-                SendNotificationJob::dispatch(
+                app(NotificationService::class)->sendToUser(
                     $task->assigned_user_id,
                     'Task due today',
                     "'{$task->title}' is due {$timeLabel}",
@@ -181,7 +181,7 @@ class CriticalCheckCommand extends Command
                 $body = $messageFn($renewal);
 
                 foreach ($memberIds as $userId) {
-                    SendNotificationJob::dispatch(
+                    app(NotificationService::class)->sendToUser(
                         $userId,
                         $title,
                         $body,
@@ -238,7 +238,7 @@ class CriticalCheckCommand extends Command
             if (!$alreadySent) {
                 $typeLabel = str_replace('_', ' ', $service->service_type);
                 foreach ($memberIds as $userId) {
-                    SendNotificationJob::dispatch(
+                    app(NotificationService::class)->sendToUser(
                         $userId,
                         ucfirst($typeLabel) . ' due today',
                         "'{$renewal->title}' — {$typeLabel} is due today",

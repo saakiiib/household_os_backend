@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\SendNotificationJob;
+use App\Services\NotificationService;
 use App\Models\Subscription;
 use App\Models\User;
 use Illuminate\Console\Command;
@@ -95,7 +95,7 @@ class CheckSubscriptionExpiry extends Command
             $key = "grace_{$daysLeft}d";
             if (!$this->alreadyNotified($sub, $key)) {
                 if ($sub->user) {
-                    SendNotificationJob::dispatch(
+                    app(NotificationService::class)->sendToUser(
                         $sub->user->id,
                         'Subscription expiring',
                         "Your subscription expires in {$daysLeft} day" . ($daysLeft > 1 ? 's' : ''),
@@ -129,7 +129,7 @@ class CheckSubscriptionExpiry extends Command
         foreach ($subs as $sub) {
             if (!$this->alreadyNotified($sub, $key)) {
                 if ($sub->user) {
-                    SendNotificationJob::dispatch(
+                    app(NotificationService::class)->sendToUser(
                         $sub->user->id,
                         'Subscription renewal reminder',
                         "Your {$sub->plan?->name} subscription renews in {$days} day" . ($days > 1 ? 's' : ''),
