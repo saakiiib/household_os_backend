@@ -107,7 +107,9 @@ class CheckSubscriptionExpiry extends Command
                             'type' => 'grace_period',
                             'action' => 'renew_now',
                         ],
-                        'critical'
+                        'critical',
+                        null,
+                        true
                     );
                 }
                 $this->markNotified($sub, $key);
@@ -141,7 +143,9 @@ class CheckSubscriptionExpiry extends Command
                             'type' => 'renewal',
                             'action' => 'view_subscription',
                         ],
-                        'high'
+                        'high',
+                        null,
+                        true
                     );
                 }
                 $this->markNotified($sub, $key);

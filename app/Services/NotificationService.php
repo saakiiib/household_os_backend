@@ -24,7 +24,7 @@ class NotificationService
      *   normal   — upcoming reminders, daily digests
      *   low      — weekly summaries, tips
      */
-    public function sendToUser(int $userId, string $title, string $body, string $type, array $data = [], string $priority = 'normal', ?User $user = null): void
+    public function sendToUser(int $userId, string $title, string $body, string $type, array $data = [], string $priority = 'normal', ?User $user = null, bool $queued = false): void
     {
         $user = $user ?? User::find($userId);
         if (!$user) {
@@ -40,20 +40,22 @@ class NotificationService
             'data'     => $data,
         ]);
 
-        // In-app row is written synchronously (best-effort). A DB failure here
-        // must not prevent the FCM push from being queued.
         try {
             $this->saveToDb($userId, $title, $body, $type, $data, $priority);
         } catch (\Throwable $e) {
             Log::error("NOTIFICATION: Failed to save in-app row for user {$userId}: " . $e->getMessage());
         }
 
-        // FCM is queued so the web request releases its DB connection instead
-        // of holding it open during the (slow) FCM HTTP call.
-        try {
-            SendFcmNotification::dispatch([$userId], $title, $body, $type, $data, $priority);
-        } catch (\Throwable $e) {
-            Log::error("NOTIFICATION: Failed to dispatch FCM job for user {$userId}: " . $e->getMessage());
+        if ($queued) {
+            // Cron commands: queue FCM to protect DB connections.
+            try {
+                SendFcmNotification::dispatch([$userId], $title, $body, $type, $data, $priority);
+            } catch (\Throwable $e) {
+                Log::error("NOTIFICATION: Failed to dispatch FCM job for user {$userId}: " . $e->getMessage());
+            }
+        } else {
+            // Controllers: send FCM inline (instant, 1-2 users).
+            $this->sendFcm([$user], $title, $body, $type, $data, $priority);
         }
 
         Log::info("NOTIFICATION: Done for user {$userId}");
@@ -62,7 +64,7 @@ class NotificationService
     /**
      * Send notification to multiple users (in-app + FCM push).
      */
-    public function sendToUsers(array $userIds, string $title, string $body, string $type, array $data = [], string $priority = 'normal'): void
+    public function sendToUsers(array $userIds, string $title, string $body, string $type, array $data = [], string $priority = 'normal', bool $queued = false): void
     {
         $users = User::whereIn('id', $userIds)->get();
 
@@ -81,11 +83,16 @@ class NotificationService
             }
         }
 
-        // Queue a single FCM multicast for all users (chunked by 500 in sendFcm).
-        try {
-            SendFcmNotification::dispatch($userIds, $title, $body, $type, $data, $priority);
-        } catch (\Throwable $e) {
-            Log::error("NOTIFICATION: Failed to dispatch FCM job for users: " . $e->getMessage());
+        if ($queued) {
+            // Cron commands: queue FCM to protect DB connections.
+            try {
+                SendFcmNotification::dispatch($userIds, $title, $body, $type, $data, $priority);
+            } catch (\Throwable $e) {
+                Log::error("NOTIFICATION: Failed to dispatch FCM job for users: " . $e->getMessage());
+            }
+        } else {
+            // Controllers: send FCM inline (instant).
+            $this->sendFcm($users->all(), $title, $body, $type, $data, $priority);
         }
 
         Log::info("NOTIFICATION: Done for " . $users->count() . " users");
@@ -109,8 +116,7 @@ class NotificationService
     }
 
     /**
-     * Send FCM push notification to devices. Public so the queued
-     * SendFcmNotification job can call it from a worker process.
+     * Send FCM push notification to devices.
      */
     public function sendFcm(array $users, string $title, string $body, string $type, array $data, string $priority = 'normal'): void
     {
