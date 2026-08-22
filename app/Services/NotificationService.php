@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Notification;
 use App\Models\User;
+use App\Jobs\SendFcmNotification;
 use Kreait\Firebase\Contract\Messaging;
 use Kreait\Firebase\Messaging\ApnsConfig;
 use Kreait\Firebase\Messaging\CloudMessage;
@@ -39,8 +40,21 @@ class NotificationService
             'data'     => $data,
         ]);
 
-        $this->saveToDb($userId, $title, $body, $type, $data, $priority);
-        $this->sendFcm([$user], $title, $body, $type, $data, $priority);
+        // In-app row is written synchronously (best-effort). A DB failure here
+        // must not prevent the FCM push from being queued.
+        try {
+            $this->saveToDb($userId, $title, $body, $type, $data, $priority);
+        } catch (\Throwable $e) {
+            Log::error("NOTIFICATION: Failed to save in-app row for user {$userId}: " . $e->getMessage());
+        }
+
+        // FCM is queued so the web request releases its DB connection instead
+        // of holding it open during the (slow) FCM HTTP call.
+        try {
+            SendFcmNotification::dispatch($userId, $title, $body, $type, $data, $priority);
+        } catch (\Throwable $e) {
+            Log::error("NOTIFICATION: Failed to dispatch FCM job for user {$userId}: " . $e->getMessage());
+        }
 
         Log::info("NOTIFICATION: Done for user {$userId}");
     }
@@ -60,9 +74,19 @@ class NotificationService
         ]);
 
         foreach ($users as $user) {
-            $this->saveToDb($user->id, $title, $body, $type, $data, $priority);
+            try {
+                $this->saveToDb($user->id, $title, $body, $type, $data, $priority);
+            } catch (\Throwable $e) {
+                Log::error("NOTIFICATION: Failed to save in-app row for user {$user->id}: " . $e->getMessage());
+            }
         }
-        $this->sendFcm($users->all(), $title, $body, $type, $data, $priority);
+
+        // Queue a single FCM multicast for all users (chunked by 500 in sendFcm).
+        try {
+            SendFcmNotification::dispatch($userIds, $title, $body, $type, $data, $priority);
+        } catch (\Throwable $e) {
+            Log::error("NOTIFICATION: Failed to dispatch FCM job for users: " . $e->getMessage());
+        }
 
         Log::info("NOTIFICATION: Done for " . $users->count() . " users");
     }
@@ -85,9 +109,10 @@ class NotificationService
     }
 
     /**
-     * Send FCM push notification to devices.
+     * Send FCM push notification to devices. Public so the queued
+     * SendFcmNotification job can call it from a worker process.
      */
-    private function sendFcm(array $users, string $title, string $body, string $type, array $data, string $priority = 'normal'): void
+    public function sendFcm(array $users, string $title, string $body, string $type, array $data, string $priority = 'normal'): void
     {
         $tokens = collect($users)
             ->filter(fn($u) => !empty($u->fcm_token))
