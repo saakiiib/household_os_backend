@@ -22,13 +22,6 @@ class SendFcmNotification implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /** Must match the Hostinger worker cron: --queue=notifications */
-    public $queue = 'notifications';
-
-    /**
-     * Retry against transient failures — the shared host occasionally
-     * refuses new MySQL connections under load ([2002] Operation not permitted).
-     */
     public $tries = 3;
     public $backoff = 60;
 
@@ -39,7 +32,9 @@ class SendFcmNotification implements ShouldQueue
         public string $type,
         public array $data = [],
         public string $priority = 'normal',
-    ) {}
+    ) {
+        $this->queue = 'notifications';
+    }
 
     public function handle(): void
     {
