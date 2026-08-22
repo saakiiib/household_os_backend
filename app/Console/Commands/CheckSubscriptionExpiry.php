@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\SendNotificationJob;
 use App\Models\Subscription;
 use App\Models\User;
-use App\Notifications\SubscriptionExpiryNotification;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 
@@ -94,11 +94,22 @@ class CheckSubscriptionExpiry extends Command
 
             $key = "grace_{$daysLeft}d";
             if (!$this->alreadyNotified($sub, $key)) {
-                $sub->user?->notify(new SubscriptionExpiryNotification(
-                    $sub,
-                    "Your subscription expires in {$daysLeft} day" . ($daysLeft > 1 ? 's' : ''),
-                    'grace_period'
-                ));
+                if ($sub->user) {
+                    SendNotificationJob::dispatch(
+                        $sub->user->id,
+                        'Subscription expiring',
+                        "Your subscription expires in {$daysLeft} day" . ($daysLeft > 1 ? 's' : ''),
+                        'subscription_expiry',
+                        [
+                            'subscription_id' => $sub->id,
+                            'household_id' => $sub->household_id,
+                            'plan_name' => $sub->plan?->name,
+                            'type' => 'grace_period',
+                            'action' => 'renew_now',
+                        ],
+                        'critical'
+                    );
+                }
                 $this->markNotified($sub, $key);
             }
         }
@@ -117,11 +128,22 @@ class CheckSubscriptionExpiry extends Command
 
         foreach ($subs as $sub) {
             if (!$this->alreadyNotified($sub, $key)) {
-                $sub->user?->notify(new SubscriptionExpiryNotification(
-                    $sub,
-                    "Your {$sub->plan?->name} subscription renews in {$days} day" . ($days > 1 ? 's' : ''),
-                    'renewal'
-                ));
+                if ($sub->user) {
+                    SendNotificationJob::dispatch(
+                        $sub->user->id,
+                        'Subscription renewal reminder',
+                        "Your {$sub->plan?->name} subscription renews in {$days} day" . ($days > 1 ? 's' : ''),
+                        'subscription_expiry',
+                        [
+                            'subscription_id' => $sub->id,
+                            'household_id' => $sub->household_id,
+                            'plan_name' => $sub->plan?->name,
+                            'type' => 'renewal',
+                            'action' => 'view_subscription',
+                        ],
+                        'high'
+                    );
+                }
                 $this->markNotified($sub, $key);
             }
         }
