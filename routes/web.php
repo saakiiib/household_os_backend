@@ -33,6 +33,9 @@ Route::get('/clean-db', function () {
 
     $tables = [
         'activity_logs',
+        'jobs',
+        'failed_jobs',
+        'job_batches',
         'documents',
         'document_files',
         'households',
