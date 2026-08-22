@@ -65,6 +65,4 @@ return [
         'service_account_json' => env('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON', ''),
     ],
 
-    'cron_secret' => env('CRON_SECRET'),
-
 ];
