@@ -77,9 +77,7 @@ class CriticalCheckCommand extends Command
                     "'{$task->title}' was due {$task->due_date->format('d M Y')} — please complete it",
                     'task_reminder',
                     ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'overdue'],
-                    'critical',
-                    null,
-                    true
+                    'critical'
                 );
                 $this->sent++;
             }
@@ -114,9 +112,7 @@ class CriticalCheckCommand extends Command
                     "'{$task->title}' is due {$timeLabel}",
                     'task_reminder',
                     ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'due_today'],
-                    'high',
-                    null,
-                    true
+                    'high'
                 );
                 $this->sent++;
             }
@@ -191,9 +187,7 @@ class CriticalCheckCommand extends Command
                         $body,
                         'renewal_reminder',
                         ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $reminderType],
-                        $priority,
-                        null,
-                        true
+                        $priority
                     );
                 }
                 $this->sent++;
