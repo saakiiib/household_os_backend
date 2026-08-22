@@ -180,16 +180,14 @@ class CriticalCheckCommand extends Command
                 $title = $reminderType === 'overdue' ? 'Renewal overdue' : 'Renewal due today';
                 $body = $messageFn($renewal);
 
-                foreach ($memberIds as $userId) {
-                    app(NotificationService::class)->sendToUser(
-                        $userId,
-                        $title,
-                        $body,
-                        'renewal_reminder',
-                        ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $reminderType],
-                        $priority
-                    );
-                }
+                app(NotificationService::class)->sendToUsers(
+                    $memberIds,
+                    $title,
+                    $body,
+                    'renewal_reminder',
+                    ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $reminderType],
+                    $priority
+                );
                 $this->sent++;
             }
         }
@@ -237,18 +235,14 @@ class CriticalCheckCommand extends Command
 
             if (!$alreadySent) {
                 $typeLabel = str_replace('_', ' ', $service->service_type);
-                foreach ($memberIds as $userId) {
-                    app(NotificationService::class)->sendToUser(
-                        $userId,
-                        ucfirst($typeLabel) . ' due today',
-                        "'{$renewal->title}' — {$typeLabel} is due today",
-                        'renewal_reminder',
-                        ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type],
-                        'critical',
-                        null,
-                        true
-                    );
-                }
+                app(NotificationService::class)->sendToUsers(
+                    $memberIds,
+                    ucfirst($typeLabel) . ' due today',
+                    "'{$renewal->title}' — {$typeLabel} is due today",
+                    'renewal_reminder',
+                    ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type],
+                    'critical'
+                );
                 $this->sent++;
             }
         }

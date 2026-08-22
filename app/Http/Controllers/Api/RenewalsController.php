@@ -163,9 +163,9 @@ class RenewalsController extends Controller
                 ->pluck('user_id')
                 ->all();
 
-            foreach ($members as $memberId) {
-                app(\App\Services\NotificationService::class)->sendToUser(
-                    $memberId,
+            if (!empty($members)) {
+                app(\App\Services\NotificationService::class)->sendToUsers(
+                    $members,
                     'New Renewal Added',
                     "'{$renewal->title}' has been added — due " . ($renewal->due_date ? $renewal->due_date->format('d M Y') : 'soon'),
                     'renewal_created',

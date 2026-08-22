@@ -18,31 +18,32 @@ class NotificationService
         $user = $user ?? User::find($userId);
         if (!$user) return;
 
-        $this->saveToDb($userId, $title, $body, $type, $data);
-        $this->sendFcm([$user], $title, $body, $type, $data);
+        $this->saveToDb($userId, $title, $body, $type, $data, $priority);
+        $this->sendFcm([$user], $title, $body, $type, $data, $priority);
     }
 
     public function sendToUsers(array $userIds, string $title, string $body, string $type, array $data = [], string $priority = 'normal'): void
     {
         $users = User::whereIn('id', $userIds)->get();
         foreach ($users as $user) {
-            $this->saveToDb($user->id, $title, $body, $type, $data);
+            $this->saveToDb($user->id, $title, $body, $type, $data, $priority);
         }
-        $this->sendFcm($users->all(), $title, $body, $type, $data);
+        $this->sendFcm($users->all(), $title, $body, $type, $data, $priority);
     }
 
-    private function saveToDb(int $userId, string $title, string $body, string $type, array $data): void
+    private function saveToDb(int $userId, string $title, string $body, string $type, array $data, string $priority): void
     {
         Notification::create([
-            'user_id' => $userId,
-            'title'   => $title,
-            'body'    => $body,
-            'type'    => $type,
-            'data'    => $data,
+            'user_id'  => $userId,
+            'title'    => $title,
+            'body'     => $body,
+            'type'     => $type,
+            'priority' => in_array($priority, Notification::PRIORITIES) ? $priority : 'normal',
+            'data'     => $data,
         ]);
     }
 
-    public function sendFcm(array $users, string $title, string $body, string $type, array $data): void
+    public function sendFcm(array $users, string $title, string $body, string $type, array $data, string $priority = 'normal'): void
     {
         $tokens = collect($users)
             ->filter(fn($u) => !empty($u->fcm_token))
@@ -52,7 +53,7 @@ class NotificationService
 
         if (empty($tokens)) return;
 
-        $payload = array_merge($data, ['type' => $type]);
+        $payload = array_merge($data, ['type' => $type, 'priority' => $priority]);
 
         foreach (array_chunk($tokens, 500) as $chunk) {
             try {
