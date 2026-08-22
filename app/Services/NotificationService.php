@@ -23,9 +23,9 @@ class NotificationService
      *   normal   — upcoming reminders, daily digests
      *   low      — weekly summaries, tips
      */
-    public function sendToUser(int $userId, string $title, string $body, string $type, array $data = [], string $priority = 'normal'): void
+    public function sendToUser(int $userId, string $title, string $body, string $type, array $data = [], string $priority = 'normal', ?User $user = null): void
     {
-        $user = User::find($userId);
+        $user = $user ?? User::find($userId);
         if (!$user) {
             Log::warning("NOTIFICATION: User {$userId} not found, skipping.");
             return;

@@ -5,14 +5,23 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\NotificationService;
-use App\Services\NotificationEngine;
-use App\Console\Commands\SendDailyDigest;
-use App\Console\Commands\SendHourlyNotification;
 
 class SchedulerController extends Controller
 {
+    /**
+     * Lightweight cron entry point.
+     *
+     * Protected by CRON_SECRET token. Only runs critical notification
+     * checks — routine reminders are handled by Flutter local notifications.
+     */
     public function run()
     {
+        // Secret token guard — prevents random people from triggering cron
+        $secret = config('services.cron_secret', env('CRON_SECRET'));
+        if ($secret && request('token') !== $secret) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
         $now = now('Europe/London');
         \Illuminate\Support\Facades\Log::info("SCHEDULER: Cron triggered at {$now->format('Y-m-d H:i:s')} London time.");
 
@@ -22,34 +31,22 @@ class SchedulerController extends Controller
 
         $results = [];
 
-        $engine = app(NotificationEngine::class);
-
+        // Critical task/renewal check — indexed queries only
         try {
-            $results['task_reminders'] = $engine->runTasks();
+            $results['critical_check'] = \Artisan::call('notifications:critical-check');
+            $results['critical_check_output'] = \Artisan::output();
         } catch (\Throwable $e) {
-            $results['task_reminders'] = 'error: ' . $e->getMessage();
-            \Illuminate\Support\Facades\Log::error("SCHEDULER: Task reminders error: " . $e->getMessage());
+            $results['critical_check'] = 'error: ' . $e->getMessage();
+            \Illuminate\Support\Facades\Log::error("SCHEDULER: Critical check error: " . $e->getMessage());
         }
 
+        // Subscription transitions + expiry warnings
         try {
-            $results['renewal_reminders'] = $engine->runRenewals();
-        } catch (\Throwable $e) {
-            $results['renewal_reminders'] = 'error: ' . $e->getMessage();
-            \Illuminate\Support\Facades\Log::error("SCHEDULER: Renewal reminders error: " . $e->getMessage());
-        }
-
-        try {
-            $results['subscription_check'] = $engine->runSubscription();
+            $results['subscription_check'] = \Artisan::call('subscription:check-expiry');
+            $results['subscription_check_output'] = \Artisan::output();
         } catch (\Throwable $e) {
             $results['subscription_check'] = 'error: ' . $e->getMessage();
             \Illuminate\Support\Facades\Log::error("SCHEDULER: Subscription check error: " . $e->getMessage());
-        }
-
-        try {
-            $results['daily_digest'] = $this->sendDailyDigest();
-        } catch (\Throwable $e) {
-            $results['daily_digest'] = 'error: ' . $e->getMessage();
-            \Illuminate\Support\Facades\Log::error("SCHEDULER: Daily digest error: " . $e->getMessage());
         }
 
         \Illuminate\Support\Facades\Log::info("SCHEDULER: Completed", ['results' => $results]);
@@ -58,32 +55,6 @@ class SchedulerController extends Controller
             'success' => true,
             'results' => $results,
         ]);
-    }
-
-    private function sendHourly(): string
-    {
-        app(SendHourlyNotification::class)->handle();
-        return 'Hourly notifications sent';
-    }
-
-    private function sendDailyDigest(): string
-    {
-        $now = now('Europe/London');
-        $hour = (int) $now->format('H');
-
-        \Illuminate\Support\Facades\Log::info("DIGEST: Checking schedule. London hour: {$hour}");
-
-        // Send daily digest at scheduled hours: 8 AM, 12 PM, 5 PM, 8 PM
-        if (!in_array($hour, [8, 12, 17, 20], true)) {
-            $msg = "Digest not scheduled this hour (hour {$hour}) — skipping";
-            \Illuminate\Support\Facades\Log::info("DIGEST: {$msg}");
-            return $msg;
-        }
-
-        \Illuminate\Support\Facades\Log::info("DIGEST: Triggering digest command for hour {$hour}");
-        $cmd = app(SendDailyDigest::class);
-        $cmd->handle();
-        return 'Digest sent';
     }
 
     private function sendTestNotification()

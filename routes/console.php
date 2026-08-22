@@ -1,8 +1,9 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+// Critical notifications: overdue/due-today tasks and renewals — every minute
+Schedule::command('notifications:critical-check')->everyMinute();
+
+// Subscription expiry + grace period transitions — every hour
+Schedule::command('subscription:check-expiry')->hourly();

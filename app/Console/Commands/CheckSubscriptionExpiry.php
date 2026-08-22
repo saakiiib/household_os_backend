@@ -6,6 +6,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Notifications\SubscriptionExpiryNotification;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 class CheckSubscriptionExpiry extends Command
 {
@@ -14,8 +15,17 @@ class CheckSubscriptionExpiry extends Command
 
     public function handle(): int
     {
-        $this->handleGracePeriodTransitions();
-        $this->sendExpiryWarnings();
+        if (!Cache::add('subscription-check-running', true, 60)) {
+            $this->info('Subscription check already running — skipping.');
+            return Command::SUCCESS;
+        }
+
+        try {
+            $this->handleGracePeriodTransitions();
+            $this->sendExpiryWarnings();
+        } finally {
+            Cache::forget('subscription-check-running');
+        }
 
         $this->info('Subscription expiry check complete.');
         return Command::SUCCESS;
