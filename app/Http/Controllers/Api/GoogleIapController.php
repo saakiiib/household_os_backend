@@ -111,4 +111,67 @@ class GoogleIapController extends Controller
             return response()->json(['error' => 'Webhook processing failed'], 500);
         }
     }
+
+    /**
+     * Restore / look up an existing Google Play subscription.
+     *
+     * Google Play ties purchases to the Google account — there is no native
+     * "restore" API like Apple's.  This endpoint simply checks whether the
+     * household already has an active Google Play subscription on the server.
+     */
+    public function restore(Request $request): JsonResponse
+    {
+        $request->validate([
+            'app_account_token' => 'nullable|string',
+        ]);
+
+        $user = $request->user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not authenticated.',
+            ], 401);
+        }
+
+        $household = $user->activeHousehold();
+        if (!$household) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active household.',
+            ], 404);
+        }
+
+        $subscription = \App\Models\Subscription::where('household_id', $household->id)
+            ->where('payment_method', 'google_play')
+            ->where(function ($q) {
+                $q->where('status', 'active')
+                  ->orWhere('status', 'grace_period')
+                  ->orWhere('status', 'trial');
+            })
+            ->first();
+
+        if ($subscription) {
+            $subscription->load('plan');
+            return response()->json([
+                'success' => true,
+                'message' => 'Google Play subscription found.',
+                'data' => [
+                    'subscription_id' => $subscription->id,
+                    'status' => $subscription->status,
+                    'plan' => [
+                        'id' => $subscription->plan->id,
+                        'name' => $subscription->plan->name,
+                        'slug' => $subscription->plan->slug,
+                    ],
+                    'expires_at' => $subscription->expires_at?->toIso8601String(),
+                    'is_active' => $subscription->isActive(),
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'No active Google Play subscription found for this household.',
+        ]);
+    }
 }

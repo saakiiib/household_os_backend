@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Document;
 use App\Models\DocumentFile;
+use App\Models\Household;
+use App\Services\EntitlementService;
 use App\Services\FileEncryptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,10 +16,12 @@ use Illuminate\Support\Facades\Validator;
 class DocumentsController extends Controller
 {
     protected $fileService;
+    protected $entitlements;
 
-    public function __construct(FileEncryptionService $fileService)
+    public function __construct(FileEncryptionService $fileService, EntitlementService $entitlements)
     {
         $this->fileService = $fileService;
+        $this->entitlements = $entitlements;
     }
 
     /**
@@ -137,6 +141,18 @@ class DocumentsController extends Controller
                     'success' => false,
                     'message' => 'Maximum 10 files allowed.',
                 ], 422);
+            }
+
+            // Entitlement gate: storage is capped per plan (command.txt §19 / §32).
+            $additionalBytes = array_reduce($files, fn($sum, $f) => $sum + $f->getSize(), 0);
+            $household = Household::findOrFail($household_id);
+            if (!$this->entitlements->canUploadDocument($household, $additionalBytes)) {
+                $usedMb = round($this->entitlements->getStorageUsed($household) / 1024 / 1024, 1);
+                return response()->json([
+                    'success' => false,
+                    'message' => "Your Document Locker is above your storage allowance ({$usedMb} MB used). Upgrade to add more files.",
+                    'code' => 'ENTITLEMENT_LIMIT_STORAGE',
+                ], 403);
             }
         }
 
@@ -359,6 +375,17 @@ class DocumentsController extends Controller
                 'success' => false,
                 'message' => 'Maximum 10 files allowed.',
             ], 422);
+        }
+
+        // Entitlement gate: check storage limit before uploading.
+        $household = Household::findOrFail($household_id);
+        $additionalBytes = array_sum(array_map(fn($f) => $f->getSize(), $files));
+        if (!$this->entitlements->canUploadDocument($household, $additionalBytes)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Storage limit reached. Upgrade to Document Locker or Complete for 5 GB.',
+                'code' => 'ENTITLEMENT_LIMIT_DOCUMENTS',
+            ], 403);
         }
 
         $uploadedFiles = [];

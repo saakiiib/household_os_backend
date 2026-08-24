@@ -13,6 +13,7 @@ class Subscription extends Model
     protected $fillable = [
         'user_id',
         'household_id',
+        'subscriber_user_id',
         'subscription_plan_id',
         'status',
         'trial_started_at',
@@ -22,6 +23,18 @@ class Subscription extends Model
         'expires_at',
         'cancelled_at',
         'payment_method',
+        'provider',
+        'product_id',
+        'billing_period',
+        'original_transaction_id',
+        'latest_transaction_id',
+        'environment',
+        'auto_renew',
+        'app_account_token',
+        'grace_period_expires_at',
+        'expired_at',
+        'revoked_at',
+        'last_verified_at',
         'stripe_subscription_id',
         'stripe_customer_id',
         'paypal_subscription_id',
@@ -40,6 +53,11 @@ class Subscription extends Model
         'current_period_end' => 'datetime',
         'expires_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'grace_period_expires_at' => 'datetime',
+        'expired_at' => 'datetime',
+        'revoked_at' => 'datetime',
+        'last_verified_at' => 'datetime',
+        'auto_renew' => 'boolean',
         'metadata' => 'array',
     ];
 
@@ -63,12 +81,24 @@ class Subscription extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(SubscriptionTransaction::class);
+    }
+
+    public function subscriber(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'subscriber_user_id');
+    }
+
     public function isActive(): bool
     {
         if ($this->status === 'trial') {
             return true;
         }
-        if ($this->status !== 'active' && $this->status !== 'grace_period') {
+        // billing_retry = Apple is re-trying payment while expiresDate keeps
+        // extending — the customer retains access (command.txt §31).
+        if (!in_array($this->status, ['active', 'grace_period', 'billing_retry'])) {
             return false;
         }
         return !$this->isFullyExpired();

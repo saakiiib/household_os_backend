@@ -2,322 +2,835 @@
 
 namespace App\Services;
 
+use App\Models\AppleNotificationLog;
+use App\Models\Household;
+use App\Models\Payment;
+use App\Models\ProductPlan;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
-use App\Models\Payment;
+use App\Models\SubscriptionTransaction;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Apple App Store Server API integration (command.txt §10-§12, §24-§29, §51).
+ *
+ * Uses the modern App Store Server API:
+ *  - ES256 JWT authentication (generated with the .p8 In-App Purchase key)
+ *  - Get All Subscription Statuses to verify a purchase server-side
+ *  - JWS (signedPayload / signedTransactionInfo) signature verification
+ *
+ * The legacy verifyReceipt + shared-secret flow is intentionally NOT used.
+ */
 class AppleIapService
 {
-    // Apple verifyReceipt endpoints
-    private const VERIFY_URL_PRODUCTION = 'https://buy.itunes.apple.com/verifyReceipt';
-    private const VERIFY_URL_SANDBOX = 'https://sandbox.itunes.apple.com/verifyReceipt';
+    private const PRODUCTION_URL = 'https://api.storekit.apple.com';
+    private const SANDBOX_URL = 'https://api.storekit-sandbox.apple.com';
 
-    // Shared secret from App Store Connect > App > In-App Purchases > App-Specific Shared Secret
+    // Apple subscription status codes (Get All Subscription Statuses).
+    private const STATUS_ACTIVE = 1;
+    private const STATUS_EXPIRED = 2;
+    private const STATUS_RETRY = 3;
+    private const STATUS_GRACE_PERIOD = 4;
+    private const STATUS_REVOKED = 5;
+
+    private string $keyId;
+    private string $issuerId;
+    private string $bundleId;
+    private ?string $appId;
+    private string $privateKeyPath;
     private string $sharedSecret;
 
     public function __construct()
     {
+        $this->keyId = config('services.apple.iap_key_id', '');
+        $this->issuerId = config('services.apple.iap_issuer_id', '');
+        $this->bundleId = config('services.apple.bundle_id', 'com.mentosoftware.householdos');
+        $this->appId = config('services.apple.app_id');
+        $this->privateKeyPath = config('services.apple.iap_private_key_path', '');
+        // Allow relative paths (resolved from the Laravel base directory).
+        if ($this->privateKeyPath && !str_starts_with($this->privateKeyPath, '/')
+            && !preg_match('~^[A-Za-z]:[\\\\/]~', $this->privateKeyPath)) {
+            $this->privateKeyPath = base_path($this->privateKeyPath);
+        }
         $this->sharedSecret = config('services.apple.shared_secret', '');
     }
 
+    /* ------------------------------------------------------------------ */
+    /* Public API                                                         */
+    /* ------------------------------------------------------------------ */
+
     /**
-     * Verify an Apple receipt and activate/extend the subscription.
+     * Verify a purchase with Apple and activate/update the household
+     * subscription (command.txt §23 / §24).
+     *
+     * Flutter sends the Apple transaction id; we are the source of truth.
      *
      * @return array{success: bool, message: string, subscription?: Subscription}
      */
-    public function verifyReceipt(
-        string $receiptData,
-        string $appleProductId,
-        string $planSlug,
-        string $billingType,
-        string $transactionId,
-        bool $isRestored = false,
-        ?User $user = null,
-    ): array {
-        if (empty($this->sharedSecret)) {
-            Log::error('AppleIapService: shared_secret not configured');
+    public function verifyAndActivate(User $user, string $transactionId, ?string $appAccountToken = null): array
+    {
+        if (!$this->isConfigured()) {
+            Log::error('AppleIapService: App Store Server API not configured');
             return ['success' => false, 'message' => 'Apple IAP is not configured on the server.'];
         }
 
-        // Try production first, fall back to sandbox
-        $result = $this->_verifyWithApple($receiptData, self::VERIFY_URL_PRODUCTION);
-
-        // If production says 21007, try sandbox
-        if (isset($result['status']) && $result['status'] == 21007) {
-            $result = $this->_verifyWithApple($receiptData, self::VERIFY_URL_SANDBOX);
+        $statusResult = $this->getSubscriptionStatus($transactionId);
+        if (!$statusResult['success']) {
+            return ['success' => false, 'message' => $statusResult['message']];
         }
 
-        if (!isset($result['status']) || $result['status'] !== 0) {
-            $status = $result['status'] ?? 'unknown';
-            Log::error('AppleIapService: verification failed', ['status' => $status, 'result' => $result]);
-            return ['success' => false, 'message' => 'Apple receipt verification failed (status: ' . $status . ').'];
+        $tx = $statusResult['transaction']; // decoded signedTransactionInfo
+
+        // Security rule: validate bundle + product + environment (§24).
+        if (($tx['bundleId'] ?? null) !== $this->bundleId) {
+            Log::warning('AppleIapService: bundle id mismatch', ['got' => $tx['bundleId'] ?? null]);
+            return ['success' => false, 'message' => 'Bundle identifier mismatch.'];
         }
 
-        // Find the latest receipt info for this product
-        $latestReceiptInfo = $result['latest_receipt_info'] ?? [];
-        if (empty($latestReceiptInfo)) {
-            return ['success' => false, 'message' => 'No receipt information found.'];
+        $productId = $tx['productId'] ?? null;
+        $productConfig = $this->productConfig($productId);
+        if (empty($productConfig)) {
+            Log::warning('AppleIapService: unknown product', ['product' => $productId]);
+            return ['success' => false, 'message' => 'Unknown Apple product.'];
         }
 
-        // Find the matching receipt entry
-        $receiptEntry = null;
-        foreach ($latestReceiptInfo as $entry) {
-            if (isset($entry['product_id']) && $entry['product_id'] === $appleProductId) {
-                $receiptEntry = $entry;
-                break;
+        $originalTransactionId = $tx['originalTransactionId'] ?? $transactionId;
+
+        // Security rule (§33): never blindly move an existing subscription to
+        // another household. If the Apple purchase is already linked to a
+        // different HouseholdOS household, flag it for support instead.
+        $household = $user->activeHousehold();
+        if ($household) {
+            $linkedElsewhere = Subscription::where(function ($q) use ($originalTransactionId) {
+                $q->where('original_transaction_id', $originalTransactionId)
+                  ->orWhere('apple_original_transaction_id', $originalTransactionId);
+            })
+            ->whereNull('revoked_at')
+            ->where('household_id', '!=', $household->id)
+            ->first();
+
+            if ($linkedElsewhere) {
+                Log::warning('AppleIapService: subscription linked to another household', [
+                    'otid' => $originalTransactionId,
+                    'existing_household' => $linkedElsewhere->household_id,
+                ]);
+                return [
+                    'success' => false,
+                    'message' => 'This Apple subscription is already active on another household. Contact support to transfer it.',
+                    'code' => 'SUBSCRIPTION_LINKED_ELSEWHERE',
+                ];
             }
         }
 
-        // If no exact match, use the latest entry
-        if (!$receiptEntry && !empty($latestReceiptInfo)) {
-            $receiptEntry = end($latestReceiptInfo);
+        $plan = SubscriptionPlan::where('code', $productConfig['plan'])->first();
+        if (!$plan) {
+            return ['success' => false, 'message' => 'Subscription plan not found.'];
         }
 
-        if (!$receiptEntry) {
-            return ['success' => false, 'message' => 'Could not find matching receipt for product.'];
-        }
-
-        // Parse expiry date
-        $expiresAt = isset($receiptEntry['expires_date_ms'])
-            ? \Carbon\Carbon::createFromTimestampMs((int) $receiptEntry['expires_date_ms'])
-            : null;
-
-        $purchaseDate = isset($receiptEntry['purchase_date_ms'])
-            ? \Carbon\Carbon::createFromTimestampMs((int) $receiptEntry['purchase_date_ms'])
-            : null;
-
-        $originalTransactionId = $receiptEntry['original_transaction_id'] ?? $transactionId;
-
-        // Determine billing type from product ID
-        $detectedBillingType = str_contains($appleProductId, '.annual.') ? 'annual' : 'monthly';
+        $subscription = $this->applySubscription(
+            user: $user,
+            plan: $plan,
+            productId: $productId,
+            billingPeriod: $productConfig['billing_period'],
+            originalTransactionId: $originalTransactionId,
+            latestTransactionId: $tx['transactionId'] ?? $transactionId,
+            environment: $tx['environment'] ?? $statusResult['environment'],
+            purchaseDateMs: (int) ($tx['purchaseDate'] ?? null),
+            expiresDateMs: (int) ($tx['expiresDate'] ?? null),
+            appAccountToken: $appAccountToken ?? $tx['appAccountToken'] ?? null,
+            appleStatus: (int) ($statusResult['status'] ?? self::STATUS_ACTIVE),
+            autoRenew: (int) ($statusResult['renewalInfo']['autoRenewStatus'] ?? 1),
+        );
 
         return [
             'success' => true,
-            'message' => 'Receipt verified successfully.',
-            'expires_at' => $expiresAt,
-            'purchase_date' => $purchaseDate,
-            'original_transaction_id' => $originalTransactionId,
-            'apple_product_id' => $appleProductId,
-            'billing_type' => $detectedBillingType,
+            'message' => 'Subscription verified and activated.',
+            'subscription' => $subscription,
         ];
     }
 
     /**
-     * Activate or extend a subscription after successful receipt verification.
+     * Restore purchases: verify an original transaction ID and activate
+     * the subscription if valid (command.txt §33).
      */
-    public function activateSubscription(
+    public function restoreSubscription(User $user, string $originalTransactionId): array
+    {
+        if (!$this->isConfigured()) {
+            return ['success' => false, 'message' => 'Apple IAP is not configured on the server.'];
+        }
+
+        $statusResult = $this->getSubscriptionStatus($originalTransactionId);
+        if (!$statusResult['success']) {
+            return ['success' => false, 'message' => $statusResult['message']];
+        }
+
+        $tx = $statusResult['transaction'];
+        $productId = $tx['productId'] ?? null;
+        $productConfig = $this->productConfig($productId);
+        if (empty($productConfig)) {
+            return ['success' => false, 'message' => 'Unknown Apple product.'];
+        }
+
+        $plan = SubscriptionPlan::where('code', $productConfig['plan'])->first();
+        if (!$plan) {
+            return ['success' => false, 'message' => 'Subscription plan not found.'];
+        }
+
+        $subscription = Subscription::where('original_transaction_id', $originalTransactionId)->first();
+        if ($subscription) {
+            $household = $user->activeHousehold();
+            if ($household && $subscription->household_id !== $household->id) {
+                Log::warning('AppleIapService: restore linked to different household', [
+                    'user_household' => $household->id,
+                    'sub_household' => $subscription->household_id,
+                ]);
+                return [
+                    'success' => false,
+                    'message' => 'This subscription is linked to another household. Please contact support.',
+                ];
+            }
+        }
+
+        $result = $this->verifyAndActivate(
+            user: $user,
+            transactionId: $originalTransactionId,
+        );
+
+        return $result;
+    }
+
+    /**
+     * Handle an App Store Server Notification V2 webhook (command.txt §27-§29).
+     */
+    public function handleServerNotification(array $payload): void
+    {
+        $signedPayload = $payload['signedPayload'] ?? null;
+        if (!$signedPayload) {
+            Log::warning('AppleIapService: webhook missing signedPayload');
+            return;
+        }
+
+        $decoded = $this->verifyAndDecodeJws($signedPayload);
+        if (!$decoded) {
+            Log::error('AppleIapService: webhook JWS signature verification failed');
+            return;
+        }
+
+        $data = $decoded['data'] ?? [];
+        $notificationUuid = $decoded['notificationUUID'] ?? null;
+        $notificationType = $decoded['notificationType'] ?? null;
+        $subtype = $decoded['subtype'] ?? null;
+        $environment = $decoded['environment'] ?? null;
+
+        // Idempotency: if we already processed this exact notificationUUID,
+        // ignore it (command.txt §17 / §51 Rule 5).
+        if ($notificationUuid && AppleNotificationLog::where('notification_uuid', $notificationUuid)->exists()) {
+            Log::info('AppleIapService: duplicate notification ignored', ['uuid' => $notificationUuid]);
+            return;
+        }
+
+        // Verify and decode the embedded transaction info.
+        $tx = null;
+        $originalTransactionId = null;
+        if (!empty($data['signedTransactionInfo'])) {
+            $txInfo = $this->verifyAndDecodeJws($data['signedTransactionInfo']);
+            if ($txInfo) {
+                $tx = $txInfo;
+                $originalTransactionId = $tx['originalTransactionId'] ?? null;
+            }
+        }
+
+        // Log first (idempotent upsert), then process.
+        AppleNotificationLog::recordOrIgnore(
+            uuid: $notificationUuid ?? (string) Str::uuid(),
+            type: $notificationType,
+            subtype: $subtype,
+            environment: $environment,
+            originalTransactionId: $originalTransactionId,
+            status: true,
+            payload: json_encode($payload)
+        );
+
+        if (!$originalTransactionId) {
+            Log::warning('AppleIapService: webhook missing originalTransactionId');
+            return;
+        }
+
+        // Re-query Apple for the authoritative current state, then apply it to
+        // the household (command.txt §29 safe pattern).
+        $statusResult = $this->getSubscriptionStatus($originalTransactionId);
+        if ($statusResult['success']) {
+            $this->applyRawStatus(
+                originalTransactionId: $originalTransactionId,
+                statusResult: $statusResult,
+                notificationType: $notificationType,
+            );
+            return;
+        }
+
+        // Fallback: apply based purely on the notification type.
+        $this->applyByNotificationType($originalTransactionId, $notificationType, $tx);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* App Store Server API                                               */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Get All Subscription Statuses (command.txt §24).
+     * https://api.storekit.apple.com/inApps/v1/subscriptions/{transactionId}
+     */
+    public function getSubscriptionStatus(string $transactionId): array
+    {
+        if (!$this->isConfigured()) {
+            return ['success' => false, 'message' => 'Apple IAP is not configured on the server.'];
+        }
+
+        $jwt = $this->generateJwt();
+        if (!$jwt) {
+            return ['success' => false, 'message' => 'Failed to generate Apple JWT.'];
+        }
+
+        $environments = [self::PRODUCTION_URL, self::SANDBOX_URL];
+        $lastError = 'Unknown error';
+
+        foreach ($environments as $base) {
+            try {
+                $response = Http::withToken($jwt)
+                    ->timeout(30)
+                    ->get("{$base}/inApps/v1/subscriptions/{$transactionId}");
+
+                if ($response->status() === 404) {
+                    $lastError = 'Transaction not found at Apple.';
+                    continue;
+                }
+                if (!$response->successful()) {
+                    $lastError = 'Apple returned HTTP ' . $response->status();
+                    continue;
+                }
+
+                $body = $response->json();
+                $environment = $body['environment'] ?? 'Production';
+
+                // Collect all valid transactions first, then pick the best one.
+                // Active > grace_period > billing_retry > expired > revoked.
+                $candidates = [];
+
+                foreach ($body['data'] ?? [] as $item) {
+                    foreach ($item['lastTransactions'] ?? [] as $last) {
+                        $txInfo = $this->verifyAndDecodeJws($last['signedTransactionInfo'] ?? null);
+                        if (!$txInfo) {
+                            continue;
+                        }
+                        $status = (int) ($last['status'] ?? self::STATUS_ACTIVE);
+                        $renewalInfo = $this->verifyAndDecodeJws($last['signedRenewalInfo'] ?? null);
+                        $candidates[] = [
+                            'status' => $status,
+                            'transaction' => $txInfo,
+                            'renewalInfo' => $renewalInfo ?? [],
+                            // Higher = better. Active is most important.
+                            'priority' => match ($status) {
+                                self::STATUS_ACTIVE => 5,
+                                self::STATUS_GRACE_PERIOD => 4,
+                                self::STATUS_RETRY => 3,
+                                self::STATUS_EXPIRED => 2,
+                                self::STATUS_REVOKED => 1,
+                                default => 0,
+                            },
+                        ];
+                    }
+                }
+
+                if (!empty($candidates)) {
+                    // Sort descending by priority so the best candidate is first.
+                    usort($candidates, fn($a, $b) => $b['priority'] <=> $a['priority']);
+                    $best = $candidates[0];
+
+                    return [
+                        'success' => true,
+                        'environment' => $environment,
+                        'status' => $best['status'],
+                        'transaction' => $best['transaction'],
+                        'renewalInfo' => $best['renewalInfo'] ?? [],
+                    ];
+                }
+
+                $lastError = 'No subscription transactions returned.';
+            } catch (\Exception $e) {
+                Log::error('AppleIapService: status request failed', ['error' => $e->getMessage()]);
+                $lastError = $e->getMessage();
+            }
+        }
+
+        return ['success' => false, 'message' => $lastError];
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Subscription activation / state application                        */
+    /* ------------------------------------------------------------------ */
+
+    private function applySubscription(
         User $user,
-        string $planSlug,
-        string $billingType,
-        string $appleProductId,
+        SubscriptionPlan $plan,
+        string $productId,
+        string $billingPeriod,
         string $originalTransactionId,
-        \Carbon\Carbon $expiresAt,
-        ?\Carbon\Carbon $purchaseDate = null,
+        string $latestTransactionId,
+        ?string $environment,
+        ?int $purchaseDateMs,
+        ?int $expiresDateMs,
+        ?string $appAccountToken,
+        int $appleStatus,
+        int $autoRenew = 1,
     ): Subscription {
         $household = $user->activeHousehold();
-
         if (!$household) {
             throw new \RuntimeException('User has no active household.');
         }
 
-        $plan = SubscriptionPlan::where('slug', $planSlug)->first();
-        if (!$plan) {
-            throw new \RuntimeException("Subscription plan not found: {$planSlug}");
-        }
+        $periodStart = $purchaseDateMs
+            ? \Carbon\Carbon::createFromTimestampMs($purchaseDateMs)
+            : now();
+        $periodEnd = $expiresDateMs
+            ? \Carbon\Carbon::createFromTimestampMs($expiresDateMs)
+            : now()->addMonth();
 
-        // Calculate period start and end
-        $periodStart = $purchaseDate ?? now();
-        $periodEnd = $expiresAt;
+        $status = $this->mapAppleStatus($appleStatus);
 
-        // Find existing subscription for this household
-        $subscription = Subscription::where('household_id', $household->id)->first();
+        $subscription = Subscription::where('original_transaction_id', $originalTransactionId)->first()
+            ?? Subscription::where('household_id', $household->id)->first();
 
         $data = [
             'user_id' => $user->id,
+            'subscriber_user_id' => $user->id,
             'household_id' => $household->id,
             'subscription_plan_id' => $plan->id,
-            'status' => 'active',
+            'status' => $status,
+            'provider' => 'apple',
+            'product_id' => $productId,
+            'billing_period' => $billingPeriod,
+            'original_transaction_id' => $originalTransactionId,
+            'latest_transaction_id' => $latestTransactionId,
+            'environment' => $environment,
+            'auto_renew' => $autoRenew === 1,
+            'app_account_token' => $appAccountToken,
             'current_period_start' => $periodStart,
             'current_period_end' => $periodEnd,
             'expires_at' => $periodEnd,
             'cancelled_at' => null,
-            'payment_method' => 'apple',
-            'apple_product_id' => $appleProductId,
-            'apple_original_transaction_id' => $originalTransactionId,
+            'last_verified_at' => now(),
         ];
 
         if ($subscription) {
             $subscription->update($data);
         } else {
-            $data['trial_started_at'] = null;
-            $data['trial_ends_at'] = null;
             $subscription = Subscription::create($data);
         }
 
-        // Record the payment
-        $amount = $billingType === 'annual' ? $plan->annual_price : $plan->monthly_price;
-        Payment::create([
-            'user_id' => $user->id,
-            'household_id' => $household->id,
-            'subscription_id' => $subscription->id,
-            'subscription_plan_id' => $plan->id,
-            'amount' => $amount,
-            'currency' => 'gbp',
-            'payment_method' => 'apple',
-            'gateway' => 'apple_iap',
-            'gateway_payment_id' => $originalTransactionId,
-            'status' => 'completed',
-            'metadata' => [
-                'apple_product_id' => $appleProductId,
-                'original_transaction_id' => $originalTransactionId,
-            ],
-        ]);
+        if ($this->recordTransaction($subscription, $latestTransactionId, $originalTransactionId, $productId, $environment, $purchaseDateMs, $expiresDateMs)) {
+            $this->recordPayment($subscription, $latestTransactionId);
+        }
 
-        Log::info('AppleIapService: subscription activated', [
-            'user_id' => $user->id,
+        Log::info('AppleIapService: subscription activated/updated', [
             'household_id' => $household->id,
-            'plan' => $planSlug,
-            'expires_at' => $expiresAt->toIso8601String(),
+            'plan' => $plan->code,
+            'status' => $status,
         ]);
 
         return $subscription;
     }
 
     /**
-     * Handle Apple Server Notification (App Store Server Notifications v2).
+     * Re-query Apple and apply the authoritative state to a local
+     * subscription (§51 Rule 10 — Apple billing status decides, never a cron).
+     * Used by the expiry scheduler instead of locally expiring Apple rows.
      */
-    public function handleServerNotification(array $payload): void
+    public function refreshFromApple(Subscription $subscription): bool
     {
-        $notificationType = $payload['notificationType'] ?? $payload['type'] ?? null;
-        $subtype = $payload['subtype'] ?? null;
-        $data = $payload['data'] ?? $payload;
+        $lookupId = $subscription->latest_transaction_id
+            ?? $subscription->original_transaction_id
+            ?? $subscription->apple_original_transaction_id;
 
-        // Extract transaction info
-        $transactionInfo = $data['transactionInfo'] ?? $data;
-        $originalTransactionId = $transactionInfo['originalTransactionId']
-            ?? $transactionInfo['original_transaction_id']
-            ?? null;
-        $product_id = $transactionInfo['productIdentifier']
-            ?? $transactionInfo['product_id']
-            ?? null;
+        if (!$lookupId || !$this->isConfigured()) {
+            return false;
+        }
 
-        Log::info('AppleIapService: server notification', [
-            'type' => $notificationType,
-            'subtype' => $subtype,
-            'original_transaction_id' => $originalTransactionId,
-            'product_id' => $product_id,
-        ]);
+        $statusResult = $this->getSubscriptionStatus($lookupId);
+        if (!$statusResult['success']) {
+            return false;
+        }
 
-        if (!$originalTransactionId) {
-            Log::warning('AppleIapService: no original_transaction_id in notification');
+        $this->applyRawStatus(
+            originalTransactionId: $statusResult['transaction']['originalTransactionId'] ?? $subscription->original_transaction_id,
+            statusResult: $statusResult,
+            notificationType: null,
+        );
+
+        return true;
+    }
+
+    private function applyRawStatus(string $originalTransactionId, array $statusResult, ?string $notificationType): void
+    {
+        $subscription = Subscription::where('original_transaction_id', $originalTransactionId)->first();
+        if (!$subscription) {
+            Log::info('AppleIapService: no local subscription for transaction', ['otid' => $originalTransactionId]);
             return;
         }
 
-        // Find subscription by original transaction ID
-        $subscription = Subscription::where('apple_original_transaction_id', $originalTransactionId)->first();
+        $tx = $statusResult['transaction'] ?? [];
+        $status = $this->mapAppleStatus((int) ($statusResult['status'] ?? self::STATUS_ACTIVE));
 
+        $periodEnd = isset($tx['expiresDate'])
+            ? \Carbon\Carbon::createFromTimestampMs((int) $tx['expiresDate'])
+            : $subscription->current_period_end;
+
+        $subscription->update([
+            'status' => $status,
+            'latest_transaction_id' => $tx['transactionId'] ?? $subscription->latest_transaction_id,
+            'current_period_end' => $periodEnd,
+            'expires_at' => $periodEnd,
+            'environment' => $statusResult['environment'] ?? $subscription->environment,
+            // §30: turning auto-renew off keeps access until the period ends —
+            // status stays active, only the renewal flag changes.
+            'auto_renew' => isset($statusResult['renewalInfo']['autoRenewStatus'])
+                ? ((int) $statusResult['renewalInfo']['autoRenewStatus'] === 1)
+                : $subscription->auto_renew,
+            'last_verified_at' => now(),
+        ]);
+
+        if (!empty($tx['transactionId'])) {
+            $created = $this->recordTransaction(
+                $subscription,
+                $tx['transactionId'],
+                $originalTransactionId,
+                $tx['productId'] ?? $subscription->product_id,
+                $statusResult['environment'] ?? null,
+                $tx['purchaseDate'] ?? null,
+                $tx['expiresDate'] ?? null
+            );
+            if ($created && ($status === 'active' || $status === 'grace_period')) {
+                $this->recordPayment($subscription, $tx['transactionId']);
+            }
+        }
+    }
+
+    private function applyByNotificationType(string $originalTransactionId, ?string $notificationType, ?array $tx): void
+    {
+        $subscription = Subscription::where('original_transaction_id', $originalTransactionId)->first();
         if (!$subscription) {
-            Log::warning('AppleIapService: subscription not found for transaction', [
-                'original_transaction_id' => $originalTransactionId,
-            ]);
             return;
         }
 
         switch ($notificationType) {
             case 'SUBSCRIBED':
             case 'DID_RENEW':
-                // Subscription renewed or first subscribed
-                $this->_handleRenewal($subscription, $transactionInfo);
-                break;
-
-            case 'EXPIRED':
-                // Subscription expired
-                $subscription->update(['status' => 'expired']);
-                Log::info('AppleIapService: subscription expired', ['id' => $subscription->id]);
-                break;
-
-            case 'DID_FAIL_TO_RENEW':
-                // Billing retry period
-                $subscription->moveToGracePeriod();
-                Log::info('AppleIapService: subscription billing failed, moved to grace period', ['id' => $subscription->id]);
-                break;
-
-            case 'GRACE_PERIOD_EXPIRED':
-                // Grace period expired
-                $subscription->markExpired();
-                Log::info('AppleIapService: grace period expired', ['id' => $subscription->id]);
-                break;
-
-            case 'REVOKE':
-                // Family sharing revocation
-                $subscription->update(['status' => 'cancelled', 'cancelled_at' => now()]);
-                Log::info('AppleIapService: subscription revoked', ['id' => $subscription->id]);
+                $subscription->update(['status' => 'active', 'cancelled_at' => null]);
                 break;
 
             case 'DID_CHANGE_RENEWAL_STATUS':
-                // Auto-renewal status changed
-                $autoRenew = $transactionInfo['autoRenewStatus'] ?? null;
-                if ($autoRenew !== null) {
-                    $metadata = $subscription->metadata ?? [];
-                    $metadata['auto_renew'] = $autoRenew == 1;
-                    $subscription->update(['metadata' => $metadata]);
-                }
+            case 'DID_CHANGE_RENEWAL_PREF':
+                $autoRenew = ($tx['autoRenewStatus'] ?? null) == 1;
+                $subscription->update(['auto_renew' => $autoRenew]);
+                // Downgrade/effective change takes effect at next renewal (§7). Keep current access.
+                break;
+
+            case 'DID_FAIL_TO_RENEW':
+                $subscription->moveToGracePeriod();
+                break;
+
+            case 'GRACE_PERIOD_EXPIRED':
+                $subscription->markExpired();
+                break;
+
+            case 'EXPIRED':
+                $subscription->markExpired();
+                break;
+
+            case 'REFUND':
+            case 'REVOKE':
+                $subscription->update([
+                    'status' => $notificationType === 'REVOKE' ? 'revoked' : 'expired',
+                    'revoked_at' => $notificationType === 'REVOKE' ? now() : null,
+                    'expired_at' => now(),
+                ]);
                 break;
 
             default:
-                Log::info('AppleIapService: unhandled notification type', ['type' => $notificationType]);
+                Log::info('AppleIapService: unhandled notification', ['type' => $notificationType]);
                 break;
         }
     }
 
-    /**
-     * Handle renewal by re-verifying the latest receipt.
-     */
-    private function _handleRenewal(Subscription $subscription, array $transactionInfo): void
-    {
-        $expiresAt = isset($transactionInfo['expiresDate'])
-            ? \Carbon\Carbon::parse($transactionInfo['expiresDate'])
-            : (isset($transactionInfo['expires_date_ms'])
-                ? \Carbon\Carbon::createFromTimestampMs((int) $transactionInfo['expires_date_ms'])
-                : null);
+    private function recordTransaction(
+        Subscription $subscription,
+        string $transactionId,
+        ?string $originalTransactionId,
+        ?string $productId,
+        ?string $environment,
+        ?int $purchaseDateMs,
+        ?int $expiresDateMs,
+    ): bool {
+        $existing = SubscriptionTransaction::where('subscription_id', $subscription->id)
+            ->where('transaction_id', $transactionId)
+            ->first();
 
-        if ($expiresAt) {
-            $subscription->update([
-                'status' => 'active',
-                'current_period_start' => now(),
-                'current_period_end' => $expiresAt,
-                'expires_at' => $expiresAt,
-                'cancelled_at' => null,
-            ]);
-            Log::info('AppleIapService: subscription renewed', [
-                'id' => $subscription->id,
-                'expires_at' => $expiresAt->toIso8601String(),
-            ]);
+        if ($existing) {
+            return false;
         }
+
+        SubscriptionTransaction::create([
+            'subscription_id' => $subscription->id,
+            'transaction_id' => $transactionId,
+            'original_transaction_id' => $originalTransactionId,
+            'product_id' => $productId,
+            'environment' => $environment,
+            'purchase_date' => $purchaseDateMs ? \Carbon\Carbon::createFromTimestampMs($purchaseDateMs) : null,
+            'expires_date' => $expiresDateMs ? \Carbon\Carbon::createFromTimestampMs($expiresDateMs) : null,
+            'transaction_reason' => 'renewal',
+        ]);
+
+        return true;
     }
 
     /**
-     * Send receipt data to Apple for verification.
+     * Keep the payments history in sync for Apple purchases.
      */
-    private function _verifyWithApple(string $receiptData, string $url): array
+    private function recordPayment(Subscription $subscription, string $transactionId): void
     {
-        try {
-            $response = Http::timeout(30)->post($url, [
-                'receipt-data' => $receiptData,
-                'shared-secret' => $this->sharedSecret,
-                'exclude-old-transactions' => true,
-            ]);
-
-            return $response->json();
-        } catch (\Exception $e) {
-            Log::error('AppleIapService: HTTP verification failed', [
-                'url' => $url,
-                'error' => $e->getMessage(),
-            ]);
-            return ['status' => -1];
+        $plan = $subscription->plan;
+        if (!$plan) {
+            return;
         }
+
+        $amount = $subscription->billing_period === 'annual'
+            ? $plan->annual_price
+            : $plan->monthly_price;
+
+        Payment::create([
+            'user_id' => $subscription->subscriber_user_id ?? $subscription->user_id,
+            'household_id' => $subscription->household_id,
+            'subscription_id' => $subscription->id,
+            'subscription_plan_id' => $plan->id,
+            'amount' => $amount,
+            'currency' => 'gbp',
+            'payment_method' => 'apple',
+            'gateway' => 'apple_iap',
+            'gateway_payment_id' => $transactionId,
+            'status' => 'completed',
+            'metadata' => [
+                'product_id' => $subscription->product_id,
+                'original_transaction_id' => $subscription->original_transaction_id,
+                'environment' => $subscription->environment,
+            ],
+        ]);
+    }
+
+    private function mapAppleStatus(int $appleStatus): string
+    {
+        return match ($appleStatus) {
+            self::STATUS_ACTIVE => 'active',
+            self::STATUS_GRACE_PERIOD => 'grace_period',
+            self::STATUS_RETRY => 'billing_retry',
+            self::STATUS_REVOKED => 'revoked',
+            self::STATUS_EXPIRED => 'expired',
+            default => 'active',
+        };
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* JWT + JWS (OpenSSL, no external dependencies)                      */
+    /* ------------------------------------------------------------------ */
+
+    private function isConfigured(): bool
+    {
+        return !empty($this->keyId) && !empty($this->issuerId) && !empty($this->privateKeyPath) && file_exists($this->privateKeyPath);
+    }
+
+    /**
+     * Resolve an Apple product ID to its plan + billing period using the
+     * central config map (command.txt §9).
+     */
+    private function productConfig(?string $productId): array
+    {
+        if (!$productId) {
+            return [];
+        }
+        $products = config('apple_products.apple_products', []);
+        return $products[$productId] ?? [];
+    }
+
+    /**
+     * Generate an ES256 JWT for the App Store Server API (command.txt §12).
+     */
+    private function generateJwt(): ?string
+    {
+        if (!$this->isConfigured()) {
+            return null;
+        }
+
+        $header = $this->base64UrlEncode(json_encode([
+            'alg' => 'ES256',
+            'kid' => $this->keyId,
+            'typ' => 'JWT',
+        ]));
+
+        $now = time();
+        $claims = $this->base64UrlEncode(json_encode([
+            'iss' => $this->issuerId,
+            'iat' => $now,
+            'exp' => $now + 1800, // max 60 minutes (§12)
+            'aud' => 'appstoreconnect-v1',
+            'bid' => $this->bundleId,
+        ]));
+
+        $signingInput = $header . '.' . $claims;
+
+        $privateKey = openssl_pkey_get_private('file://' . $this->privateKeyPath);
+        if ($privateKey === false) {
+            Log::error('AppleIapService: cannot read private key', ['path' => $this->privateKeyPath]);
+            return null;
+        }
+
+        $signature = '';
+        if (!openssl_sign($signingInput, $signature, $privateKey, OPENSSL_ALGO_SHA256)) {
+            Log::error('AppleIapService: openssl_sign failed');
+            return null;
+        }
+
+        $rawSignature = $this->derToRaw($signature);
+
+        return $signingInput . '.' . $this->base64UrlEncode($rawSignature);
+    }
+
+    /**
+     * Verify a JWS (Apple signed payload / signedTransactionInfo) and return
+     * the decoded payload. Verifies the signature against the x5c certificate
+     * chain embedded in the JWS header (command.txt §28).
+     */
+    private function verifyAndDecodeJws(?string $jws): ?array
+    {
+        if (!$jws) {
+            return null;
+        }
+
+        $parts = explode('.', $jws);
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        [$headerB64, $payloadB64, $sigB64] = $parts;
+        $header = json_decode($this->base64UrlDecode($headerB64), true);
+        if (!is_array($header)) {
+            return null;
+        }
+
+        $signingInput = $headerB64 . '.' . $payloadB64;
+        $signature = $this->base64UrlDecode($sigB64);
+        if (strlen($signature) !== 64) {
+            // Apple ES256 signatures are 64 bytes (32 R + 32 S).
+            return null;
+        }
+
+        $x5c = $header['x5c'] ?? [];
+        if (empty($x5c)) {
+            return null;
+        }
+
+        // Verify the leaf signature against the public key in the leaf cert.
+        $leafCert = $this->pemFromDer($x5c[0]);
+        $pubKey = openssl_pkey_get_public($leafCert);
+        if ($pubKey === false) {
+            return null;
+        }
+        $derSignature = $this->rawToDer($signature);
+        $valid = openssl_verify($signingInput, $derSignature, $pubKey, OPENSSL_ALGO_SHA256);
+        if ($valid !== 1) {
+            return null;
+        }
+
+        // Verify the certificate chain (leaf signed by next, ... up to root).
+        for ($i = 0; $i < count($x5c) - 1; $i++) {
+            $cert = openssl_x509_read($this->pemFromDer($x5c[$i]));
+            $parent = openssl_x509_read($this->pemFromDer($x5c[$i + 1]));
+            if ($cert === false || $parent === false) {
+                return null;
+            }
+            if (openssl_x509_verify($cert, $parent) !== 1) {
+                return null;
+            }
+        }
+
+        $payload = json_decode($this->base64UrlDecode($payloadB64), true);
+        return is_array($payload) ? $payload : null;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Low level helpers                                                  */
+    /* ------------------------------------------------------------------ */
+
+    private function base64UrlEncode(string $data): string
+    {
+        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+    }
+
+    private function base64UrlDecode(string $data): string
+    {
+        $padded = str_pad($data, strlen($data) % 4 === 0 ? strlen($data) : strlen($data) + (4 - strlen($data) % 4), '=', STR_PAD_RIGHT);
+        return base64_decode(strtr($padded, '-_', '+/'), true);
+    }
+
+    private function pemFromDer(string $der): string
+    {
+        return "-----BEGIN CERTIFICATE-----\n" . chunk_split(base64_encode($der), 64, "\n") . "-----END CERTIFICATE-----\n";
+    }
+
+    /**
+     * Convert a DER-encoded ECDSA signature to raw R||S (for JWT signing).
+     */
+    private function derToRaw(string $der): string
+    {
+        $offset = 2; // skip SEQUENCE tag + length
+        // First INTEGER (R)
+        $offset++;
+        $rLen = ord($der[$offset++]);
+        $r = substr($der, $offset, $rLen);
+        $offset += $rLen;
+        // Second INTEGER (S)
+        $offset++;
+        $sLen = ord($der[$offset++]);
+        $s = substr($der, $offset, $sLen);
+
+        return $this->stripPadding($r, 32) . $this->stripPadding($s, 32);
+    }
+
+    /**
+     * Convert raw R||S (64 bytes) to a DER-encoded ECDSA signature
+     * (for openssl_verify).
+     */
+    private function rawToDer(string $raw): string
+    {
+        $r = $this->addDerPadding(substr($raw, 0, 32));
+        $s = $this->addDerPadding(substr($raw, 32, 32));
+        $rComp = "\x02" . chr(strlen($r)) . $r;
+        $sComp = "\x02" . chr(strlen($s)) . $s;
+        $body = $rComp . $sComp;
+        return "\x30" . chr(strlen($body)) . $body;
+    }
+
+    private function stripPadding(string $bin, int $size): string
+    {
+        $bin = ltrim($bin, "\x00");
+        return str_pad($bin, $size, "\x00", STR_PAD_LEFT);
+    }
+
+    private function addDerPadding(string $bin): string
+    {
+        if (ord($bin[0]) & 0x80) {
+            $bin = "\x00" . $bin;
+        }
+        return $bin;
     }
 }

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Household;
 use App\Models\Renewal;
+use App\Services\EntitlementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -81,6 +83,16 @@ class RenewalsController extends Controller
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
             ], 422);
+        }
+
+        // Entitlement gate: free plan is limited to a number of active renewals.
+        $household = Household::findOrFail($household_id);
+        if (!(new EntitlementService())->canCreateRenewal($household)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have reached your Free plan Renewal limit (' . EntitlementService::FREE_RENEWALS . ' active). Upgrade to unlock unlimited Renewals.',
+                'code' => 'ENTITLEMENT_LIMIT_RENEWALS',
+            ], 403);
         }
 
         // Check if vehicle already has a pending renewal

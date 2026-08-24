@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Route;
 */
 Route::get('config', [ConfigController::class, 'index']);
 Route::get('subscription/plans', [SubscriptionController::class, 'index']);
+Route::get('subscription/products', [SubscriptionController::class, 'products']);
 
 // PayPal return URL (user redirected here after approving payment)
 Route::get('subscription/paypal-capture', function () {
@@ -173,6 +174,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
 
     // Subscription & Payments
     Route::get('subscription/current', [SubscriptionController::class, 'current']);
+    Route::get('subscription/usage', [SubscriptionController::class, 'usage']);
     Route::post('subscription/checkout', [PaymentController::class, 'checkout']);
     Route::post('subscription/cancel', [SubscriptionController::class, 'cancel']);
     Route::get('subscription/history', [SubscriptionController::class, 'history']);
@@ -181,9 +183,11 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
 
     // Apple IAP
     Route::post('subscription/apple/verify', [AppleIapController::class, 'verify']);
+    Route::post('subscription/apple/restore', [AppleIapController::class, 'restore']);
 
     // Google Play IAP
     Route::post('subscription/google/verify', [GoogleIapController::class, 'verify']);
+    Route::post('subscription/google/restore', [GoogleIapController::class, 'restore']);
 });
 
 // Stripe return URLs (public, matched by WebView)

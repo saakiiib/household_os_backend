@@ -17,11 +17,16 @@ class RequireSubscription
             return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
         }
 
-        if (SubscriptionGuard::isExpired($user)) {
+        // Per-feature limits are enforced by EntitlementService in each
+        // controller. This middleware only blocks revoked subscriptions
+        // (e.g. refund / abuse). Expired subscriptions fall back to free
+        // plan limits and are NOT blocked here.
+        $household = $user->activeHousehold();
+        if ($household && $household->subscription && $household->subscription->status === 'revoked') {
             return response()->json([
                 'success' => false,
-                'message' => 'Your subscription has expired. Please subscribe to access this feature.',
-                'code' => 'SUBSCRIPTION_EXPIRED',
+                'message' => 'Your subscription has been revoked. Please contact support.',
+                'code' => 'SUBSCRIPTION_REVOKED',
             ], 403);
         }
 

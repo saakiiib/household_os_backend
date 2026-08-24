@@ -54,9 +54,20 @@ return [
     ],
 
     'apple' => [
+        // Sign in with Apple (existing)
         'client_id' => env('APPLE_CLIENT_ID'),
         'team_id'   => env('APPLE_TEAM_ID'),
-        'key_path'  => env('APPLE_KEY_PATH', storage_path('apple/AuthKey.p8')),
+        'key_path'  => env('APPLE_KEY_PATH', storage_path('app/AuthKey.p8')),
+
+        // App Store Server API (App Store Connect > Users & Access > Integrations > In-App Purchase)
+        // The .p8 key MUST only ever exist on this server (never in the app, iOS binary or Git).
+        'iap_key_id'          => env('APPLE_IAP_KEY_ID'),
+        'iap_issuer_id'       => env('APPLE_IAP_ISSUER_ID'),
+        'iap_private_key_path' => env('APPLE_IAP_PRIVATE_KEY_PATH', storage_path('app/AuthKey.p8')),
+        'bundle_id'           => env('APPLE_BUNDLE_ID', 'com.mentosoftware.householdos'),
+        'app_id'              => env('APPLE_APP_ID'),
+
+        // Legacy verifyReceipt shared secret (kept only as fallback; new flow uses the Server API).
         'shared_secret' => env('APPLE_SHARED_SECRET', ''),
     ],
 

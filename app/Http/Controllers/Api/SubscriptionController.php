@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\HouseholdMember;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
+use App\Services\EntitlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -21,6 +22,30 @@ class SubscriptionController extends Controller
 
         return response()->json([
             'plans' => $plans,
+        ]);
+    }
+
+    /**
+     * Return all Apple Product IDs for StoreKit to query (command.txt §21/§22).
+     * Flutter calls this on startup to know which products to load.
+     */
+    public function products(): JsonResponse
+    {
+        $products = config('apple_products.apple_products', []);
+
+        $result = [];
+        foreach ($products as $productId => $cfg) {
+            $result[] = [
+                'product_id' => $productId,
+                'plan' => $cfg['plan'],
+                'billing_period' => $cfg['billing_period'],
+                'level' => $cfg['level'],
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
         ]);
     }
 
@@ -151,6 +176,27 @@ class SubscriptionController extends Controller
         return response()->json([
             'success' => true,
             'data' => $payments,
+        ]);
+    }
+
+    /**
+     * Household entitlement / usage summary (command.txt §22 usage endpoint).
+     */
+    public function usage(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $household = $user->activeHousehold();
+
+        if (!$household) {
+            return response()->json([
+                'success' => true,
+                'data' => null,
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => (new EntitlementService())->summary($household),
         ]);
     }
 

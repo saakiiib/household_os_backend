@@ -33,6 +33,11 @@ class CheckSubscriptionExpiry extends Command
 
     /**
      * Move active subscriptions to grace period, and grace period to expired.
+     *
+     * command.txt §51 Rule 10: Apple billing status — not this cron — decides
+     * expiry/renewal for Apple subscriptions. So for provider=apple rows we
+     * re-verify with Apple instead of transitioning locally. Legacy
+     * Stripe/PayPal subscriptions keep the local transitions.
      */
     private function handleGracePeriodTransitions(): void
     {
@@ -48,6 +53,10 @@ class CheckSubscriptionExpiry extends Command
             ->get();
 
         foreach ($toGrace as $sub) {
+            if ($sub->provider === 'apple') {
+                app(\App\Services\AppleIapService::class)->refreshFromApple($sub);
+                continue;
+            }
             $sub->moveToGracePeriod();
             $this->line("Moved to grace period: Household #{$sub->household_id}");
         }
@@ -59,6 +68,10 @@ class CheckSubscriptionExpiry extends Command
             ->get();
 
         foreach ($toExpired as $sub) {
+            if ($sub->provider === 'apple') {
+                app(\App\Services\AppleIapService::class)->refreshFromApple($sub);
+                continue;
+            }
             $sub->markExpired();
             $this->line("Expired: Household #{$sub->household_id}");
         }

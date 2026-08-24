@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\Task;
+use App\Services\EntitlementService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -93,6 +95,16 @@ class TasksController extends Controller
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
             ], 422);
+        }
+
+        // Entitlement gate: free plan is limited to a number of active tasks.
+        $household = Household::findOrFail($household_id);
+        if (!(new EntitlementService())->canCreateTask($household)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have reached your Free plan Task limit (' . EntitlementService::FREE_TASKS . ' active). Upgrade to unlock unlimited Tasks.',
+                'code' => 'ENTITLEMENT_LIMIT_TASKS',
+            ], 403);
         }
 
         $task = Task::create([
