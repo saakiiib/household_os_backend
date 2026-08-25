@@ -10,7 +10,6 @@ use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\File;
 
 /**
  * Send "remind me before" advance reminders via FCM + in-app notifications.
@@ -97,15 +96,21 @@ class ReminderCheckCommand extends Command
             }
 
             $cfg = self::TASK_OFFSETS[$task->reminder_before];
-            $dueDateStr = $task->due_date;
-            $dueTimeStr = $task->due_time;
+            $base = $task->due_date instanceof Carbon
+                ? $task->due_date->copy()->startOfDay()
+                : Carbon::parse($task->due_date)->startOfDay();
 
-            if (str_contains($dueDateStr, ' ')) {
-                $base = Carbon::parse($dueDateStr);
-            } elseif ($dueTimeStr && preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $dueTimeStr)) {
-                $base = Carbon::parse($dueDateStr . ' ' . $dueTimeStr);
+            if ($task->due_time) {
+                if ($task->due_time instanceof Carbon) {
+                    $base->setTime($task->due_time->hour, $task->due_time->minute, 0);
+                } else {
+                    $timeStr = (string) $task->due_time;
+                    if (preg_match('/(\d{1,2}):(\d{2})/', $timeStr, $m)) {
+                        $base->setTime((int) $m[1], (int) $m[2], 0);
+                    }
+                }
             } else {
-                $base = Carbon::parse($dueDateStr . ' 09:00:00');
+                $base->setTime(9, 0, 0);
             }
             $target = $base->copy()->subMinutes($cfg['minutes']);
 

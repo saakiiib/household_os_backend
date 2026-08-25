@@ -51,7 +51,12 @@ class NotificationService
             ->values()
             ->all();
 
-        if (empty($tokens)) return;
+        if (empty($tokens)) {
+            Log::warning('[NotificationService] No FCM tokens found for users: ' . collect($users)->pluck('id')->implode(','));
+            return;
+        }
+
+        Log::info('[NotificationService] Sending FCM to ' . count($tokens) . ' token(s): ' . $type);
 
         $payload = array_merge($data, ['type' => $type, 'priority' => $priority]);
 
@@ -60,9 +65,10 @@ class NotificationService
                 $message = CloudMessage::new()
                     ->withNotification(FcmNotification::create($title, $body))
                     ->withData($payload);
-                $this->messaging->sendMulticast($message, $chunk);
+                $result = $this->messaging->sendMulticast($message, $chunk);
+                Log::info('[NotificationService] FCM result: success=' . $result->successes()->count() . ' failures=' . $result->failures()->count());
             } catch (\Throwable $e) {
-                Log::error('FCM Error: ' . $e->getMessage());
+                Log::error('[NotificationService] FCM Error: ' . $e->getMessage());
             }
         }
     }
