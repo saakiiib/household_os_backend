@@ -130,10 +130,19 @@ class ReminderCheckCommand extends Command
                 continue;
             }
 
+            $dueStr = $task->due_date instanceof Carbon
+                ? $task->due_date->format('M j, Y')
+                : Carbon::parse($task->due_date)->format('M j, Y');
+            if ($task->due_time) {
+                $dueStr .= ' ' . ($task->due_time instanceof Carbon
+                    ? $task->due_time->format('g:i A')
+                    : Carbon::parse($task->due_time)->format('g:i A'));
+            }
+
             app(NotificationService::class)->sendToUser(
                 $task->assigned_user_id,
                 'Task reminder',
-                "'{$task->title}' is due in {$cfg['label']} on {$task->due_date}",
+                "'{$task->title}' is due in {$cfg['label']} on {$dueStr}",
                 'task_reminder',
                 ['type' => 'task', 'id' => $task->id, 'reminder_type' => $cfg['type']],
                 'high'
@@ -192,10 +201,14 @@ class ReminderCheckCommand extends Command
                 continue;
             }
 
+            $dueStr = $renewal->due_date instanceof Carbon
+                ? $renewal->due_date->format('M j, Y')
+                : Carbon::parse($renewal->due_date)->format('M j, Y');
+
             app(NotificationService::class)->sendToUsers(
                 $memberIds,
                 'Renewal reminder',
-                "'{$renewal->title}' is due in {$cfg['label']} on {$renewal->due_date}",
+                "'{$renewal->title}' is due in {$cfg['label']} on {$dueStr}",
                 'renewal_reminder',
                 ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $cfg['type']],
                 'high'
