@@ -349,11 +349,11 @@ class MembersController extends Controller
             if (!empty($adminIds)) {
                 $userName = $user->name ?? $user->email;
                 $userEmail = $user->email;
-                $notificationMessage = $userName . ' (' . $userEmail . ') accepted the invitation to join ' . $invitation->household->name;
+                $notificationMessage = $userName . ' (' . $userEmail . ') accepted the invitation and is waiting for your approval to join ' . $invitation->household->name;
 
                 app(NotificationService::class)->sendToUsers(
                     $adminIds,
-                    'New Join Request',
+                    'Member Approval Needed',
                     $notificationMessage,
                     'join_request',
                     [
