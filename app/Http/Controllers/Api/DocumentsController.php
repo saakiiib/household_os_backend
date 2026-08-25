@@ -100,7 +100,7 @@ class DocumentsController extends Controller
             ], 422);
         }
 
-        $visibility = $request->input('visibility', 'all');
+        $visibility = $request->input('visibility', 'specific');
         $allowedUserIds = $request->input('allowed_user_ids', []);
 
         // If visibility is 'all', ignore allowed_user_ids
@@ -470,7 +470,14 @@ class DocumentsController extends Controller
      */
     public function downloadFile($household_id, $document_id, $file_id)
     {
-        Document::where('household_id', $household_id)->findOrFail($document_id);
+        $document = Document::where('household_id', $household_id)->findOrFail($document_id);
+
+        if (!$document->canUserView(Auth::id())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to view this document.',
+            ], 403);
+        }
 
         $file = DocumentFile::where('id', $file_id)
             ->where('document_id', $document_id)

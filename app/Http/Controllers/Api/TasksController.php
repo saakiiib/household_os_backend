@@ -20,8 +20,18 @@ class TasksController extends Controller
      */
     public function index(Request $request, $household_id)
     {
+        $userId = Auth::id();
+
         $query = Task::with(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name'])
             ->where('household_id', $household_id);
+
+        // Visibility: non-admins only see tasks they created or are assigned to.
+        if (!$this->isHouseholdAdmin($household_id, $userId)) {
+            $query->where(function ($q) use ($userId) {
+                $q->where('created_by_user_id', $userId)
+                  ->orWhere('assigned_user_id', $userId);
+            });
+        }
 
         // Text search — title, description, assigned member name
         if ($request->filled('search')) {
@@ -171,6 +181,13 @@ class TasksController extends Controller
             ->where('household_id', $household_id)
             ->findOrFail($task_id);
 
+        if (!$this->canAccessTask($household_id, $task)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to view this task.',
+            ], 403);
+        }
+
         return response()->json([
             'success' => true,
             'data' => $this->formatTask($task),
@@ -184,6 +201,13 @@ class TasksController extends Controller
     public function update(Request $request, $household_id, $task_id)
     {
         $task = Task::where('household_id', $household_id)->findOrFail($task_id);
+
+        if (!$this->canAccessTask($household_id, $task)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to modify this task.',
+            ], 403);
+        }
 
         $validator = Validator::make($request->all(), [
             'title'             => 'sometimes|string|max:255',
@@ -266,19 +290,11 @@ class TasksController extends Controller
     {
         $task = Task::where('household_id', $household_id)->findOrFail($task_id);
 
-        // Only creator or admin can delete
-        $isCreator = $task->created_by_user_id === Auth::id();
-        if (!$isCreator) {
-            $membership = HouseholdMember::where('household_id', $household_id)
-                ->where('user_id', Auth::id())
-                ->where('status', 'active')
-                ->first();
-            if (!$membership || !$membership->isAdmin()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Only the task creator or an admin can delete tasks.',
-                ], 403);
-            }
+        if (!$this->canAccessTask($household_id, $task)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the task creator, assignee, or an admin can delete tasks.',
+            ], 403);
         }
 
         $task->delete();
@@ -395,6 +411,28 @@ class TasksController extends Controller
             'data' => $this->formatTask($task),
             'next_task' => $newTask ? $this->formatTask($newTask) : null,
         ]);
+    }
+
+    private function isHouseholdAdmin(int $householdId, int $userId): bool
+    {
+        $membership = HouseholdMember::where('household_id', $householdId)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->first();
+
+        return $membership && $membership->isAdmin();
+    }
+
+    private function canAccessTask($household_id, Task $task): bool
+    {
+        $userId = Auth::id();
+
+        if ($this->isHouseholdAdmin($household_id, $userId)) {
+            return true;
+        }
+
+        return $task->created_by_user_id === $userId
+            || $task->assigned_user_id === $userId;
     }
 
     private function calculateNextDueDate(string $currentDueDate, string $frequency): string
