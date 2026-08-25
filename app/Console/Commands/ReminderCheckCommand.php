@@ -72,14 +72,9 @@ class ReminderCheckCommand extends Command
         return Command::SUCCESS;
     }
 
-    /**
-     * Append a timestamped line to storage/logs/reminders.log so the cron run
-     * is verifiable even when stdout is discarded (>> /dev/null 2>&1).
-     */
     private function logLine(string $msg): void
     {
-        $path = storage_path('logs/reminders.log');
-        File::append($path, '[' . now()->format('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL);
+        \Log::info('[ReminderCheck] ' . $msg);
     }
 
     private function checkTaskReminders(): void
@@ -102,7 +97,16 @@ class ReminderCheckCommand extends Command
             }
 
             $cfg = self::TASK_OFFSETS[$task->reminder_before];
-            $base = Carbon::parse($task->due_date . ' ' . ($task->due_time ?: '09:00:00'));
+            $dueDateStr = $task->due_date;
+            $dueTimeStr = $task->due_time;
+
+            if (str_contains($dueDateStr, ' ')) {
+                $base = Carbon::parse($dueDateStr);
+            } elseif ($dueTimeStr && preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $dueTimeStr)) {
+                $base = Carbon::parse($dueDateStr . ' ' . $dueTimeStr);
+            } else {
+                $base = Carbon::parse($dueDateStr . ' 09:00:00');
+            }
             $target = $base->copy()->subMinutes($cfg['minutes']);
 
             // Not time yet.
@@ -159,7 +163,7 @@ class ReminderCheckCommand extends Command
 
         foreach ($renewals as $renewal) {
             $cfg = self::RENEWAL_OFFSETS[$renewal->reminder_before];
-            $base = Carbon::parse($renewal->due_date . ' 09:00:00');
+            $base = Carbon::parse($renewal->due_date);
             $target = $base->copy()->subDays($cfg['days']);
 
             if ($target->gt($now)) {
