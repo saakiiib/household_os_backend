@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
+use App\Models\SubscriptionTransaction;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
@@ -45,8 +46,18 @@ class GooglePlayIapService
         try {
             $accessToken = $this->_getAccessToken();
 
+            // Resolve plan + billing period from the central product config so
+            // the server (not the client) is the source of truth. Falls back
+            // to the app-provided values if no config entry exists.
+            $googleProducts = config('google_products.google_products', []);
+            if (!empty($googleProducts) && isset($googleProducts[$googleProductId])) {
+                $cfg = $googleProducts[$googleProductId];
+                $planSlug = $cfg['plan'] ?? $planSlug;
+                $billingType = $cfg['billing_period'] ?? $billingType;
+            }
+
             // Verify the subscription with Google Play Developer API
-            $result = $this->_verifySubscription($accessToken, $receiptData);
+            $result = $this->_verifySubscription($accessToken, $receiptData, $googleProductId);
 
             if (!$result) {
                 return ['success' => false, 'message' => 'Failed to verify Google Play receipt.'];
@@ -123,6 +134,7 @@ class GooglePlayIapService
             'household_id' => $household->id,
             'subscription_plan_id' => $plan->id,
             'status' => 'active',
+            'provider' => 'google_play',
             'current_period_start' => $periodStart,
             'current_period_end' => $periodEnd,
             'expires_at' => $periodEnd,
@@ -130,6 +142,8 @@ class GooglePlayIapService
             'payment_method' => 'google_play',
             'google_product_id' => $googleProductId,
             'google_order_id' => $orderId,
+            'original_transaction_id' => $orderId,
+            'latest_transaction_id' => $orderId,
         ];
 
         // Merge auto_renewing into metadata
@@ -165,6 +179,18 @@ class GooglePlayIapService
                 'order_id' => $orderId,
                 'auto_renewing' => $autoRenewing,
             ],
+        ]);
+
+        // Record the transaction for a full audit trail.
+        SubscriptionTransaction::create([
+            'subscription_id' => $subscription->id,
+            'transaction_id' => $orderId,
+            'original_transaction_id' => $orderId,
+            'product_id' => $googleProductId,
+            'environment' => 'google_play',
+            'purchase_date' => $purchaseDate,
+            'expires_date' => $expiresAt,
+            'transaction_reason' => $isRestored ? 'restore' : 'purchase',
         ]);
 
         Log::info('GooglePlayIapService: subscription activated', [
@@ -362,20 +388,19 @@ class GooglePlayIapService
     /**
      * Verify subscription with Google Play Developer API.
      */
-    private function _verifySubscription(string $accessToken, string $purchaseToken): ?array
+    private function _verifySubscription(string $accessToken, string $purchaseToken, string $subscriptionId): ?array
     {
-        // Try to query each possible product ID format
-        // The API expects: GET /androidpublisher/v3/applications/{package}/purchases/subscriptions/{subscriptionId}/tokens/{token}
+        if (empty($subscriptionId)) {
+            Log::warning('GooglePlayIapService: missing subscriptionId for verification');
+            return null;
+        }
 
-        // We need the subscriptionId (product ID) — get it from the purchase token
-        // Actually, the Flutter app sends product_id, so we use that
-        // But we need to know the exact subscriptionId to call the API
-
-        // Try with the purchase token as subscriptionToken
+        // GET .../purchases/subscriptions/{subscriptionId}/tokens/{token}
         $url = sprintf(
-            '%s/%s/purchases/subscriptions/tokens/%s',
+            '%s/%s/purchases/subscriptions/%s/tokens/%s',
             self::API_BASE,
             $this->packageName,
+            $subscriptionId,
             $purchaseToken
         );
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class ActivityController extends Controller
 {
@@ -22,6 +23,12 @@ class ActivityController extends Controller
         }
         if ($request->filled('subject_id')) {
             $query->where('subject_id', $request->subject_id);
+        }
+
+        // scope=mine → only activities performed by the current user, so the
+        // dashboard can show a personal feed instead of the whole household's.
+        if ($request->input('scope') === 'mine') {
+            $query->where('user_id', Auth::id());
         }
 
         $activities = $query->orderBy('created_at', 'desc')

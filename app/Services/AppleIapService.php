@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AppleNotificationLog;
 use App\Models\Household;
+use App\Models\HouseholdMember;
 use App\Models\Payment;
 use App\Models\ProductPlan;
 use App\Models\Subscription;
@@ -77,6 +78,15 @@ class AppleIapService
             return ['success' => false, 'message' => 'Apple IAP is not configured on the server.'];
         }
 
+        // Persist the app_account_token on the household immediately so that
+        // App Store Server Notifications can resolve this household later even
+        // if the Apple re-query below fails. This guarantees the subscription
+        // ends up recorded even when the App Store Server API is flaky.
+        $household = $user->activeHousehold();
+        if ($household && $appAccountToken) {
+            $household->update(['app_account_token' => $appAccountToken]);
+        }
+
         $statusResult = $this->getSubscriptionStatus($transactionId);
         if (!$statusResult['success']) {
             return ['success' => false, 'message' => $statusResult['message']];
@@ -130,19 +140,11 @@ class AppleIapService
             return ['success' => false, 'message' => 'Subscription plan not found.'];
         }
 
-        $subscription = $this->applySubscription(
+        $subscription = $this->applyFromStatusResult(
             user: $user,
-            plan: $plan,
-            productId: $productId,
-            billingPeriod: $productConfig['billing_period'],
+            statusResult: $statusResult,
             originalTransactionId: $originalTransactionId,
-            latestTransactionId: $tx['transactionId'] ?? $transactionId,
-            environment: $tx['environment'] ?? $statusResult['environment'],
-            purchaseDateMs: (int) ($tx['purchaseDate'] ?? null),
-            expiresDateMs: (int) ($tx['expiresDate'] ?? null),
-            appAccountToken: $appAccountToken ?? $tx['appAccountToken'] ?? null,
-            appleStatus: (int) ($statusResult['status'] ?? self::STATUS_ACTIVE),
-            autoRenew: (int) ($statusResult['renewalInfo']['autoRenewStatus'] ?? 1),
+            appAccountToken: $appAccountToken,
         );
 
         return [
@@ -260,19 +262,40 @@ class AppleIapService
         }
 
         // Re-query Apple for the authoritative current state, then apply it to
-        // the household (command.txt §29 safe pattern).
-        $statusResult = $this->getSubscriptionStatus($originalTransactionId);
-        if ($statusResult['success']) {
-            $this->applyRawStatus(
+        // the household (command.txt §29 safe pattern). Any failure while
+        // applying is logged but does NOT throw — Apple should receive a 200
+        // so it does not retry the same notification indefinitely.
+        try {
+            $appAccountToken = $tx['appAccountToken'] ?? null;
+
+            $statusResult = $this->getSubscriptionStatus($originalTransactionId);
+
+            // If the App Store Server API re-query fails (key/env issues),
+            // fall back to the verified notification payload itself. The JWS
+            // is Apple-signed, so its transaction info is trusted and lets us
+            // record the subscription without a second Apple call.
+            if (!$statusResult['success']) {
+                $statusResult = [
+                    'success' => true,
+                    'environment' => $environment,
+                    'status' => (int) ($tx['status'] ?? self::STATUS_ACTIVE),
+                    'transaction' => $tx,
+                    'renewalInfo' => [],
+                ];
+            }
+
+            $this->applyResolvedStatus(
                 originalTransactionId: $originalTransactionId,
                 statusResult: $statusResult,
                 notificationType: $notificationType,
+                appAccountToken: $appAccountToken,
             );
-            return;
+        } catch (\Throwable $e) {
+            Log::error('AppleIapService: failed to apply notification', [
+                'otid' => $originalTransactionId,
+                'error' => $e->getMessage(),
+            ]);
         }
-
-        // Fallback: apply based purely on the notification type.
-        $this->applyByNotificationType($originalTransactionId, $notificationType, $tx);
     }
 
     /* ------------------------------------------------------------------ */
@@ -391,6 +414,13 @@ class AppleIapService
             throw new \RuntimeException('User has no active household.');
         }
 
+        // Persist the app_account_token on the household so that App Store
+        // Server Notifications (which arrive independently of the app) can
+        // resolve this household even before a local subscription exists.
+        if ($appAccountToken && $household->app_account_token !== $appAccountToken) {
+            $household->update(['app_account_token' => $appAccountToken]);
+        }
+
         $periodStart = $purchaseDateMs
             ? \Carbon\Carbon::createFromTimestampMs($purchaseDateMs)
             : now();
@@ -413,6 +443,7 @@ class AppleIapService
             'product_id' => $productId,
             'billing_period' => $billingPeriod,
             'original_transaction_id' => $originalTransactionId,
+            'apple_original_transaction_id' => $originalTransactionId,
             'latest_transaction_id' => $latestTransactionId,
             'environment' => $environment,
             'auto_renew' => $autoRenew === 1,
@@ -470,6 +501,113 @@ class AppleIapService
         );
 
         return true;
+    }
+
+    /**
+     * Build and persist a subscription from a verified Apple status result.
+     * Shared by both the app's verify flow and the server-notification flow.
+     */
+    private function applyFromStatusResult(
+        User $user,
+        array $statusResult,
+        string $originalTransactionId,
+        ?string $appAccountToken = null,
+    ): Subscription {
+        $tx = $statusResult['transaction'] ?? [];
+        $productId = $tx['productId'] ?? null;
+        $productConfig = $this->productConfig($productId);
+        if (empty($productConfig)) {
+            throw new \RuntimeException('Unknown Apple product: ' . $productId);
+        }
+
+        $plan = SubscriptionPlan::where('code', $productConfig['plan'])->first();
+        if (!$plan) {
+            throw new \RuntimeException('Subscription plan not found: ' . $productConfig['plan']);
+        }
+
+        return $this->applySubscription(
+            user: $user,
+            plan: $plan,
+            productId: $productId,
+            billingPeriod: $productConfig['billing_period'],
+            originalTransactionId: $originalTransactionId,
+            latestTransactionId: $tx['transactionId'] ?? $originalTransactionId,
+            environment: $tx['environment'] ?? $statusResult['environment'],
+            purchaseDateMs: (int) ($tx['purchaseDate'] ?? null),
+            expiresDateMs: (int) ($tx['expiresDate'] ?? null),
+            appAccountToken: $appAccountToken ?? $tx['appAccountToken'] ?? null,
+            appleStatus: (int) ($statusResult['status'] ?? self::STATUS_ACTIVE),
+            autoRenew: (int) ($statusResult['renewalInfo']['autoRenewStatus'] ?? 1),
+        );
+    }
+
+    /**
+     * Apply an authoritative Apple status to a household subscription.
+     *
+     * - If a local subscription already exists for the original transaction,
+     *   update it (renewals, cancellations, expiry, etc.).
+     * - If not, create it — resolving the household via the app_account_token
+     *   that StoreKit echoes back in the signed transaction. This makes the
+     *   webhook self-sufficient so the plan activates even when the app's
+     *   verify call hasn't run yet.
+     */
+    private function applyResolvedStatus(
+        string $originalTransactionId,
+        array $statusResult,
+        ?string $notificationType,
+        ?string $appAccountToken,
+    ): void {
+        $subscription = Subscription::where('original_transaction_id', $originalTransactionId)->first();
+        if ($subscription) {
+            $this->applyRawStatus(
+                originalTransactionId: $originalTransactionId,
+                statusResult: $statusResult,
+                notificationType: $notificationType,
+            );
+            return;
+        }
+
+        $household = null;
+        if ($appAccountToken) {
+            $household = Household::where('app_account_token', $appAccountToken)->first();
+        }
+
+        if (!$household) {
+            Log::warning('AppleIapService: cannot create subscription from webhook — no household for token', [
+                'otid' => $originalTransactionId,
+                'has_token' => !empty($appAccountToken),
+            ]);
+            return;
+        }
+
+        $member = HouseholdMember::where('household_id', $household->id)
+                ->where('status', 'active')
+                ->where('role', 'admin')
+                ->first()
+            ?? HouseholdMember::where('household_id', $household->id)
+                ->where('status', 'active')
+                ->first();
+
+        $user = $member?->user;
+        if (!$user) {
+            Log::warning('AppleIapService: household has no active member to attach subscription', [
+                'household_id' => $household->id,
+            ]);
+            return;
+        }
+
+        $subscription = $this->applyFromStatusResult(
+            user: $user,
+            statusResult: $statusResult,
+            originalTransactionId: $originalTransactionId,
+            appAccountToken: $appAccountToken,
+        );
+
+        Log::info('AppleIapService: subscription created from webhook', [
+            'household_id' => $household->id,
+            'subscription_id' => $subscription->id,
+            'plan' => $subscription->plan?->code,
+        ]);
     }
 
     private function applyRawStatus(string $originalTransactionId, array $statusResult, ?string $notificationType): void
