@@ -10,6 +10,7 @@ use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\File;
 
 /**
  * Send "remind me before" advance reminders via FCM + in-app notifications.
@@ -58,6 +59,7 @@ class ReminderCheckCommand extends Command
             return Command::SUCCESS;
         }
 
+        $this->logLine('Run start');
         try {
             $this->checkTaskReminders();
             $this->checkRenewalReminders();
@@ -65,8 +67,19 @@ class ReminderCheckCommand extends Command
             Cache::forget('reminder-check-running');
         }
 
+        $this->logLine("Run complete. {$this->sent} notification(s) sent.");
         $this->info("Reminder check complete. {$this->sent} notification(s) sent.");
         return Command::SUCCESS;
+    }
+
+    /**
+     * Append a timestamped line to storage/logs/reminders.log so the cron run
+     * is verifiable even when stdout is discarded (>> /dev/null 2>&1).
+     */
+    private function logLine(string $msg): void
+    {
+        $path = storage_path('logs/reminders.log');
+        File::append($path, '[' . now()->format('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL);
     }
 
     private function checkTaskReminders(): void
@@ -117,6 +130,7 @@ class ReminderCheckCommand extends Command
                 'high'
             );
             $this->sent++;
+            $this->logLine("SENT TASK #{$task->id} '{$task->title}' -> user {$task->assigned_user_id} [{$cfg['type']}]");
         }
     }
 
@@ -178,6 +192,7 @@ class ReminderCheckCommand extends Command
                 'high'
             );
             $this->sent++;
+            $this->logLine("SENT RENEWAL #{$renewal->id} '{$renewal->title}' -> " . count($memberIds) . " member(s) [{$cfg['type']}]");
         }
     }
 }
