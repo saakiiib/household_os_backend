@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\DeviceToken;
 use App\Models\Notification;
 use App\Models\User;
 use Kreait\Firebase\Contract\Messaging;
@@ -45,11 +46,23 @@ class NotificationService
 
     public function sendFcm(array $users, string $title, string $body, string $type, array $data, string $priority = 'normal'): void
     {
-        $tokens = collect($users)
-            ->filter(fn($u) => !empty($u->fcm_token))
-            ->pluck('fcm_token')
-            ->values()
-            ->all();
+        $tokens = [];
+
+        // Legacy single token per user (backwards compatible).
+        foreach ($users as $user) {
+            if (!empty($user->fcm_token)) {
+                $tokens[] = $user->fcm_token;
+            }
+        }
+
+        // All registered device tokens for these users.
+        $userIds = collect($users)->pluck('id')->filter()->unique()->all();
+        if (!empty($userIds)) {
+            $deviceTokens = DeviceToken::whereIn('user_id', $userIds)->pluck('token')->all();
+            $tokens = array_merge($tokens, $deviceTokens);
+        }
+
+        $tokens = array_values(array_unique(array_filter($tokens)));
 
         if (empty($tokens)) {
             Log::warning('[NotificationService] No FCM tokens found for users: ' . collect($users)->pluck('id')->implode(','));

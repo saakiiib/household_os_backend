@@ -237,6 +237,27 @@ class PayPalService
             'capture_status' => $captureData['status'] ?? 'unknown',
         ]);
 
+        // PayPal capture must be COMPLETED (or the order APPROVED) before we
+        // entitle the household. Activating on any other status would grant
+        // premium for unpaid orders (overview.md bug #5).
+        $orderStatus = $captureData['status'] ?? null;
+        $captureStatus = null;
+        foreach (($captureData['purchase_units'] ?? []) as $pu) {
+            foreach (($pu['payments']['captures'] ?? []) as $cap) {
+                $captureStatus = $cap['status'] ?? null;
+            }
+        }
+        $accepted = in_array($orderStatus, ['COMPLETED', 'APPROVED'], true)
+            || $captureStatus === 'COMPLETED';
+        if (!$accepted) {
+            Log::warning('PayPal activateFromCapture: capture not completed', [
+                'order_id' => $orderId,
+                'order_status' => $orderStatus,
+                'capture_status' => $captureStatus,
+            ]);
+            throw new \Exception('PayPal payment has not completed (status: ' . ($orderStatus ?? 'unknown') . ').');
+        }
+
         $payment = $user->payments()
             ->where('gateway_payment_id', $orderId)
             ->where('status', 'pending')

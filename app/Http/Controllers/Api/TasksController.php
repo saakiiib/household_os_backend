@@ -94,6 +94,7 @@ class TasksController extends Controller
             'due_date'          => 'required|date',
             'due_time'          => 'nullable|date_format:H:i',
             'reminder_before'   => 'nullable|in:15_minutes,1_hour,1_day,3_days,1_week',
+            'snooze'            => 'nullable|boolean',
             'repeat'            => 'nullable|in:does_not_repeat,daily,weekly,monthly',
             'notes'             => 'nullable|string|max:2000',
             'assigned_user_id'  => 'required|integer|exists:users,id',
@@ -104,6 +105,16 @@ class TasksController extends Controller
                 'success' => false,
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        // Reject scheduling conflicts: same assigned user + due date + due time.
+        if ($request->filled('due_time')
+            && $this->hasSchedulingConflict($request->assigned_user_id, $request->due_date, $request->due_time)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Scheduling conflict: a task is already scheduled at this date and time for the assigned user.',
+                'errors' => ['due_time' => ['Scheduling conflict']],
             ], 422);
         }
 
@@ -129,6 +140,7 @@ class TasksController extends Controller
             'due_date'          => $request->due_date,
             'due_time'          => $request->due_time,
             'reminder_before'   => $request->reminder_before,
+            'snooze'            => $request->boolean('snooze'),
             'repeat'            => $request->repeat ?? 'does_not_repeat',
             'notes'             => $request->notes,
             'status'            => 'pending',
@@ -219,6 +231,7 @@ class TasksController extends Controller
             'due_date'          => 'sometimes|date',
             'due_time'          => 'nullable|date_format:H:i',
             'reminder_before'   => 'nullable|in:15_minutes,1_hour,1_day,3_days,1_week',
+            'snooze'            => 'nullable|boolean',
             'repeat'            => 'nullable|in:does_not_repeat,daily,weekly,monthly',
             'notes'             => 'nullable|string|max:2000',
             'assigned_user_id'  => 'sometimes|integer|exists:users,id',
@@ -232,11 +245,25 @@ class TasksController extends Controller
             ], 422);
         }
 
+        // Reject scheduling conflicts using the effective values (only when a
+        // concrete due time is involved). Exclude the task being updated.
+        $effectiveAssigned = $request->input('assigned_user_id', $task->assigned_user_id);
+        $effectiveDueDate = $request->input('due_date', $task->due_date);
+        $effectiveDueTime = $request->input('due_time', $task->due_time);
+        if (!empty($effectiveDueTime)
+            && $this->hasSchedulingConflict($effectiveAssigned, $effectiveDueDate, $effectiveDueTime, $task->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Scheduling conflict: a task is already scheduled at this date and time for the assigned user.',
+                'errors' => ['due_time' => ['Scheduling conflict']],
+            ], 422);
+        }
+
         $oldAssignedUserId = $task->assigned_user_id;
 
         $task->update($request->only([
             'title', 'description', 'task_type', 'priority', 'status',
-            'frequency', 'due_date', 'due_time', 'reminder_before', 'repeat', 'notes', 'assigned_user_id',
+            'frequency', 'due_date', 'due_time', 'reminder_before', 'snooze', 'repeat', 'notes', 'assigned_user_id',
         ]));
 
         // Handle completion
@@ -393,6 +420,7 @@ class TasksController extends Controller
                 'due_date'          => $nextDueDate,
                 'due_time'          => $task->due_time,
                 'reminder_before'   => $task->reminder_before,
+                'snooze'            => $task->snooze,
                 'repeat'            => $task->repeat,
                 'notes'             => $task->notes,
                 'status'            => 'pending',
@@ -411,6 +439,24 @@ class TasksController extends Controller
             'data' => $this->formatTask($task),
             'next_task' => $newTask ? $this->formatTask($newTask) : null,
         ]);
+    }
+
+    private function hasSchedulingConflict(?int $assignedUserId, $dueDate, $dueTime, ?int $exceptTaskId = null): bool
+    {
+        if (!$assignedUserId || !$dueDate) {
+            return false;
+        }
+
+        $query = Task::where('assigned_user_id', $assignedUserId)
+            ->where('status', '!=', 'completed')
+            ->where('due_date', $dueDate)
+            ->where('due_time', $dueTime);
+
+        if ($exceptTaskId) {
+            $query->where('id', '!=', $exceptTaskId);
+        }
+
+        return $query->exists();
     }
 
     private function isHouseholdAdmin(int $householdId, int $userId): bool
@@ -483,6 +529,7 @@ class TasksController extends Controller
             'due_date_formatted' => $task->due_date instanceof \DateTimeInterface ? $task->due_date->format('d-m-y') : $task->due_date,
             'due_time'         => $task->due_time instanceof \DateTimeInterface ? $task->due_time->format('H:i') : $task->due_time,
             'reminder_before'  => $task->reminder_before,
+            'snooze'           => $task->snooze,
             'repeat'           => $task->repeat ?? 'does_not_repeat',
             'completed_at'     => $task->completed_at instanceof \DateTimeInterface ? $task->completed_at->toIso8601String() : $task->completed_at,
             'notes'            => $task->notes,

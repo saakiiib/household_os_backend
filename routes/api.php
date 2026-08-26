@@ -104,7 +104,7 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
             Route::get('members', [MembersController::class, 'index']);
         });
 
-        Route::middleware('household.role')->group(function () {
+        Route::middleware('household.role:admin')->group(function () {
             Route::post('invitations', [MembersController::class, 'invite']);
             Route::delete('invitations/{invitation_id}', [MembersController::class, 'cancelInvitation']);
         });

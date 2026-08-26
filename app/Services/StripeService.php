@@ -228,14 +228,23 @@ class StripeService
 
     /**
      * Handle Stripe webhook event.
+     *
+     * @param string $payload Raw request body (exactly as Stripe signed it).
+     *                       Never re-encode an array — the signature is over
+     *                       the raw bytes, so a re-encoded body fails verification.
      */
-    public function handleWebhook(array $payload, string $sigHeader): void
+    public function handleWebhook(string $payload, string $sigHeader): void
     {
         $endpointSecret = config('services.stripe.webhook_secret');
 
+        if (empty($endpointSecret)) {
+            \Log::error('Stripe webhook: STRIPE_WEBHOOK_SECRET is not configured');
+            return;
+        }
+
         try {
             $event = \Stripe\Webhook::constructEvent(
-                json_encode($payload),
+                $payload,
                 $sigHeader,
                 $endpointSecret
             );

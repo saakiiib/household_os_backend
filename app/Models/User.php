@@ -40,6 +40,14 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Get all registered device tokens for this user (multi-device FCM).
+     */
+    public function deviceTokens()
+    {
+        return $this->hasMany(DeviceToken::class);
+    }
+
+    /**
      * Get subscriptions this user purchased (for payment history).
      */
     public function subscriptions()

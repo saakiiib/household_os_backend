@@ -61,10 +61,8 @@ class CheckSubscriptionExpiry extends Command
             $this->line("Moved to grace period: Household #{$sub->household_id}");
         }
 
-        // Grace period subscriptions past expires_at → expired
-        $toExpired = Subscription::where('status', 'grace_period')
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '<', $now)
+        // Grace period / cancelled subscriptions past their access window → expired
+        $toExpired = Subscription::whereIn('status', ['grace_period', 'cancelled'])
             ->get();
 
         foreach ($toExpired as $sub) {
@@ -72,8 +70,10 @@ class CheckSubscriptionExpiry extends Command
                 app(\App\Services\AppleIapService::class)->refreshFromApple($sub);
                 continue;
             }
-            $sub->markExpired();
-            $this->line("Expired: Household #{$sub->household_id}");
+            if (!$sub->isActive()) {
+                $sub->markExpired();
+                $this->line("Expired: Household #{$sub->household_id}");
+            }
         }
     }
 

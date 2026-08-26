@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\DeviceToken;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -15,9 +16,16 @@ class NotificationController extends Controller
      */
     public function index(Request $request)
     {
-        $notifications = Notification::where('user_id', $request->user()->id)
-            ->latest()
-            ->paginate(20);
+        $query = Notification::where('user_id', $request->user()->id);
+
+        // When `unread=1` is requested (the notification bell/inbox), return only
+        // unread items so the list acts as an "unread-only" view and read items
+        // are naturally unlisted. Without the flag, all notifications are returned.
+        if ($request->boolean('unread')) {
+            $query->whereNull('read_at');
+        }
+
+        $notifications = $query->latest()->paginate(20);
 
         return response()->json([
             'success' => true,
@@ -87,9 +95,23 @@ class NotificationController extends Controller
      */
     public function saveFcmToken(Request $request)
     {
-        $request->validate(['fcm_token' => 'required|string']);
+        $request->validate([
+            'fcm_token' => 'required|string',
+            'platform'  => 'nullable|string|in:ios,android,web',
+        ]);
 
-        $request->user()->update(['fcm_token' => $request->fcm_token]);
+        $user = $request->user();
+        $token = $request->fcm_token;
+
+        // Keep the legacy single-token column updated for backwards compatibility.
+        $user->update(['fcm_token' => $token]);
+
+        // Upsert into the per-device tokens table so multiple devices can each
+        // receive push notifications for the same user.
+        DeviceToken::updateOrCreate(
+            ['token' => $token],
+            ['user_id' => $user->id, 'platform' => $request->input('platform')]
+        );
 
         return response()->json([
             'success' => true,

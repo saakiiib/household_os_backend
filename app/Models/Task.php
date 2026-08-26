@@ -16,6 +16,7 @@ class Task extends Model
         'due_time' => 'date:H:i',
         'completed_at' => 'datetime',
         'parent_task_id' => 'integer',
+        'snooze' => 'boolean',
     ];
 
     public function household()

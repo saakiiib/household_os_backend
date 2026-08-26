@@ -78,55 +78,42 @@ class SocialAuthController extends Controller
      */
     private function findOrCreateSocialUser(string $provider, string $providerId, string $email, string $name, ?string $avatar = null, ?string $firstName = null, ?string $lastName = null, bool $emailVerified = false)
     {
-        // Check if user exists by provider + provider_id
+        // Resolve the best display-name parts from what the provider gave us.
+        if (empty($firstName) || empty($lastName)) {
+            $nameParts = explode(' ', $name ?? '', 2);
+            $firstName = $firstName ?: ($nameParts[0] ?? '');
+            $lastName = $lastName ?: ($nameParts[1] ?? '');
+        }
+
+        // 1) Existing social account (same provider + provider id)
         $user = User::where('provider', $provider)
             ->where('provider_id', $providerId)
             ->first();
 
+        // 2) Existing account with the same email — link the provider.
         if (!$user) {
-            // Check if user exists by email
             $user = User::where('email', $email)->first();
-
             if ($user) {
-                // User exists — link this social provider only, keep existing name/email
-                $updates = [
+                $user->update([
                     'provider' => $provider,
                     'provider_id' => $providerId,
-                ];
-
-                // Update avatar only if user doesn't have one yet
-                if ($avatar && empty($user->avatar)) {
-                    $updates['avatar'] = $avatar;
-                }
-
-                // If the social provider already verified this email, mark it verified
-                // so the user isn't later blocked from the password login (which requires
-                // a verified email). Prevents the "verify email before logging in" 403.
-                if ($emailVerified && is_null($user->email_verified_at)) {
-                    $updates['email_verified_at'] = now();
-                }
-
-                $user->update($updates);
-            } else {
-                // Create new user — prefer passed-in names, fallback to token name
-                if (!$firstName || !$lastName) {
-                    $nameParts = explode(' ', $name, 2);
-                    $firstName = $firstName ?? $nameParts[0] ?? '';
-                    $lastName = $lastName ?? $nameParts[1] ?? '';
-                }
-
-                $user = User::create([
-                    'email'         => $email,
-                    'first_name'    => $firstName,
-                    'last_name'     => $lastName,
-                    'password'      => \Illuminate\Support\Str::random(32),
-                    'provider'      => $provider,
-                    'provider_id'   => $providerId,
-                    'avatar'        => $avatar,
-                    'email_verified_at' => now(),
-                    'status'        => 'active',
                 ]);
             }
+        }
+
+        // 3) Otherwise create a brand-new user.
+        if (!$user) {
+            $user = User::create([
+                'email'         => $email,
+                'first_name'    => $firstName,
+                'last_name'     => $lastName,
+                'password'      => \Illuminate\Support\Str::random(32),
+                'provider'      => $provider,
+                'provider_id'   => $providerId,
+                'avatar'        => $avatar,
+                'email_verified_at' => now(),
+                'status'        => 'active',
+            ]);
         }
 
         if ($user->status !== 'active') {
@@ -134,6 +121,30 @@ class SocialAuthController extends Controller
                 'success' => false,
                 'message' => 'Your account is inactive.',
             ], 403);
+        }
+
+        // Always refresh profile fields from the provider on every login so
+        // details like name/email are captured. This fixes "empty profile
+        // after Google login" (issue #34): an account that was originally
+        // created with a blank name keeps the Google display name on the next
+        // login. We only FILL fields that are still empty, so we never clobber
+        // a name the user set intentionally, and we never change an email that
+        // was already captured (preserving the existing email-linking behaviour).
+        $profileUpdates = [];
+        if (empty($user->first_name) && $firstName !== '') {
+            $profileUpdates['first_name'] = $firstName;
+        }
+        if (empty($user->last_name) && $lastName !== '') {
+            $profileUpdates['last_name'] = $lastName;
+        }
+        if (empty($user->email) && $email !== '') {
+            $profileUpdates['email'] = $email;
+        }
+        if ($emailVerified && empty($user->email_verified_at)) {
+            $profileUpdates['email_verified_at'] = now();
+        }
+        if (!empty($profileUpdates)) {
+            $user->update($profileUpdates);
         }
 
         // Update avatar if provided and different

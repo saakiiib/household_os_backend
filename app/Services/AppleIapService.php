@@ -901,8 +901,52 @@ class AppleIapService
             }
         }
 
+        // Anchor trust to Apple: the chain must terminate at an Apple root CA,
+        // otherwise a self-signed impostor chain would pass the checks above.
+        $rootCert = openssl_x509_read($this->pemFromDer($x5c[count($x5c) - 1]));
+        if ($rootCert === false || !$this->isAppleRootCertificate($rootCert)) {
+            Log::warning('AppleIapService: JWS chain does not terminate at an Apple root CA');
+            return null;
+        }
+        if (count($x5c) >= 2) {
+            $intermediate = openssl_x509_read($this->pemFromDer($x5c[count($x5c) - 2]));
+            if ($intermediate !== false && !$this->isAppleWwdrCertificate($intermediate)) {
+                Log::warning('AppleIapService: JWS intermediate is not an Apple WWDR certificate');
+                return null;
+            }
+        }
+
         $payload = json_decode($this->base64UrlDecode($payloadB64), true);
         return is_array($payload) ? $payload : null;
+    }
+
+    /**
+     * Whether the given X.509 cert's subject identifies an Apple root CA
+     * (e.g. "Apple Root CA - G3"). Used to anchor JWS trust to Apple.
+     */
+    private function isAppleRootCertificate($cert): bool
+    {
+        return $this->certSubjectContains($cert, 'Apple Root CA');
+    }
+
+    /**
+     * Whether the given X.509 cert's subject identifies the Apple Worldwide
+     * Developer Relations Certification Authority (the WWDR intermediate used in
+     * App Store JWS chains).
+     */
+    private function isAppleWwdrCertificate($cert): bool
+    {
+        return $this->certSubjectContains($cert, 'Apple Worldwide Developer Relations');
+    }
+
+    private function certSubjectContains($cert, string $needle): bool
+    {
+        $parsed = openssl_x509_parse($cert);
+        if (!is_array($parsed)) {
+            return false;
+        }
+        $text = ($parsed['name'] ?? '') . ' ' . json_encode($parsed['subject'] ?? []);
+        return stripos($text, $needle) !== false;
     }
 
     /* ------------------------------------------------------------------ */

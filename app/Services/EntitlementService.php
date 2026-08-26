@@ -8,6 +8,7 @@ use App\Models\SubscriptionPlan;
 use App\Models\Task;
 use App\Models\Renewal;
 use App\Models\DocumentFile;
+use App\Models\HouseholdMember;
 
 /**
  * Central entitlement resolver (command.txt §18-§20).
@@ -116,6 +117,21 @@ class EntitlementService
             return true;
         }
         return ($this->getStorageUsed($household) + $additionalBytes) <= $limit;
+    }
+
+    /**
+     * Whether another member can be added to the household.
+     * Free tier is capped at FREE_MEMBERS; paid plans are unlimited.
+     */
+    public function canAddMember(Household $household): bool
+    {
+        if ($this->getPlanCode($household) === 'free') {
+            $count = HouseholdMember::where('household_id', $household->id)
+                ->where('status', 'active')
+                ->count();
+            return $count < self::FREE_MEMBERS;
+        }
+        return true;
     }
 
     public function getStorageUsed(Household $household): int

@@ -224,11 +224,16 @@ class PaymentController extends Controller
      */
     public function stripeWebhook(Request $request): JsonResponse
     {
-        $payload = $request->all();
+        $payload = $request->getContent();
         $sigHeader = $request->header('Stripe-Signature');
 
         if (!$sigHeader) {
             return response()->json(['error' => 'Missing signature'], 400);
+        }
+
+        if (empty(config('services.stripe.webhook_secret'))) {
+            \Log::error('PaymentController@stripeWebhook: STRIPE_WEBHOOK_SECRET not configured');
+            return response()->json(['error' => 'Webhook secret not configured'], 503);
         }
 
         try {

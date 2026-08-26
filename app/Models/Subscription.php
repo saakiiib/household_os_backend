@@ -96,6 +96,12 @@ class Subscription extends Model
         if ($this->status === 'trial') {
             return true;
         }
+        // A cancelled subscription retains access until the end of the paid
+        // period (current_period_end), matching the cancel confirmation message.
+        if ($this->status === 'cancelled') {
+            $cutoff = $this->expires_at ?? $this->current_period_end;
+            return $cutoff !== null && now()->isBefore($cutoff);
+        }
         // billing_retry = Apple is re-trying payment while expiresDate keeps
         // extending — the customer retains access (command.txt §31).
         if (!in_array($this->status, ['active', 'grace_period', 'billing_retry'])) {

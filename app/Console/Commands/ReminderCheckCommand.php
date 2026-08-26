@@ -87,7 +87,7 @@ class ReminderCheckCommand extends Command
             ->whereDate('due_date', '>=', $now->copy()->subDay())
             ->whereDate('due_date', '<=', $now->copy()->addDays(7))
             ->with('assignedUser:id,first_name,last_name,email,fcm_token')
-            ->select('id', 'title', 'due_date', 'due_time', 'reminder_before', 'assigned_user_id')
+            ->select('id', 'title', 'due_date', 'due_time', 'reminder_before', 'assigned_user_id', 'snooze')
             ->get();
 
         foreach ($tasks as $task) {
@@ -112,23 +112,6 @@ class ReminderCheckCommand extends Command
             } else {
                 $base->setTime(9, 0, 0);
             }
-            $target = $base->copy()->subMinutes($cfg['minutes']);
-
-            // Not time yet.
-            if ($target->gt($now)) {
-                continue;
-            }
-
-            // One-time send per (task, reminder_type).
-            $alreadySent = Notification::where('user_id', $task->assigned_user_id)
-                ->where('type', 'task_reminder')
-                ->where('data->id', $task->id)
-                ->where('data->reminder_type', $cfg['type'])
-                ->exists();
-
-            if ($alreadySent) {
-                continue;
-            }
 
             $dueStr = $task->due_date instanceof Carbon
                 ? $task->due_date->format('M j, Y')
@@ -139,17 +122,73 @@ class ReminderCheckCommand extends Command
                     : Carbon::parse($task->due_time)->format('g:i A'));
             }
 
-            app(NotificationService::class)->sendToUser(
-                $task->assigned_user_id,
-                'Task reminder',
-                "'{$task->title}' is due in {$cfg['label']} on {$dueStr}",
-                'task_reminder',
-                ['type' => 'task', 'id' => $task->id, 'reminder_type' => $cfg['type']],
-                'high'
+            // Base "remind me before" reminder (always sent once).
+            $this->sendTaskReminderIfDue(
+                $task,
+                $cfg['type'],
+                $cfg['label'],
+                $base->copy()->subMinutes($cfg['minutes']),
+                $now,
+                $dueStr
             );
-            $this->sent++;
-            $this->logLine("SENT TASK #{$task->id} '{$task->title}' -> user {$task->assigned_user_id} [{$cfg['type']}]");
+
+            // Snooze cascade: every ladder step that is *closer* to the due time
+            // than the chosen base reminder. e.g. base `1_day` => 1_hour + 15_minutes;
+            // base `1_week` => 3_days + 1_day + 1_hour + 15_minutes.
+            if ($task->snooze) {
+                $ladderKeys = array_keys(self::TASK_OFFSETS);
+                $baseIndex = array_search($task->reminder_before, $ladderKeys, true);
+                if ($baseIndex !== false) {
+                    for ($i = 0; $i < $baseIndex; $i++) {
+                        $step = self::TASK_OFFSETS[$ladderKeys[$i]];
+                        $this->sendTaskReminderIfDue(
+                            $task,
+                            $step['type'],
+                            $step['label'],
+                            $base->copy()->subMinutes($step['minutes']),
+                            $now,
+                            $dueStr
+                        );
+                    }
+                }
+            }
         }
+    }
+
+    /**
+     * Send a single task reminder (FCM + in-app) if its target time has arrived
+     * and it hasn't already been sent for this (task, reminder_type).
+     */
+    private function sendTaskReminderIfDue(Task $task, string $type, string $label, Carbon $target, Carbon $now, string $dueStr): void
+    {
+        if ($target->gt($now)) {
+            return;
+        }
+
+        // Key the "already sent" record on a hash of (task, reminder_type, due
+        // date, due time). If the task's due date/time is later edited, the hash
+        // changes and the reminder is allowed to re-send (otherwise it would be
+        // permanently suppressed after the first send).
+        $sentKey = md5('task|' . $task->id . '|' . $type . '|' . $task->due_date . '|' . $task->due_time);
+
+        $alreadySent = Notification::where('type', 'task_reminder')
+            ->where('data->sent_key', $sentKey)
+            ->exists();
+
+        if ($alreadySent) {
+            return;
+        }
+
+        app(NotificationService::class)->sendToUser(
+            $task->assigned_user_id,
+            'Task reminder',
+            "'{$task->title}' is due in {$label} on {$dueStr}",
+            'task_reminder',
+            ['type' => 'task', 'id' => $task->id, 'reminder_type' => $type, 'sent_key' => $sentKey],
+            'high'
+        );
+        $this->sent++;
+        $this->logLine("SENT TASK #{$task->id} '{$task->title}' -> user {$task->assigned_user_id} [{$type}]");
     }
 
     private function checkRenewalReminders(): void
@@ -192,9 +231,12 @@ class ReminderCheckCommand extends Command
                 continue;
             }
 
+            // Keyed on (renewal, reminder_type, due date) so an edited due date
+            // allows the reminder to re-send instead of being permanently skipped.
+            $sentKey = md5('renewal|' . $renewal->id . '|' . $cfg['type'] . '|' . $renewal->due_date);
+
             $alreadySent = Notification::where('type', 'renewal_reminder')
-                ->where('data->id', $renewal->id)
-                ->where('data->reminder_type', $cfg['type'])
+                ->where('data->sent_key', $sentKey)
                 ->exists();
 
             if ($alreadySent) {
@@ -210,7 +252,7 @@ class ReminderCheckCommand extends Command
                 'Renewal reminder',
                 "'{$renewal->title}' is due in {$cfg['label']} on {$dueStr}",
                 'renewal_reminder',
-                ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $cfg['type']],
+                ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $cfg['type'], 'sent_key' => $sentKey],
                 'high'
             );
             $this->sent++;

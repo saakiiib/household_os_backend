@@ -114,6 +114,13 @@ class MembersController extends Controller
     {
         $membership = $request->get('_household_member');
 
+        if (!$membership->isAdmin()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only admins can invite members.',
+            ], 403);
+        }
+
         $invitedEmail = $request->input('invited_email', $request->input('email'));
 
         $validator = Validator::make($request->all() + ['invited_email' => $invitedEmail], [
@@ -129,6 +136,16 @@ class MembersController extends Controller
         }
 
         $household = Household::findOrFail($household_id);
+
+        // Enforce free-tier member limit (command.txt: subscription free fallback).
+        $entitlement = app(\App\Services\EntitlementService::class);
+        if (!$entitlement->canAddMember($household)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your free plan is limited to ' . \App\Services\EntitlementService::FREE_MEMBERS
+                    . ' members. Upgrade your subscription to add more.',
+            ], 403);
+        }
 
         // Check if a pending invitation already exists for this email
         $existingInvitation = Invitation::where('household_id', $household_id)
