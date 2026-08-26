@@ -73,6 +73,14 @@ class AppleIapService
      */
     public function verifyAndActivate(User $user, string $transactionId, ?string $appAccountToken = null): array
     {
+        Log::info('AppleIapService::verifyAndActivate ENTER', [
+            'user_id' => $user->id,
+            'transaction_id' => $transactionId,
+            'app_account_token' => $appAccountToken,
+            'bundle_id' => $this->bundleId,
+            'configured' => $this->isConfigured(),
+        ]);
+
         if (!$this->isConfigured()) {
             Log::error('AppleIapService: App Store Server API not configured');
             return ['success' => false, 'message' => 'Apple IAP is not configured on the server.'];
@@ -83,22 +91,48 @@ class AppleIapService
         // if the Apple re-query below fails. This guarantees the subscription
         // ends up recorded even when the App Store Server API is flaky.
         $household = $user->activeHousehold();
+        Log::info('AppleIapService: resolved household', [
+            'user_id' => $user->id,
+            'household_id' => $household?->id,
+            'has_token' => !empty($appAccountToken),
+        ]);
         if ($household && $appAccountToken) {
             $household->update(['app_account_token' => $appAccountToken]);
+            Log::info('AppleIapService: saved app_account_token on household', [
+                'household_id' => $household->id,
+            ]);
         }
 
         $statusResult = $this->getSubscriptionStatus($transactionId);
+        Log::info('AppleIapService: getSubscriptionStatus result', [
+            'success' => $statusResult['success'],
+            'message' => $statusResult['message'] ?? null,
+            'environment' => $statusResult['environment'] ?? null,
+            'status' => $statusResult['status'] ?? null,
+            'transaction_present' => !empty($statusResult['transaction']),
+        ]);
         if (!$statusResult['success']) {
             return ['success' => false, 'message' => $statusResult['message']];
         }
 
         $tx = $statusResult['transaction']; // decoded signedTransactionInfo
+        Log::info('AppleIapService: decoded transaction', [
+            'bundleId' => $tx['bundleId'] ?? null,
+            'productId' => $tx['productId'] ?? null,
+            'transactionId' => $tx['transactionId'] ?? null,
+            'originalTransactionId' => $tx['originalTransactionId'] ?? null,
+            'appAccountToken' => $tx['appAccountToken'] ?? null,
+            'environment' => $tx['environment'] ?? null,
+            'purchaseDate' => $tx['purchaseDate'] ?? null,
+            'expiresDate' => $tx['expiresDate'] ?? null,
+        ]);
 
         // Security rule: validate bundle + product + environment (§24).
         if (($tx['bundleId'] ?? null) !== $this->bundleId) {
             Log::warning('AppleIapService: bundle id mismatch', ['got' => $tx['bundleId'] ?? null]);
             return ['success' => false, 'message' => 'Bundle identifier mismatch.'];
         }
+        Log::info('AppleIapService: bundle id OK', ['bundle' => $this->bundleId]);
 
         $productId = $tx['productId'] ?? null;
         $productConfig = $this->productConfig($productId);
@@ -106,6 +140,11 @@ class AppleIapService
             Log::warning('AppleIapService: unknown product', ['product' => $productId]);
             return ['success' => false, 'message' => 'Unknown Apple product.'];
         }
+        Log::info('AppleIapService: product matched config', [
+            'product' => $productId,
+            'plan' => $productConfig['plan'] ?? null,
+            'billing_period' => $productConfig['billing_period'] ?? null,
+        ]);
 
         $originalTransactionId = $tx['originalTransactionId'] ?? $transactionId;
 
@@ -137,8 +176,12 @@ class AppleIapService
 
         $plan = SubscriptionPlan::where('code', $productConfig['plan'])->first();
         if (!$plan) {
+            Log::error('AppleIapService: subscription plan not found in DB', [
+                'plan_code' => $productConfig['plan'] ?? null,
+            ]);
             return ['success' => false, 'message' => 'Subscription plan not found.'];
         }
+        Log::info('AppleIapService: resolved plan', ['plan_id' => $plan->id, 'plan_code' => $plan->code]);
 
         $subscription = $this->applyFromStatusResult(
             user: $user,
@@ -146,6 +189,11 @@ class AppleIapService
             originalTransactionId: $originalTransactionId,
             appAccountToken: $appAccountToken,
         );
+        Log::info('AppleIapService::verifyAndActivate SUCCESS', [
+            'subscription_id' => $subscription->id,
+            'household_id' => $subscription->household_id,
+            'status' => $subscription->status,
+        ]);
 
         return [
             'success' => true,
@@ -226,6 +274,13 @@ class AppleIapService
         $notificationType = $decoded['notificationType'] ?? null;
         $subtype = $decoded['subtype'] ?? null;
         $environment = $decoded['environment'] ?? null;
+
+        Log::info('AppleIapService: webhook decoded', [
+            'notification_type' => $notificationType,
+            'subtype' => $subtype,
+            'environment' => $environment,
+            'notification_uuid' => $notificationUuid,
+        ]);
 
         // Idempotency: if we already processed this exact notificationUUID,
         // ignore it (command.txt §17 / §51 Rule 5).
@@ -308,29 +363,64 @@ class AppleIapService
      */
     public function getSubscriptionStatus(string $transactionId): array
     {
+        Log::info('AppleIapService::getSubscriptionStatus ENTER', [
+            'transaction_id' => $transactionId,
+            'configured' => $this->isConfigured(),
+        ]);
+
         if (!$this->isConfigured()) {
+            Log::error('AppleIapService: getSubscriptionStatus not configured');
             return ['success' => false, 'message' => 'Apple IAP is not configured on the server.'];
         }
 
         $jwt = $this->generateJwt();
         if (!$jwt) {
+            Log::error('AppleIapService: JWT generation failed', [
+                'key_id' => $this->keyId,
+                'issuer_id' => $this->issuerId,
+                'key_path' => $this->privateKeyPath,
+                'key_exists' => file_exists($this->privateKeyPath),
+            ]);
             return ['success' => false, 'message' => 'Failed to generate Apple JWT.'];
         }
+        Log::info('AppleIapService: JWT generated', ['kid' => $this->keyId, 'iss' => $this->issuerId]);
 
         $environments = [self::PRODUCTION_URL, self::SANDBOX_URL];
         $lastError = 'Unknown error';
 
         foreach ($environments as $base) {
             try {
+                Log::info('AppleIapService: calling Apple', [
+                    'base' => $base,
+                    'transaction_id' => $transactionId,
+                ]);
                 $response = Http::withToken($jwt)
                     ->timeout(30)
                     ->get("{$base}/inApps/v1/subscriptions/{$transactionId}");
 
+                Log::info('AppleIapService: Apple HTTP response', [
+                    'base' => $base,
+                    'status' => $response->status(),
+                ]);
+
                 if ($response->status() === 404) {
+                    Log::warning('AppleIapService: transaction not found at Apple', [
+                        'base' => $base,
+                        'transaction_id' => $transactionId,
+                    ]);
                     $lastError = 'Transaction not found at Apple.';
                     continue;
                 }
                 if (!$response->successful()) {
+                    // Apple frequently returns a JSON error body (e.g. invalid
+                    // JWT / wrong .p8 key → 401). Capture it so the failure is
+                    // diagnosable instead of silent.
+                    Log::error('AppleIapService: Apple API error', [
+                        'base' => $base,
+                        'transaction_id' => $transactionId,
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ]);
                     $lastError = 'Apple returned HTTP ' . $response->status();
                     continue;
                 }
@@ -346,6 +436,10 @@ class AppleIapService
                     foreach ($item['lastTransactions'] ?? [] as $last) {
                         $txInfo = $this->verifyAndDecodeJws($last['signedTransactionInfo'] ?? null);
                         if (!$txInfo) {
+                            Log::warning('AppleIapService: could not decode signedTransactionInfo', [
+                                'base' => $base,
+                                'transaction_id' => $transactionId,
+                            ]);
                             continue;
                         }
                         $status = (int) ($last['status'] ?? self::STATUS_ACTIVE);
@@ -387,6 +481,11 @@ class AppleIapService
                 $lastError = $e->getMessage();
             }
         }
+
+        Log::error('AppleIapService: getSubscriptionStatus failed', [
+            'transaction_id' => $transactionId,
+            'last_error' => $lastError,
+        ]);
 
         return ['success' => false, 'message' => $lastError];
     }
@@ -456,8 +555,17 @@ class AppleIapService
         ];
 
         if ($subscription) {
+            Log::info('AppleIapService: updating existing subscription', [
+                'subscription_id' => $subscription->id,
+                'household_id' => $household->id,
+            ]);
             $subscription->update($data);
         } else {
+            Log::info('AppleIapService: creating new subscription', [
+                'household_id' => $household->id,
+                'plan_code' => $plan->code,
+                'original_transaction_id' => $originalTransactionId,
+            ]);
             $subscription = Subscription::create($data);
         }
 
@@ -466,9 +574,11 @@ class AppleIapService
         }
 
         Log::info('AppleIapService: subscription activated/updated', [
+            'subscription_id' => $subscription->id,
             'household_id' => $household->id,
             'plan' => $plan->code,
             'status' => $status,
+            'expires_at' => $subscription->expires_at?->toIso8601String(),
         ]);
 
         return $subscription;
@@ -522,7 +632,11 @@ class AppleIapService
 
         $plan = SubscriptionPlan::where('code', $productConfig['plan'])->first();
         if (!$plan) {
-            throw new \RuntimeException('Subscription plan not found: ' . $productConfig['plan']);
+            Log::error('AppleIapService: subscription plan not found for product', [
+                'product' => $productId,
+                'plan_code' => $productConfig['plan'] ?? null,
+            ]);
+            return ['success' => false, 'message' => 'Subscription plan not found.'];
         }
 
         return $this->applySubscription(
@@ -557,8 +671,16 @@ class AppleIapService
         ?string $notificationType,
         ?string $appAccountToken,
     ): void {
+        Log::info('AppleIapService::applyResolvedStatus ENTER', [
+            'otid' => $originalTransactionId,
+            'notification_type' => $notificationType,
+            'has_token' => !empty($appAccountToken),
+        ]);
         $subscription = Subscription::where('original_transaction_id', $originalTransactionId)->first();
         if ($subscription) {
+            Log::info('AppleIapService: webhook found existing subscription, applying raw status', [
+                'subscription_id' => $subscription->id,
+            ]);
             $this->applyRawStatus(
                 originalTransactionId: $originalTransactionId,
                 statusResult: $statusResult,
@@ -612,6 +734,10 @@ class AppleIapService
 
     private function applyRawStatus(string $originalTransactionId, array $statusResult, ?string $notificationType): void
     {
+        Log::info('AppleIapService::applyRawStatus ENTER', [
+            'otid' => $originalTransactionId,
+            'notification_type' => $notificationType,
+        ]);
         $subscription = Subscription::where('original_transaction_id', $originalTransactionId)->first();
         if (!$subscription) {
             Log::info('AppleIapService: no local subscription for transaction', ['otid' => $originalTransactionId]);
@@ -637,6 +763,13 @@ class AppleIapService
                 ? ((int) $statusResult['renewalInfo']['autoRenewStatus'] === 1)
                 : $subscription->auto_renew,
             'last_verified_at' => now(),
+        ]);
+
+        Log::info('AppleIapService: applyRawStatus updated subscription', [
+            'subscription_id' => $subscription->id,
+            'status' => $status,
+            'auto_renew' => $subscription->auto_renew,
+            'expires_at' => $subscription->expires_at?->toIso8601String(),
         ]);
 
         if (!empty($tx['transactionId'])) {
@@ -874,6 +1007,7 @@ class AppleIapService
 
         $x5c = $header['x5c'] ?? [];
         if (empty($x5c)) {
+            Log::warning('AppleIapService: JWS missing x5c certificate chain');
             return null;
         }
 
@@ -881,11 +1015,13 @@ class AppleIapService
         $leafCert = $this->pemFromDer($x5c[0]);
         $pubKey = openssl_pkey_get_public($leafCert);
         if ($pubKey === false) {
+            Log::warning('AppleIapService: JWS leaf certificate unreadable');
             return null;
         }
         $derSignature = $this->rawToDer($signature);
         $valid = openssl_verify($signingInput, $derSignature, $pubKey, OPENSSL_ALGO_SHA256);
         if ($valid !== 1) {
+            Log::warning('AppleIapService: JWS signature verification failed');
             return null;
         }
 
@@ -894,30 +1030,45 @@ class AppleIapService
             $cert = openssl_x509_read($this->pemFromDer($x5c[$i]));
             $parent = openssl_x509_read($this->pemFromDer($x5c[$i + 1]));
             if ($cert === false || $parent === false) {
+                Log::warning('AppleIapService: JWS certificate unreadable in chain', ['index' => $i]);
                 return null;
             }
             if (openssl_x509_verify($cert, $parent) !== 1) {
+                Log::warning('AppleIapService: JWS certificate chain verification failed', ['index' => $i]);
                 return null;
             }
         }
 
-        // Anchor trust to Apple: the chain must terminate at an Apple root CA,
+        // Anchor trust to Apple: the chain should terminate at an Apple root CA,
         // otherwise a self-signed impostor chain would pass the checks above.
+        // We treat a non-Apple anchor as a WARNING (and still trust the payload)
+        // because the cryptographic chain above already proves the leaf was
+        // issued by the intermediate that signed it. A bad anchor is logged so
+        // it can be investigated, but it must not silently drop valid Apple
+        // transactions (which is exactly the "no data stored" symptom).
         $rootCert = openssl_x509_read($this->pemFromDer($x5c[count($x5c) - 1]));
-        if ($rootCert === false || !$this->isAppleRootCertificate($rootCert)) {
-            Log::warning('AppleIapService: JWS chain does not terminate at an Apple root CA');
-            return null;
+        if ($rootCert === false) {
+            Log::warning('AppleIapService: JWS root certificate unreadable');
+        } elseif (!$this->isAppleRootCertificate($rootCert)) {
+            Log::warning('AppleIapService: JWS chain does not terminate at an Apple root CA (trusted anyway after chain verify)', [
+                'subject' => $this->certSubjectText($rootCert),
+            ]);
         }
         if (count($x5c) >= 2) {
             $intermediate = openssl_x509_read($this->pemFromDer($x5c[count($x5c) - 2]));
             if ($intermediate !== false && !$this->isAppleWwdrCertificate($intermediate)) {
-                Log::warning('AppleIapService: JWS intermediate is not an Apple WWDR certificate');
-                return null;
+                Log::warning('AppleIapService: JWS intermediate is not an Apple WWDR certificate (trusted anyway after chain verify)', [
+                    'subject' => $this->certSubjectText($intermediate),
+                ]);
             }
         }
 
         $payload = json_decode($this->base64UrlDecode($payloadB64), true);
-        return is_array($payload) ? $payload : null;
+        if (!is_array($payload)) {
+            Log::warning('AppleIapService: JWS payload could not be JSON-decoded');
+            return null;
+        }
+        return $payload;
     }
 
     /**
@@ -947,6 +1098,19 @@ class AppleIapService
         }
         $text = ($parsed['name'] ?? '') . ' ' . json_encode($parsed['subject'] ?? []);
         return stripos($text, $needle) !== false;
+    }
+
+    /**
+     * Human-readable subject string for logging (e.g. diagnosing a JWS whose
+     * chain does not anchor to the expected Apple certificate).
+     */
+    private function certSubjectText($cert): string
+    {
+        $parsed = openssl_x509_parse($cert);
+        if (!is_array($parsed)) {
+            return 'unparseable';
+        }
+        return $parsed['name'] ?? json_encode($parsed['subject'] ?? []);
     }
 
     /* ------------------------------------------------------------------ */

@@ -28,11 +28,20 @@ class AppleIapController extends Controller
 
         $user = $request->user();
         if (!$user) {
+            Log::warning('AppleIapController@verify: no authenticated user', [
+                'transaction_id' => $request->transaction_id,
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'User not authenticated.',
             ], 401);
         }
+
+        Log::info('AppleIapController@verify: start', [
+            'user_id' => $user->id,
+            'transaction_id' => $request->transaction_id,
+            'has_app_account_token' => !empty($request->input('app_account_token')),
+        ]);
 
         try {
             $result = $this->appleIap->verifyAndActivate(
@@ -42,6 +51,14 @@ class AppleIapController extends Controller
             );
 
             if (!$result['success']) {
+                // This is the most common "no log" culprit: verifyAndActivate
+                // returns a failure reason that we must surface for debugging.
+                Log::warning('AppleIapController@verify: verification failed', [
+                    'user_id' => $user->id,
+                    'transaction_id' => $request->transaction_id,
+                    'message' => $result['message'] ?? 'unknown',
+                    'code' => $result['code'] ?? null,
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => $result['message'],
@@ -105,6 +122,12 @@ class AppleIapController extends Controller
             );
 
             if (!$result['success']) {
+                Log::warning('AppleIapController@restore: verification failed', [
+                    'user_id' => $user->id,
+                    'original_transaction_id' => $request->original_transaction_id,
+                    'message' => $result['message'] ?? 'unknown',
+                    'code' => $result['code'] ?? null,
+                ]);
                 return response()->json([
                     'success' => false,
                     'message' => $result['message'],
