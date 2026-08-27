@@ -415,12 +415,24 @@ class AppleIapService
                     // Apple frequently returns a JSON error body (e.g. invalid
                     // JWT / wrong .p8 key → 401). Capture it so the failure is
                     // diagnosable instead of silent.
+                    $errorBody = $response->body();
                     Log::error('AppleIapService: Apple API error', [
                         'base' => $base,
                         'transaction_id' => $transactionId,
                         'status' => $response->status(),
-                        'body' => $response->body(),
+                        'body' => $errorBody,
+                        'headers' => $response->headers(),
                     ]);
+                    // If production fails with 401, try to decode Apple's error
+                    $errorJson = json_decode($errorBody, true);
+                    if ($errorJson) {
+                        Log::error('AppleIapService: Apple error details', [
+                            'base' => $base,
+                            'error' => $errorJson['error'] ?? null,
+                            'message' => $errorJson['message'] ?? null,
+                            'detail' => $errorJson['detail'] ?? null,
+                        ]);
+                    }
                     $lastError = 'Apple returned HTTP ' . $response->status();
                     continue;
                 }
@@ -636,7 +648,7 @@ class AppleIapService
                 'product' => $productId,
                 'plan_code' => $productConfig['plan'] ?? null,
             ]);
-            return ['success' => false, 'message' => 'Subscription plan not found.'];
+            throw new \RuntimeException('Subscription plan not found: ' . ($productConfig['plan'] ?? 'unknown'));
         }
 
         return $this->applySubscription(
@@ -1000,8 +1012,10 @@ class AppleIapService
 
         $signingInput = $headerB64 . '.' . $payloadB64;
         $signature = $this->base64UrlDecode($sigB64);
-        if (strlen($signature) !== 64) {
-            // Apple ES256 signatures are 64 bytes (32 R + 32 S).
+        if (strlen($signature) < 64 || strlen($signature) > 72) {
+            // Apple ES256 signatures are typically 64 bytes (32 R + 32 S)
+            // but can vary slightly depending on leading zero bytes.
+            Log::warning('AppleIapService: unexpected signature length', ['length' => strlen($signature)]);
             return null;
         }
 
@@ -1012,7 +1026,8 @@ class AppleIapService
         }
 
         // Verify the leaf signature against the public key in the leaf cert.
-        $leafCert = $this->pemFromDer($x5c[0]);
+        // x5c values are base64-encoded DER per RFC 7515 Section 4.1.6.
+        $leafCert = $this->pemFromX5c($x5c[0]);
         $pubKey = openssl_pkey_get_public($leafCert);
         if ($pubKey === false) {
             Log::warning('AppleIapService: JWS leaf certificate unreadable');
@@ -1027,8 +1042,8 @@ class AppleIapService
 
         // Verify the certificate chain (leaf signed by next, ... up to root).
         for ($i = 0; $i < count($x5c) - 1; $i++) {
-            $cert = openssl_x509_read($this->pemFromDer($x5c[$i]));
-            $parent = openssl_x509_read($this->pemFromDer($x5c[$i + 1]));
+            $cert = openssl_x509_read($this->pemFromX5c($x5c[$i]));
+            $parent = openssl_x509_read($this->pemFromX5c($x5c[$i + 1]));
             if ($cert === false || $parent === false) {
                 Log::warning('AppleIapService: JWS certificate unreadable in chain', ['index' => $i]);
                 return null;
@@ -1046,7 +1061,7 @@ class AppleIapService
         // issued by the intermediate that signed it. A bad anchor is logged so
         // it can be investigated, but it must not silently drop valid Apple
         // transactions (which is exactly the "no data stored" symptom).
-        $rootCert = openssl_x509_read($this->pemFromDer($x5c[count($x5c) - 1]));
+        $rootCert = openssl_x509_read($this->pemFromX5c($x5c[count($x5c) - 1]));
         if ($rootCert === false) {
             Log::warning('AppleIapService: JWS root certificate unreadable');
         } elseif (!$this->isAppleRootCertificate($rootCert)) {
@@ -1055,7 +1070,7 @@ class AppleIapService
             ]);
         }
         if (count($x5c) >= 2) {
-            $intermediate = openssl_x509_read($this->pemFromDer($x5c[count($x5c) - 2]));
+            $intermediate = openssl_x509_read($this->pemFromX5c($x5c[count($x5c) - 2]));
             if ($intermediate !== false && !$this->isAppleWwdrCertificate($intermediate)) {
                 Log::warning('AppleIapService: JWS intermediate is not an Apple WWDR certificate (trusted anyway after chain verify)', [
                     'subject' => $this->certSubjectText($intermediate),
@@ -1128,9 +1143,17 @@ class AppleIapService
         return base64_decode(strtr($padded, '-_', '+/'), true);
     }
 
-    private function pemFromDer(string $der): string
+    private function pemFromX5c(string $x5cBase64): string
     {
-        return "-----BEGIN CERTIFICATE-----\n" . chunk_split(base64_encode($der), 64, "\n") . "-----END CERTIFICATE-----\n";
+        $der = base64_decode($x5cBase64, true);
+
+        if ($der === false) {
+            throw new \RuntimeException('Invalid x5c certificate encoding.');
+        }
+
+        return "-----BEGIN CERTIFICATE-----\n"
+            . chunk_split(base64_encode($der), 64, "\n")
+            . "-----END CERTIFICATE-----\n";
     }
 
     /**

@@ -27,6 +27,10 @@ class CriticalCheckCommand extends Command
 
     private int $sent = 0;
 
+    // Critical notifications that are not tied to a specific due time are held
+    // back until this local hour so they don't all fire at 00:00 (midnight).
+    private const MORNING_HOUR = 8;
+
     public function handle(): int
     {
         // Overlap lock: prevent concurrent runs from multiplying DB queries.
@@ -52,17 +56,28 @@ class CriticalCheckCommand extends Command
 
     private function checkOverdueTasks(): void
     {
-        $today = now()->startOfDay();
+        $now = now();
+        $today = $now->copy()->startOfDay();
 
         $tasks = Task::where('status', '!=', 'completed')
             ->whereNotNull('due_date')
             ->whereNotNull('assigned_user_id')
-            ->whereDate('due_date', '<', $today)
+            ->whereDate('due_date', '<=', $today)
             ->with('assignedUser:id,first_name,last_name,email,fcm_token')
-            ->select('id', 'title', 'due_date', 'assigned_user_id')
+            ->select('id', 'title', 'due_date', 'due_time', 'assigned_user_id')
             ->get();
 
         foreach ($tasks as $task) {
+            // Only flag as overdue once the actual due date/time has passed.
+            if ($this->itemDueDateTime($task->due_date, $task->due_time)->gt($now)) {
+                continue;
+            }
+
+            // Hold off until the morning hour so it doesn't fire at midnight.
+            if ($now->hour < self::MORNING_HOUR) {
+                continue;
+            }
+
             $alreadySent = \App\Models\Notification::where('user_id', $task->assigned_user_id)
                 ->where('type', 'task_reminder')
                 ->where('data->id', $task->id)
@@ -86,7 +101,8 @@ class CriticalCheckCommand extends Command
 
     private function checkDueTodayTasks(): void
     {
-        $today = now()->startOfDay();
+        $now = now();
+        $today = $now->copy()->startOfDay();
 
         $tasks = Task::where('status', '!=', 'completed')
             ->whereNotNull('due_date')
@@ -97,6 +113,17 @@ class CriticalCheckCommand extends Command
             ->get();
 
         foreach ($tasks as $task) {
+            // Skip if the due time has already passed — that's an "overdue"
+            // notification now, not a "due today" heads-up.
+            if ($this->itemDueDateTime($task->due_date, $task->due_time)->lte($now)) {
+                continue;
+            }
+
+            // Hold off until the morning hour so it doesn't fire at midnight.
+            if ($now->hour < self::MORNING_HOUR) {
+                continue;
+            }
+
             $alreadySent = \App\Models\Notification::where('user_id', $task->assigned_user_id)
                 ->where('type', 'task_reminder')
                 ->where('data->id', $task->id)
@@ -123,6 +150,11 @@ class CriticalCheckCommand extends Command
     {
         $today = now()->startOfDay();
 
+        // Hold off until the morning hour so it doesn't fire at midnight.
+        if (now()->hour < self::MORNING_HOUR) {
+            return;
+        }
+
         $renewals = Renewal::where('status', 'pending')
             ->whereNotNull('due_date')
             ->whereDate('due_date', '<', $today)
@@ -137,6 +169,11 @@ class CriticalCheckCommand extends Command
     private function checkDueTodayRenewals(): void
     {
         $today = now()->startOfDay();
+
+        // Hold off until the morning hour so it doesn't fire at midnight.
+        if (now()->hour < self::MORNING_HOUR) {
+            return;
+        }
 
         $renewals = Renewal::where('status', 'pending')
             ->whereNotNull('due_date')
@@ -197,6 +234,11 @@ class CriticalCheckCommand extends Command
     {
         $today = now()->startOfDay();
 
+        // Hold off until the morning hour so it doesn't fire at midnight.
+        if (now()->hour < self::MORNING_HOUR) {
+            return;
+        }
+
         $services = \App\Models\RenewalVehicleService::with('renewal:id,household_id,title')
             ->whereHas('renewal', fn($q) => $q->where('status', 'pending'))
             ->whereDate('service_date', '=', $today)
@@ -246,5 +288,22 @@ class CriticalCheckCommand extends Command
                 $this->sent++;
             }
         }
+    }
+
+    /**
+     * Build the actual due date/time for an item from its date + optional time.
+     * Falls back to 09:00 when no time is set.
+     */
+    private function itemDueDateTime($date, $time = null): \Carbon\Carbon
+    {
+        $dt = $date instanceof \Carbon\Carbon ? $date->copy() : \Carbon\Carbon::parse($date);
+        $dt->setTime(9, 0, 0);
+
+        if ($time) {
+            $t = $time instanceof \Carbon\Carbon ? $time : \Carbon\Carbon::parse($time);
+            $dt->setTime($t->hour, $t->minute, 0);
+        }
+
+        return $dt;
     }
 }

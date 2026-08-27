@@ -19,6 +19,13 @@ class GoogleIapController extends Controller
      */
     public function verify(Request $request): JsonResponse
     {
+        \Log::info('GoogleIapController@verify: start', [
+            'user_id' => $request->user()?->id,
+            'product_id' => $request->product_id,
+            'plan_slug' => $request->plan_slug,
+            'billing_type' => $request->billing_type,
+        ]);
+
         $request->validate([
             'receipt_data' => 'required|string',
             'product_id' => 'required|string',
@@ -47,6 +54,11 @@ class GoogleIapController extends Controller
                 user: $user,
             );
 
+            \Log::info('GoogleIapController@verify: receipt verified', [
+                'success' => $result['success'],
+                'message' => $result['message'] ?? null,
+            ]);
+
             if (!$result['success']) {
                 return response()->json([
                     'success' => false,
@@ -65,6 +77,13 @@ class GoogleIapController extends Controller
                 purchaseDate: $result['purchase_date'],
                 autoRenewing: $result['auto_renewing'] ?? true,
             );
+
+            \Log::info('GoogleIapController@verify: subscription activated', [
+                'subscription_id' => $subscription->id,
+                'household_id' => $subscription->household_id,
+                'plan' => $request->plan_slug,
+                'expires_at' => $result['expires_at']?->toIso8601String(),
+            ]);
 
             return response()->json([
                 'success' => true,

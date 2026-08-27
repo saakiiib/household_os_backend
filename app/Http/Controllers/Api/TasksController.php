@@ -395,39 +395,14 @@ class TasksController extends Controller
 
         ActivityController::log($household_id, Auth::id(), 'task', $task->id, 'completed', 'Task completed');
 
-        // Auto-create next instance for recurring tasks (using task_type OR repeat field)
-        $newTask = null;
-        $repeatFrequency = null;
-        if ($task->repeat && $task->repeat !== 'does_not_repeat' && $task->due_date) {
-            $repeatFrequency = $task->repeat;
-        } elseif ($task->task_type === 'recurring' && $task->frequency && $task->due_date) {
-            $repeatFrequency = $task->frequency;
-        }
+        // Auto-create the next occurrence via the shared generator. This is also
+        // run by the scheduler (recurring:generate), but calling it here makes the
+        // new task appear immediately on completion. The generator is idempotent
+        // and skips missed days, so it never backfills a backlog of occurrences.
+        $newTask = \App\Services\RecurringGenerator::generateForTask($task);
 
-        if ($repeatFrequency) {
-            $nextDueDate = $this->calculateNextDueDate($task->due_date, $repeatFrequency);
-
-            $newTask = Task::create([
-                'household_id'      => $household_id,
-                'created_by_user_id' => $task->created_by_user_id,
-                'assigned_user_id'  => $task->assigned_user_id,
-                'parent_task_id'    => $task->id,
-                'title'             => $task->title,
-                'description'       => $task->description,
-                'task_type'         => $task->task_type,
-                'priority'          => $task->priority,
-                'frequency'         => $task->frequency,
-                'due_date'          => $nextDueDate,
-                'due_time'          => $task->due_time,
-                'reminder_before'   => $task->reminder_before,
-                'snooze'            => $task->snooze,
-                'repeat'            => $task->repeat,
-                'notes'             => $task->notes,
-                'status'            => 'pending',
-            ]);
-
+        if ($newTask) {
             $newTask->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
-
             ActivityController::log($household_id, Auth::id(), 'task', $newTask->id, 'repeated', 'Task repeated');
         }
 
@@ -479,39 +454,6 @@ class TasksController extends Controller
 
         return $task->created_by_user_id === $userId
             || $task->assigned_user_id === $userId;
-    }
-
-    private function calculateNextDueDate(string $currentDueDate, string $frequency): string
-    {
-        $date = new \DateTime($currentDueDate);
-
-        switch ($frequency) {
-            case 'daily':
-                $date->modify('+1 day');
-                break;
-            case 'weekly':
-                $date->modify('+7 days');
-                break;
-            case 'biweekly':
-                $date->modify('+14 days');
-                break;
-            case 'monthly':
-                $day = (int) $date->format('d');
-                $date->modify('+1 month');
-                // If the original day exceeded the new month's last day, use the last day
-                $maxDay = (int) $date->format('t');
-                if ($day > $maxDay) {
-                    $date->setDate((int) $date->format('Y'), (int) $date->format('m'), $maxDay);
-                } else {
-                    $date->setDate((int) $date->format('Y'), (int) $date->format('m'), $day);
-                }
-                break;
-            case 'yearly':
-                $date->modify('+1 year');
-                break;
-        }
-
-        return $date->format('Y-m-d');
     }
 
     private function formatTask(Task $task): array

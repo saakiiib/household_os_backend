@@ -43,8 +43,16 @@ class GooglePlayIapService
             return ['success' => false, 'message' => 'Google Play IAP is not configured on the server.'];
         }
 
+        Log::info('GooglePlayIapService: verifyReceipt start', [
+            'product_id' => $googleProductId,
+            'plan_slug' => $planSlug,
+            'billing_type' => $billingType,
+            'user_id' => $user?->id,
+        ]);
+
         try {
             $accessToken = $this->_getAccessToken();
+            Log::info('GooglePlayIapService: got access token');
 
             // Resolve plan + billing period from the central product config so
             // the server (not the client) is the source of truth. Falls back
@@ -60,13 +68,22 @@ class GooglePlayIapService
             $result = $this->_verifySubscription($accessToken, $receiptData, $googleProductId);
 
             if (!$result) {
+                Log::error('GooglePlayIapService: _verifySubscription returned null');
                 return ['success' => false, 'message' => 'Failed to verify Google Play receipt.'];
             }
+
+            Log::info('GooglePlayIapService: Google API response', [
+                'paymentState' => $result['paymentState'] ?? 'missing',
+                'orderId' => $result['orderId'] ?? 'missing',
+                'expiryTimeMillis' => $result['expiryTimeMillis'] ?? 'missing',
+                'autoRenewing' => $result['autoRenewing'] ?? 'missing',
+            ]);
 
             // Check payment state
             // paymentState: 0=pending, 1=approved, 2=free trial, 3=pending (upgrade/downgrade)
             $paymentState = $result['paymentState'] ?? -1;
             if ($paymentState != 1 && $paymentState != 2) {
+                Log::warning('GooglePlayIapService: payment not approved', ['paymentState' => $paymentState]);
                 return ['success' => false, 'message' => 'Payment not approved (state: ' . $paymentState . ').'];
             }
 

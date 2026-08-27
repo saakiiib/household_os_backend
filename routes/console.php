@@ -10,3 +10,7 @@ Schedule::command('notifications:critical-check')->everyMinute();
 
 // Subscription expiry + grace period transitions
 Schedule::command('subscription:check-expiry')->hourly();
+
+// Auto-create next occurrence for recurring tasks and renewals
+// (skips missed days so an overdue series never backfills a backlog).
+Schedule::command('recurring:generate')->everyFiveMinutes();
