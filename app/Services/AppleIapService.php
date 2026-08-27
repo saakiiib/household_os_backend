@@ -71,7 +71,12 @@ class AppleIapService
      *
      * @return array{success: bool, message: string, subscription?: Subscription}
      */
-    public function verifyAndActivate(User $user, string $transactionId, ?string $appAccountToken = null): array
+    public function verifyAndActivate(
+        User $user,
+        string $transactionId,
+        ?string $appAccountToken = null,
+        ?string $deviceId = null,
+    ): array
     {
         Log::info('AppleIapService::verifyAndActivate ENTER', [
             'user_id' => $user->id,
@@ -96,11 +101,31 @@ class AppleIapService
             'household_id' => $household?->id,
             'has_token' => !empty($appAccountToken),
         ]);
-        if ($household && $appAccountToken) {
-            $household->update(['app_account_token' => $appAccountToken]);
-            Log::info('AppleIapService: saved app_account_token on household', [
-                'household_id' => $household->id,
-            ]);
+        if ($household) {
+            // Security: the app must send this household's own Apple account
+            // token. If the household already has a token and the request sends
+            // a different one, reject it — that means a client is trying to
+            // attach a purchase that belongs to a DIFFERENT household (account /
+            // device misuse). This is the core guard against sharing one Apple
+            // subscription across households.
+            if (!empty($household->app_account_token)
+                && $appAccountToken
+                && $appAccountToken !== $household->app_account_token) {
+                Log::warning('AppleIapService: app_account_token mismatch', [
+                    'household_id' => $household->id,
+                ]);
+                return [
+                    'success' => false,
+                    'message' => 'This purchase is linked to a different household. Contact support.',
+                    'code' => 'APP_ACCOUNT_TOKEN_MISMATCH',
+                ];
+            }
+            if ($appAccountToken && $household->app_account_token !== $appAccountToken) {
+                $household->update(['app_account_token' => $appAccountToken]);
+                Log::info('AppleIapService: saved app_account_token on household', [
+                    'household_id' => $household->id,
+                ]);
+            }
         }
 
         $statusResult = $this->getSubscriptionStatus($transactionId);
@@ -188,6 +213,7 @@ class AppleIapService
             statusResult: $statusResult,
             originalTransactionId: $originalTransactionId,
             appAccountToken: $appAccountToken,
+            deviceId: $deviceId,
         );
         Log::info('AppleIapService::verifyAndActivate SUCCESS', [
             'subscription_id' => $subscription->id,
@@ -206,7 +232,7 @@ class AppleIapService
      * Restore purchases: verify an original transaction ID and activate
      * the subscription if valid (command.txt §33).
      */
-    public function restoreSubscription(User $user, string $originalTransactionId): array
+    public function restoreSubscription(User $user, string $originalTransactionId, ?string $deviceId = null): array
     {
         if (!$this->isConfigured()) {
             return ['success' => false, 'message' => 'Apple IAP is not configured on the server.'];
@@ -247,6 +273,7 @@ class AppleIapService
         $result = $this->verifyAndActivate(
             user: $user,
             transactionId: $originalTransactionId,
+            deviceId: $deviceId,
         );
 
         return $result;
@@ -519,6 +546,7 @@ class AppleIapService
         ?string $appAccountToken,
         int $appleStatus,
         int $autoRenew = 1,
+        ?string $deviceId = null,
     ): Subscription {
         $household = $user->activeHousehold();
         if (!$household) {
@@ -564,6 +592,10 @@ class AppleIapService
             'expires_at' => $periodEnd,
             'cancelled_at' => null,
             'last_verified_at' => now(),
+            'metadata' => array_merge(
+                is_array($subscription?->metadata) ? $subscription->metadata : [],
+                $deviceId ? ['device_id' => $deviceId] : [],
+            ),
         ];
 
         if ($subscription) {
@@ -634,6 +666,7 @@ class AppleIapService
         array $statusResult,
         string $originalTransactionId,
         ?string $appAccountToken = null,
+        ?string $deviceId = null,
     ): Subscription {
         $tx = $statusResult['transaction'] ?? [];
         $productId = $tx['productId'] ?? null;
@@ -664,6 +697,7 @@ class AppleIapService
             appAccountToken: $appAccountToken ?? $tx['appAccountToken'] ?? null,
             appleStatus: (int) ($statusResult['status'] ?? self::STATUS_ACTIVE),
             autoRenew: (int) ($statusResult['renewalInfo']['autoRenewStatus'] ?? 1),
+            deviceId: $deviceId,
         );
     }
 
@@ -1028,7 +1062,17 @@ class AppleIapService
         // Verify the leaf signature against the public key in the leaf cert.
         // x5c values are base64-encoded DER per RFC 7515 Section 4.1.6.
         $leafCert = $this->pemFromX5c($x5c[0]);
+        // Reading the public key from a certificate *string* directly fails on
+        // many PHP/OpenSSL builds ("JWS leaf certificate unreadable"). The
+        // canonical, reliable path is to read an X.509 resource first and pass
+        // that resource to openssl_pkey_get_public().
         $pubKey = openssl_pkey_get_public($leafCert);
+        if ($pubKey === false) {
+            $x509 = openssl_x509_read($leafCert);
+            if ($x509 !== false) {
+                $pubKey = openssl_pkey_get_public($x509);
+            }
+        }
         if ($pubKey === false) {
             Log::warning('AppleIapService: JWS leaf certificate unreadable');
             return null;
@@ -1145,9 +1189,17 @@ class AppleIapService
 
     private function pemFromX5c(string $x5cBase64): string
     {
-        $der = base64_decode($x5cBase64, true);
+        // x5c values are Base64 per RFC 7517, but some Apple environments emit
+        // Base64URL. Normalise to standard Base64 (with padding) before decode.
+        $normalized = strtr($x5cBase64, '-_', '+/');
+        $pad = strlen($normalized) % 4;
+        if ($pad !== 0) {
+            $normalized .= substr('====', $pad);
+        }
 
-        if ($der === false) {
+        $der = base64_decode($normalized, true);
+
+        if ($der === false || $der === '') {
             throw new \RuntimeException('Invalid x5c certificate encoding.');
         }
 

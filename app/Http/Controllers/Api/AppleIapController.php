@@ -24,6 +24,7 @@ class AppleIapController extends Controller
         $request->validate([
             'transaction_id' => 'required|string',
             'app_account_token' => 'nullable|string',
+            'device_id' => 'nullable|string',
         ]);
 
         $user = $request->user();
@@ -48,6 +49,7 @@ class AppleIapController extends Controller
                 user: $user,
                 transactionId: $request->transaction_id,
                 appAccountToken: $request->input('app_account_token'),
+                deviceId: $request->input('device_id'),
             );
 
             if (!$result['success']) {
@@ -105,6 +107,7 @@ class AppleIapController extends Controller
     {
         $request->validate([
             'original_transaction_id' => 'required|string',
+            'device_id' => 'nullable|string',
         ]);
 
         $user = $request->user();
@@ -119,6 +122,7 @@ class AppleIapController extends Controller
             $result = $this->appleIap->restoreSubscription(
                 user: $user,
                 originalTransactionId: $request->original_transaction_id,
+                deviceId: $request->input('device_id'),
             );
 
             if (!$result['success']) {
