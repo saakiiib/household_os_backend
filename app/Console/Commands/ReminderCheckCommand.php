@@ -86,8 +86,8 @@ class ReminderCheckCommand extends Command
             ->whereIn('reminder_before', array_keys(self::TASK_OFFSETS))
             ->whereDate('due_date', '>=', $now->copy()->subDay())
             ->whereDate('due_date', '<=', $now->copy()->addDays(7))
-            ->with('assignedUser:id,first_name,last_name,email,fcm_token')
-            ->select('id', 'title', 'due_date', 'due_time', 'reminder_before', 'assigned_user_id', 'snooze')
+            ->with('assignedUser:id,first_name,last_name,email,fcm_token', 'createdBy:id,first_name,last_name,email')
+            ->select('id', 'title', 'due_date', 'due_time', 'reminder_before', 'assigned_user_id', 'created_by_user_id', 'household_id', 'snooze')
             ->get();
 
         foreach ($tasks as $task) {
@@ -179,16 +179,42 @@ class ReminderCheckCommand extends Command
             return;
         }
 
-        app(NotificationService::class)->sendToUser(
-            $task->assigned_user_id,
+        // Rule 3: Task Creator + Current Assignee.
+        $recipientIds = [];
+        if (!empty($task->assigned_user_id)) {
+            $recipientIds[] = $task->assigned_user_id;
+        }
+        if (!empty($task->created_by_user_id) && $task->created_by_user_id !== $task->assigned_user_id) {
+            $recipientIds[] = $task->created_by_user_id;
+        }
+        $recipientIds = array_unique($recipientIds);
+
+        // Rule 8: Verify each recipient still belongs to the household.
+        $verifiedRecipients = [];
+        foreach ($recipientIds as $userId) {
+            $isActive = HouseholdMember::where('household_id', $task->household_id)
+                ->where('user_id', $userId)
+                ->where('status', 'active')
+                ->exists();
+            if ($isActive) {
+                $verifiedRecipients[] = $userId;
+            }
+        }
+
+        if (empty($verifiedRecipients)) {
+            return;
+        }
+
+        app(NotificationService::class)->sendToUsers(
+            $verifiedRecipients,
             'Task reminder',
             "'{$task->title}' is due in {$label} on {$dueStr}",
             'task_reminder',
-            ['type' => 'task', 'id' => $task->id, 'reminder_type' => $type, 'sent_key' => $sentKey],
+            ['type' => 'task', 'id' => $task->id, 'reminder_type' => $type, 'sent_key' => $sentKey, 'household_id' => $task->household_id],
             'high'
         );
         $this->sent++;
-        $this->logLine("SENT TASK #{$task->id} '{$task->title}' -> user {$task->assigned_user_id} [{$type}]");
+        $this->logLine("SENT TASK #{$task->id} '{$task->title}' -> " . count($verifiedRecipients) . " recipient(s) [{$type}]");
     }
 
     private function checkRenewalReminders(): void
@@ -201,18 +227,12 @@ class ReminderCheckCommand extends Command
             ->whereIn('reminder_before', array_keys(self::RENEWAL_OFFSETS))
             ->whereDate('due_date', '>=', $now->copy()->subDay())
             ->whereDate('due_date', '<=', $now->copy()->addDays(31))
-            ->select('id', 'title', 'due_date', 'reminder_before', 'household_id')
+            ->select('id', 'title', 'due_date', 'reminder_before', 'household_id', 'created_by_user_id', 'assigned_user_id')
             ->get();
 
         if ($renewals->isEmpty()) {
             return;
         }
-
-        $householdIds = $renewals->pluck('household_id')->unique()->all();
-        $membersByHousehold = HouseholdMember::whereIn('household_id', $householdIds)
-            ->where('status', 'active')
-            ->get()
-            ->groupBy('household_id');
 
         foreach ($renewals as $renewal) {
             $cfg = self::RENEWAL_OFFSETS[$renewal->reminder_before];
@@ -223,11 +243,29 @@ class ReminderCheckCommand extends Command
                 continue;
             }
 
-            $memberIds = isset($membersByHousehold[$renewal->household_id])
-                ? $membersByHousehold[$renewal->household_id]->pluck('user_id')->all()
-                : [];
+            // Rule 4: Renewal Creator + Current Assignee (NOT all household members).
+            $recipientIds = [];
+            if ($renewal->created_by_user_id) {
+                $recipientIds[] = $renewal->created_by_user_id;
+            }
+            if ($renewal->assigned_user_id && $renewal->assigned_user_id !== $renewal->created_by_user_id) {
+                $recipientIds[] = $renewal->assigned_user_id;
+            }
+            $recipientIds = array_unique($recipientIds);
 
-            if (empty($memberIds)) {
+            // Rule 8: Verify each recipient still belongs to the household.
+            $verifiedRecipients = [];
+            foreach ($recipientIds as $userId) {
+                $isActive = HouseholdMember::where('household_id', $renewal->household_id)
+                    ->where('user_id', $userId)
+                    ->where('status', 'active')
+                    ->exists();
+                if ($isActive) {
+                    $verifiedRecipients[] = $userId;
+                }
+            }
+
+            if (empty($verifiedRecipients)) {
                 continue;
             }
 
@@ -248,15 +286,15 @@ class ReminderCheckCommand extends Command
                 : Carbon::parse($renewal->due_date)->format('M j, Y');
 
             app(NotificationService::class)->sendToUsers(
-                $memberIds,
+                $verifiedRecipients,
                 'Renewal reminder',
                 "'{$renewal->title}' is due in {$cfg['label']} on {$dueStr}",
                 'renewal_reminder',
-                ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $cfg['type'], 'sent_key' => $sentKey],
+                ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $cfg['type'], 'sent_key' => $sentKey, 'household_id' => $renewal->household_id],
                 'high'
             );
             $this->sent++;
-            $this->logLine("SENT RENEWAL #{$renewal->id} '{$renewal->title}' -> " . count($memberIds) . " member(s) [{$cfg['type']}]");
+            $this->logLine("SENT RENEWAL #{$renewal->id} '{$renewal->title}' -> " . count($verifiedRecipients) . " recipient(s) [{$cfg['type']}]");
         }
     }
 }

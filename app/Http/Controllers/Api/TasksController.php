@@ -153,20 +153,32 @@ class TasksController extends Controller
         // Always send assignment notification
         \Log::info("TASK STORE: Sending notification to user {$task->assigned_user_id} for task {$task->id}");
         try {
-            app(NotificationService::class)->sendToUser(
-                $task->assigned_user_id,
-                'New task assigned',
-                'You have been assigned: ' . $task->title,
-                'task_assigned',
-                [
-                    'module' => 'task',
-                    'action_type' => 'task',
-                    'action_id' => $task->id,
-                    'type' => 'task',
-                    'id' => $task->id,
-                ],
-                'high'
-            );
+            // Rule 7: Don't notify the creator if they assigned the task to themselves.
+            if ($task->assigned_user_id !== Auth::id()) {
+                // Rule 8: Verify assignee is still an active member of this household.
+                $isMember = HouseholdMember::where('household_id', $household_id)
+                    ->where('user_id', $task->assigned_user_id)
+                    ->where('status', 'active')
+                    ->exists();
+
+                if ($isMember) {
+                    app(NotificationService::class)->sendToUser(
+                        $task->assigned_user_id,
+                        'New task assigned',
+                        'You have been assigned: ' . $task->title,
+                        'task_assigned',
+                        [
+                            'module' => 'task',
+                            'action_type' => 'task',
+                            'action_id' => $task->id,
+                            'type' => 'task',
+                            'id' => $task->id,
+                            'household_id' => $household_id,
+                        ],
+                        'high'
+                    );
+                }
+            }
         } catch (\Throwable $e) {
             \Log::error("TASK STORE: Notification failed: " . $e->getMessage());
         }
@@ -279,20 +291,32 @@ class TasksController extends Controller
         if ($request->has('assigned_user_id') && $request->assigned_user_id != $oldAssignedUserId) {
             \Log::info("TASK UPDATE: Sending notification to user {$request->assigned_user_id}");
             try {
-                app(NotificationService::class)->sendToUser(
-                    $request->assigned_user_id,
-                    'Task reassigned',
-                    'You have been assigned: ' . $task->title,
-                    'task_assigned',
-                    [
-                        'module' => 'task',
-                        'action_type' => 'task',
-                        'action_id' => $task->id,
-                        'type' => 'task',
-                        'id' => $task->id,
-                    ],
-                    'high'
-                );
+                // Rule 7: Don't notify the user if they reassigned the task to themselves.
+                if ($request->assigned_user_id !== Auth::id()) {
+                    // Rule 8: Verify new assignee is still an active member of this household.
+                    $isMember = HouseholdMember::where('household_id', $household_id)
+                        ->where('user_id', $request->assigned_user_id)
+                        ->where('status', 'active')
+                        ->exists();
+
+                    if ($isMember) {
+                        app(NotificationService::class)->sendToUser(
+                            $request->assigned_user_id,
+                            'Task updated',
+                            'You have been assigned: ' . $task->title,
+                            'task_assigned',
+                            [
+                                'module' => 'task',
+                                'action_type' => 'task',
+                                'action_id' => $task->id,
+                                'type' => 'task',
+                                'id' => $task->id,
+                                'household_id' => $household_id,
+                            ],
+                            'high'
+                        );
+                    }
+                }
             } catch (\Throwable $e) {
                 \Log::error("TASK UPDATE: Notification failed: " . $e->getMessage());
             }

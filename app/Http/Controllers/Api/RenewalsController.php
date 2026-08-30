@@ -178,17 +178,33 @@ class RenewalsController extends Controller
             ], 500);
         }
 
-        // Notify the assignee (if any); otherwise notify all other active members.
+        // Notify creator + assignee (Rule 3: notify creator + assignee only).
+        // Rule 8: verify household membership before sending.
         try {
-            if ($renewal->assigned_user_id) {
-                $members = [$renewal->assigned_user_id];
-            } else {
-                $members = [];
+            $recipients = [];
+            if ($renewal->created_by_user_id) {
+                $creatorMembership = HouseholdMember::where('household_id', $household_id)
+                    ->where('user_id', $renewal->created_by_user_id)
+                    ->where('status', 'active')
+                    ->exists();
+                if ($creatorMembership) {
+                    $recipients[] = $renewal->created_by_user_id;
+                }
             }
+            if ($renewal->assigned_user_id && $renewal->assigned_user_id !== $renewal->created_by_user_id) {
+                $assigneeMembership = HouseholdMember::where('household_id', $household_id)
+                    ->where('user_id', $renewal->assigned_user_id)
+                    ->where('status', 'active')
+                    ->exists();
+                if ($assigneeMembership) {
+                    $recipients[] = $renewal->assigned_user_id;
+                }
+            }
+            $recipients = array_unique($recipients);
 
-            if (!empty($members)) {
+            if (!empty($recipients)) {
                 app(\App\Services\NotificationService::class)->sendToUsers(
-                    $members,
+                    $recipients,
                     'New Renewal Added',
                     "'{$renewal->title}' has been added — due " . ($renewal->due_date ? $renewal->due_date->format('d M Y') : 'soon'),
                     'renewal_created',

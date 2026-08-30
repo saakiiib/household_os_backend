@@ -61,10 +61,9 @@ class CriticalCheckCommand extends Command
 
         $tasks = Task::where('status', '!=', 'completed')
             ->whereNotNull('due_date')
-            ->whereNotNull('assigned_user_id')
             ->whereDate('due_date', '<=', $today)
-            ->with('assignedUser:id,first_name,last_name,email,fcm_token')
-            ->select('id', 'title', 'due_date', 'due_time', 'assigned_user_id')
+            ->with('assignedUser:id,first_name,last_name,email,fcm_token', 'createdBy:id,first_name,last_name,email')
+            ->select('id', 'title', 'due_date', 'due_time', 'created_by_user_id', 'assigned_user_id', 'household_id')
             ->get();
 
         foreach ($tasks as $task) {
@@ -78,20 +77,49 @@ class CriticalCheckCommand extends Command
                 continue;
             }
 
-            $alreadySent = \App\Models\Notification::where('user_id', $task->assigned_user_id)
-                ->where('type', 'task_reminder')
+            $recipientIds = [];
+
+            // Rule 3: Task Creator + Current Assignee.
+            if (!empty($task->assigned_user_id)) {
+                $isAssigneeActive = HouseholdMember::where('household_id', $task->household_id)
+                    ->where('user_id', $task->assigned_user_id)
+                    ->where('status', 'active')
+                    ->exists();
+                if ($isAssigneeActive) {
+                    $recipientIds[] = $task->assigned_user_id;
+                }
+            }
+
+            if (!empty($task->created_by_user_id) && $task->created_by_user_id !== $task->assigned_user_id) {
+                $isCreatorActive = HouseholdMember::where('household_id', $task->household_id)
+                    ->where('user_id', $task->created_by_user_id)
+                    ->where('status', 'active')
+                    ->exists();
+                if ($isCreatorActive) {
+                    $recipientIds[] = $task->created_by_user_id;
+                }
+            }
+
+            $recipientIds = array_unique($recipientIds);
+
+            if (empty($recipientIds)) {
+                continue;
+            }
+
+            $alreadySent = \App\Models\Notification::where('type', 'task_reminder')
                 ->where('data->id', $task->id)
                 ->where('data->reminder_type', 'overdue')
+                ->whereIn('user_id', $recipientIds)
                 ->whereDate('created_at', $today)
                 ->exists();
 
             if (!$alreadySent) {
-                app(NotificationService::class)->sendToUser(
-                    $task->assigned_user_id,
+                app(NotificationService::class)->sendToUsers(
+                    $recipientIds,
                     'Task overdue',
                     "'{$task->title}' was due {$task->due_date->format('d M Y')} — please complete it",
                     'task_reminder',
-                    ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'overdue'],
+                    ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'overdue', 'household_id' => $task->household_id],
                     'critical'
                 );
                 $this->sent++;
@@ -108,8 +136,8 @@ class CriticalCheckCommand extends Command
             ->whereNotNull('due_date')
             ->whereNotNull('assigned_user_id')
             ->whereDate('due_date', '=', $today)
-            ->with('assignedUser:id,first_name,last_name,email,fcm_token')
-            ->select('id', 'title', 'due_date', 'due_time', 'assigned_user_id')
+            ->with('assignedUser:id,first_name,last_name,email,fcm_token', 'createdBy:id,first_name,last_name,email')
+            ->select('id', 'title', 'due_date', 'due_time', 'assigned_user_id', 'created_by_user_id', 'household_id')
             ->get();
 
         foreach ($tasks as $task) {
@@ -124,21 +152,47 @@ class CriticalCheckCommand extends Command
                 continue;
             }
 
-            $alreadySent = \App\Models\Notification::where('user_id', $task->assigned_user_id)
-                ->where('type', 'task_reminder')
+            // Rule 3: Task Creator + Current Assignee.
+            $recipientIds = [];
+            if (!empty($task->assigned_user_id)) {
+                $recipientIds[] = $task->assigned_user_id;
+            }
+            if (!empty($task->created_by_user_id) && $task->created_by_user_id !== $task->assigned_user_id) {
+                $recipientIds[] = $task->created_by_user_id;
+            }
+            $recipientIds = array_unique($recipientIds);
+
+            // Rule 8: Verify each recipient still belongs to the household.
+            $verifiedRecipients = [];
+            foreach ($recipientIds as $userId) {
+                $isActive = HouseholdMember::where('household_id', $task->household_id)
+                    ->where('user_id', $userId)
+                    ->where('status', 'active')
+                    ->exists();
+                if ($isActive) {
+                    $verifiedRecipients[] = $userId;
+                }
+            }
+
+            if (empty($verifiedRecipients)) {
+                continue;
+            }
+
+            $alreadySent = \App\Models\Notification::where('type', 'task_reminder')
                 ->where('data->id', $task->id)
                 ->where('data->reminder_type', 'due_today')
+                ->whereIn('user_id', $verifiedRecipients)
                 ->whereDate('created_at', $today)
                 ->exists();
 
             if (!$alreadySent) {
                 $timeLabel = $task->due_time ? 'today at ' . \Carbon\Carbon::parse($task->due_time)->format('g:i A') : 'today';
-                app(NotificationService::class)->sendToUser(
-                    $task->assigned_user_id,
+                app(NotificationService::class)->sendToUsers(
+                    $verifiedRecipients,
                     'Task due today',
                     "'{$task->title}' is due {$timeLabel}",
                     'task_reminder',
-                    ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'due_today'],
+                    ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'due_today', 'household_id' => $task->household_id],
                     'high'
                 );
                 $this->sent++;
@@ -158,7 +212,7 @@ class CriticalCheckCommand extends Command
         $renewals = Renewal::where('status', 'pending')
             ->whereNotNull('due_date')
             ->whereDate('due_date', '<', $today)
-            ->select('id', 'title', 'due_date', 'household_id')
+            ->select('id', 'title', 'due_date', 'household_id', 'created_by_user_id', 'assigned_user_id')
             ->get();
 
         $this->sendRenewalNotifications($renewals, $today, 'overdue', 'critical', function ($renewal) {
@@ -178,7 +232,7 @@ class CriticalCheckCommand extends Command
         $renewals = Renewal::where('status', 'pending')
             ->whereNotNull('due_date')
             ->whereDate('due_date', '=', $today)
-            ->select('id', 'title', 'due_date', 'household_id')
+            ->select('id', 'title', 'due_date', 'household_id', 'created_by_user_id', 'assigned_user_id')
             ->get();
 
         $this->sendRenewalNotifications($renewals, $today, 'due_today', 'critical', function ($renewal) {
@@ -192,24 +246,42 @@ class CriticalCheckCommand extends Command
             return;
         }
 
-        $householdIds = $renewals->pluck('household_id')->unique()->all();
-        $membersByHousehold = HouseholdMember::whereIn('household_id', $householdIds)
-            ->where('status', 'active')
-            ->get()
-            ->groupBy('household_id');
-
         foreach ($renewals as $renewal) {
-            $memberIds = isset($membersByHousehold[$renewal->household_id])
-                ? $membersByHousehold[$renewal->household_id]->pluck('user_id')->all()
-                : [];
+            // Rule 4: Renewal Creator + Current Assignee (Rule 8: verify membership).
+            $recipientIds = [];
 
-            if (empty($memberIds)) {
+            // Add creator with membership verification
+            if ($renewal->created_by_user_id) {
+                $isCreatorActive = HouseholdMember::where('household_id', $renewal->household_id)
+                    ->where('user_id', $renewal->created_by_user_id)
+                    ->where('status', 'active')
+                    ->exists();
+                if ($isCreatorActive) {
+                    $recipientIds[] = $renewal->created_by_user_id;
+                }
+            }
+
+            // Add assigned user if different from creator and still active member
+            if ($renewal->assigned_user_id && $renewal->assigned_user_id !== $renewal->created_by_user_id) {
+                $isActiveMember = HouseholdMember::where('household_id', $renewal->household_id)
+                    ->where('user_id', $renewal->assigned_user_id)
+                    ->where('status', 'active')
+                    ->exists();
+                if ($isActiveMember) {
+                    $recipientIds[] = $renewal->assigned_user_id;
+                }
+            }
+
+            $recipientIds = array_unique($recipientIds);
+
+            if (empty($recipientIds)) {
                 continue;
             }
 
             $alreadySent = \App\Models\Notification::where('type', 'renewal_reminder')
                 ->where('data->id', $renewal->id)
                 ->where('data->reminder_type', $reminderType)
+                ->whereIn('user_id', $recipientIds)
                 ->whereDate('created_at', $today)
                 ->exists();
 
@@ -218,11 +290,11 @@ class CriticalCheckCommand extends Command
                 $body = $messageFn($renewal);
 
                 app(NotificationService::class)->sendToUsers(
-                    $memberIds,
+                    $recipientIds,
                     $title,
                     $body,
                     'renewal_reminder',
-                    ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $reminderType],
+                    ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $reminderType, 'household_id' => $renewal->household_id],
                     $priority
                 );
                 $this->sent++;
@@ -249,40 +321,58 @@ class CriticalCheckCommand extends Command
             return;
         }
 
-        $householdIds = $services->pluck('renewal.household_id')->filter()->unique()->all();
-        $membersByHousehold = HouseholdMember::whereIn('household_id', $householdIds)
-            ->where('status', 'active')
-            ->get()
-            ->groupBy('household_id');
-
         foreach ($services as $service) {
             $renewal = $service->renewal;
             if (!$renewal) {
                 continue;
             }
 
-            $memberIds = isset($membersByHousehold[$renewal->household_id])
-                ? $membersByHousehold[$renewal->household_id]->pluck('user_id')->all()
-                : [];
+            // Rule 4: Renewal Creator + Current Assignee (Rule 8: verify membership).
+            $recipientIds = [];
 
-            if (empty($memberIds)) {
+            // Add creator with membership verification
+            if ($renewal->created_by_user_id) {
+                $isCreatorActive = HouseholdMember::where('household_id', $renewal->household_id)
+                    ->where('user_id', $renewal->created_by_user_id)
+                    ->where('status', 'active')
+                    ->exists();
+                if ($isCreatorActive) {
+                    $recipientIds[] = $renewal->created_by_user_id;
+                }
+            }
+
+            // Add assigned user if different from creator and still active member
+            if ($renewal->assigned_user_id && $renewal->assigned_user_id !== $renewal->created_by_user_id) {
+                $isActiveMember = HouseholdMember::where('household_id', $renewal->household_id)
+                    ->where('user_id', $renewal->assigned_user_id)
+                    ->where('status', 'active')
+                    ->exists();
+                if ($isActiveMember) {
+                    $recipientIds[] = $renewal->assigned_user_id;
+                }
+            }
+
+            $recipientIds = array_unique($recipientIds);
+
+            if (empty($recipientIds)) {
                 continue;
             }
 
             $alreadySent = \App\Models\Notification::where('type', 'renewal_reminder')
                 ->where('data->id', $service->id)
                 ->where('data->reminder_type', 'service_due_today')
+                ->whereIn('user_id', $recipientIds)
                 ->whereDate('created_at', $today)
                 ->exists();
 
             if (!$alreadySent) {
                 $typeLabel = str_replace('_', ' ', $service->service_type);
                 app(NotificationService::class)->sendToUsers(
-                    $memberIds,
+                    $recipientIds,
                     ucfirst($typeLabel) . ' due today',
                     "'{$renewal->title}' — {$typeLabel} is due today",
                     'renewal_reminder',
-                    ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type],
+                    ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type, 'household_id' => $renewal->household_id],
                     'critical'
                 );
                 $this->sent++;

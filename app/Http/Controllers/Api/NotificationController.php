@@ -103,6 +103,13 @@ class NotificationController extends Controller
         $user = $request->user();
         $token = $request->fcm_token;
 
+        // If the token was previously registered to a different user (login
+        // switch, account change on the same device) take ownership and remove
+        // the stale binding so the old user no longer receives push on this device.
+        DeviceToken::where('token', $token)
+            ->where('user_id', '!=', $user->id)
+            ->delete();
+
         // Keep the legacy single-token column updated for backwards compatibility.
         $user->update(['fcm_token' => $token]);
 
@@ -125,7 +132,18 @@ class NotificationController extends Controller
      */
     public function deleteFcmToken(Request $request)
     {
-        $request->user()->update(['fcm_token' => null]);
+        $user = $request->user();
+
+        $token = $user->fcm_token;
+        $user->update(['fcm_token' => null]);
+
+        // Drop every device-token row bound to this user. Using only the
+        // stored fcm_token would miss multi-device entries that the
+        // per-device `device_tokens` table tracks separately.
+        if (!empty($token)) {
+            DeviceToken::where('token', $token)->delete();
+        }
+        DeviceToken::where('user_id', $user->id)->delete();
 
         return response()->json([
             'success' => true,
