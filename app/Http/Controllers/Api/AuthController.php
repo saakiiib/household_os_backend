@@ -431,14 +431,10 @@ class AuthController extends Controller
                 ]);
         }
 
-        // If user already belongs to an active household, don't prompt them with new invitations
-        if (!empty($activeHouseholdIds)) {
-            Log::info('pendingInvitations: user already in active household, skipping prompt', ['user_id' => $user->id]);
-            return response()->json([
-                'success' => true,
-                'data' => null,
-            ], 200);
-        }
+        // NOTE: A user who already belongs to a household MUST still see pending
+        // invitations to OTHER households (spec: Mary in Parents' Home still
+        // receives John's invite). The conflict is resolved privately at accept
+        // time, so we do not suppress the prompt here.
 
         $query = Invitation::with(['household', 'invitedBy'])
             ->where('invited_email', $user->email)
@@ -635,7 +631,36 @@ class AuthController extends Controller
 
             if ($existingMembership) {
                 $otherHousehold = $existingMembership->household;
+                $isCreator = $otherHousehold && $otherHousehold->created_by_user_id === $user->id;
+                $isAdmin = $existingMembership->role === 'admin';
                 $tempToken = $user->createToken('HouseholdOS')->accessToken;
+
+                if ($isCreator || $isAdmin) {
+                    $hasOtherMembers = HouseholdMember::where('household_id', $otherHousehold->id)
+                        ->where('status', 'active')
+                        ->where('user_id', '!=', $user->id)
+                        ->exists();
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'You are an admin or creator of ' . ($otherHousehold->name ?? 'another household') . '. Before joining, you need to transfer ownership or close the household.',
+                        'error_code' => 'CREATOR_OF_HOUSEHOLD',
+                        'data' => [
+                            'current_household_id' => $otherHousehold->id,
+                            'current_household_name' => $otherHousehold->name,
+                            'has_other_members' => $hasOtherMembers,
+                            'token' => $tempToken,
+                            'token_type' => 'Bearer',
+                            'user' => [
+                                'id' => $user->id,
+                                'email' => $user->email,
+                                'first_name' => $user->first_name,
+                                'last_name' => $user->last_name,
+                            ],
+                        ],
+                    ], 409);
+                }
+
                 return response()->json([
                     'success' => false,
                     'message' => 'You are already a member of another household. Leave it first before joining.',
@@ -707,19 +732,19 @@ class AuthController extends Controller
                     ]
                 ], 200);
             }
-            // Update existing pending membership
+            // Reactivate the existing pending membership as active (direct accept)
             $existingPending->update([
                 'role' => $invitation->role,
-                'status' => 'pending',
+                'status' => 'active',
                 'joined_at' => now(),
             ]);
         } else {
-            // Create membership with pending status (requires admin approval)
+            // Create an active membership — the recipient has accepted the invitation
             HouseholdMember::create([
                 'household_id' => $invitation->household_id,
                 'user_id' => $user->id,
                 'role' => $invitation->role,
-                'status' => 'pending',
+                'status' => 'active',
                 'joined_at' => now(),
             ]);
         }
@@ -738,7 +763,7 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Join request submitted. Waiting for approval from household admin.',
+            'message' => 'You have joined the household.',
             'data' => [
                 'user' => [
                     'id' => $user->id,
@@ -752,7 +777,7 @@ class AuthController extends Controller
                     'id' => $invitation->household->id,
                     'name' => $invitation->household->name,
                 ],
-                'membership_status' => 'pending',
+                'membership_status' => 'active',
                 'token' => $token,
                 'token_type' => 'Bearer',
                 'is_new_user' => $isNewUser,

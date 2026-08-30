@@ -516,10 +516,15 @@ class HouseholdController extends Controller
             ], 404);
         }
 
-        if ($membership->role === 'owner') {
+        // A household creator cannot simply leave — they must transfer ownership
+        // or close the household first (spec: "Mary cannot simply leave because
+        // she owns the existing household"). Note: creator is identified via
+        // households.created_by_user_id, not the membership role.
+        $household = Household::find($householdId);
+        if ($household && $household->created_by_user_id === $user->id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Household owners cannot leave. Transfer ownership first.',
+                'message' => 'You cannot leave a household you manage. Transfer ownership or close the household first.',
             ], 403);
         }
 
@@ -562,6 +567,75 @@ class HouseholdController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'You have left the household.',
+        ]);
+    }
+
+    /**
+     * POST /api/households/{id}/transfer-ownership
+     * Transfer household ownership to another active member, then remove the
+     * current creator's membership (spec: "Transfer Household Ownership").
+     * Requires: the current household creator.
+     */
+    public function transferOwnership(Request $request, $id)
+    {
+        $request->validate([
+            'new_owner_user_id' => 'required|integer|exists:users,id',
+        ]);
+
+        $user = $request->user();
+        $household = Household::findOrFail($id);
+
+        // Allowed for the household creator, or any active admin member.
+        $isCreator = $household->created_by_user_id === $user->id;
+        $isAdmin = HouseholdMember::where('household_id', $id)
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->where('role', 'admin')
+            ->exists();
+
+        if (!$isCreator && !$isAdmin) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the household creator or an admin can transfer ownership.',
+            ], 403);
+        }
+
+        $newOwnerId = $request->new_owner_user_id;
+
+        if ($newOwnerId === $user->id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are already the owner of this household.',
+            ], 409);
+        }
+
+        $newOwnerMember = HouseholdMember::where('household_id', $id)
+            ->where('user_id', $newOwnerId)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$newOwnerMember) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The selected user is not an active member of this household.',
+            ], 422);
+        }
+
+        // Promote the new owner to admin, reassign creator, then remove old creator.
+        $newOwnerMember->update(['role' => 'admin']);
+        $household->update(['created_by_user_id' => $newOwnerId]);
+
+        HouseholdMember::where('household_id', $id)
+            ->where('user_id', $user->id)
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Household ownership transferred successfully.',
+            'data' => [
+                'household_id' => $household->id,
+                'new_owner_user_id' => $newOwnerId,
+            ]
         ]);
     }
 }

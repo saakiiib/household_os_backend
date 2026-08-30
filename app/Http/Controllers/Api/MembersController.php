@@ -147,20 +147,15 @@ class MembersController extends Controller
             ], 403);
         }
 
-        // Check if a pending invitation already exists for this email
-        $existingInvitation = Invitation::where('household_id', $household_id)
-            ->where('invited_email', $invitedEmail)
-            ->where('status', 'pending')
-            ->first();
-
-        if ($existingInvitation) {
+        // Rule 3: Prevent the creator from inviting themselves
+        if (strtolower($invitedEmail) === strtolower(Auth::user()->email)) {
             return response()->json([
                 'success' => false,
-                'message' => 'An invitation is already pending for this email.',
+                'message' => 'You cannot invite yourself to your household.',
             ], 409);
         }
 
-        // Check if user is already an active member
+        // Check if the invited user is already an active member of THIS household
         $invitedUser = User::where('email', $invitedEmail)->first();
         if ($invitedUser) {
             $existingMember = HouseholdMember::where('household_id', $household_id)
@@ -171,22 +166,55 @@ class MembersController extends Controller
             if ($existingMember) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'This user is already an active member of this household.',
-                ], 409);
-            }
-
-            // Enforce single household: invitee must not belong to another household
-            $otherHousehold = HouseholdMember::where('user_id', $invitedUser->id)
-                ->where('status', 'active')
-                ->first();
-
-            if ($otherHousehold) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This user already belongs to another household. They must leave their current household before joining yours.',
+                    'message' => 'This person is already a member of your household.',
                 ], 409);
             }
         }
+
+        // Rule 2: A pending invitation to THIS household already exists.
+        // Per the spec we must NOT create a duplicate; optionally resend it.
+        $existingInvitation = Invitation::where('household_id', $household_id)
+            ->where('invited_email', $invitedEmail)
+            ->where('status', 'pending')
+            ->first();
+
+        if ($existingInvitation) {
+            $emailSent = true;
+            try {
+                $inviter = Auth::user();
+                $inviterName = $inviter->name ?? $inviter->email;
+                Notification::route('mail', $invitedEmail)
+                    ->notify(new InvitationMail(
+                        $household->name,
+                        $existingInvitation->token,
+                        $existingInvitation->role,
+                        $inviterName
+                    ));
+            } catch (\Exception $e) {
+                \Log::error('Invitation resend failed for ' . $invitedEmail . ': ' . $e->getMessage());
+                $emailSent = false;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $emailSent
+                    ? 'Invitation resent successfully.'
+                    : 'Invitation already sent. Could not resend email; share the code manually.',
+                'data' => [
+                    'id' => $existingInvitation->id,
+                    'invited_email' => $existingInvitation->invited_email,
+                    'token' => $existingInvitation->token,
+                    'role' => $existingInvitation->role,
+                    'status' => $existingInvitation->status,
+                    'expires_at' => $existingInvitation->expires_at,
+                ]
+            ], 200);
+        }
+
+        // Privacy rule + final business rule:
+        // Whether the invited user already belongs to or owns another household
+        // is private. The invitation is always sent and stays pending; the
+        // conflict is resolved privately when the recipient accepts.
 
         // Generate short 6-digit code (same as verification codes)
         $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
@@ -304,7 +332,7 @@ class MembersController extends Controller
             ], 410);
         }
 
-        // Check user is not already an active member
+        // Check user is not already an active member of THIS household
         $existingMember = HouseholdMember::where('household_id', $invitation->household_id)
             ->where('user_id', $user->id)
             ->where('status', 'active')
@@ -317,29 +345,60 @@ class MembersController extends Controller
             ], 409);
         }
 
-        // Enforce single household: user must not belong to another household
-        $otherHousehold = HouseholdMember::where('user_id', $user->id)
+        // One active household per user: detect any OTHER active household.
+        $otherMembership = HouseholdMember::where('user_id', $user->id)
             ->where('status', 'active')
+            ->where('household_id', '!=', $invitation->household_id)
             ->first();
 
-        if ($otherHousehold) {
+        if ($otherMembership) {
+            $otherHousehold = Household::find($otherMembership->household_id);
+            $isCreator = $otherHousehold && $otherHousehold->created_by_user_id === $user->id;
+            $isAdmin = $otherMembership->role === 'admin';
+
+            // A normal member can simply leave & join. An admin/creator must
+            // transfer ownership (or close the household) before leaving.
+            if ($isCreator || $isAdmin) {
+                $hasOtherMembers = HouseholdMember::where('household_id', $otherMembership->household_id)
+                    ->where('status', 'active')
+                    ->where('user_id', '!=', $user->id)
+                    ->exists();
+
+                return response()->json([
+                    'success' => false,
+                    'error_code' => 'CREATOR_OF_HOUSEHOLD',
+                    'message' => 'You are an admin or creator of ' . ($otherHousehold->name ?? 'another household') . '. Before joining, you need to transfer ownership to another member or close the household.',
+                    'data' => [
+                        'current_household_id' => $otherHousehold->id,
+                        'current_household_name' => $otherHousehold->name,
+                        'has_other_members' => $hasOtherMembers,
+                    ],
+                ], 409);
+            }
+
             return response()->json([
                 'success' => false,
-                'message' => 'You already belong to another household. Leave your current household first before accepting this invitation.',
+                'error_code' => 'ALREADY_IN_HOUSEHOLD',
+                'message' => 'You are already part of a household. To join this one, you will need to leave your existing household first.',
+                'data' => [
+                    'current_household_id' => $otherMembership->household_id,
+                    'current_household_name' => $otherHousehold ? $otherHousehold->name : null,
+                    'current_role' => $otherMembership->role,
+                ],
             ], 409);
         }
 
-        // Create membership with pending status (requires admin approval)
+        // No conflict: accept directly as a Member (spec: Accept -> Member -> Dashboard)
         HouseholdMember::updateOrCreate(
             ['household_id' => $invitation->household_id, 'user_id' => $user->id],
             [
                 'role' => $invitation->role,
-                'status' => 'pending',
+                'status' => 'active',
                 'joined_at' => now(),
             ]
         );
 
-        // Update invitation status (and any duplicate pending invitations for this email)
+        // Mark this invitation (and any duplicates for this email) as accepted
         Invitation::where('household_id', $invitation->household_id)
             ->where('invited_email', $user->email)
             ->where('status', 'pending')
@@ -355,24 +414,22 @@ class MembersController extends Controller
             'accepted_by_user_id' => $user->id,
         ]);
 
-        // Notify household admins about the new join request
+        // Notify household admins that the user joined
         try {
             $adminIds = HouseholdMember::where('household_id', $invitation->household_id)
                 ->where('role', 'admin')
                 ->where('status', 'active')
+                ->where('user_id', '!=', $user->id)
                 ->pluck('user_id')
                 ->toArray();
 
             if (!empty($adminIds)) {
                 $userName = $user->name ?? $user->email;
-                $userEmail = $user->email;
-                $notificationMessage = $userName . ' (' . $userEmail . ') accepted the invitation and is waiting for your approval to join ' . $invitation->household->name;
-
                 app(NotificationService::class)->sendToUsers(
                     $adminIds,
-                    'Member Approval Needed',
-                    $notificationMessage,
-                    'join_request',
+                    'New Member',
+                    $userName . ' accepted the invitation and joined ' . $invitation->household->name,
+                    'member_joined',
                     [
                         'module' => 'household',
                         'action_type' => 'household',
@@ -381,25 +438,67 @@ class MembersController extends Controller
                         'id' => $invitation->household_id,
                         'household_id' => $invitation->household_id,
                         'user_id' => $user->id,
-                        'user_email' => $userEmail,
+                        'user_email' => $user->email,
                         'user_name' => $userName,
                     ],
-                    'high'
+                    'normal'
                 );
             }
         } catch (\Throwable $e) {
-            \Log::error('Failed to send join request notification to admins: ' . $e->getMessage());
+            \Log::error('Failed to send member joined notification: ' . $e->getMessage());
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'Join request submitted. Waiting for approval from household admin.',
+            'message' => 'You have joined the household.',
             'data' => [
                 'household_id' => $invitation->household_id,
                 'household_name' => $invitation->household->name,
                 'role' => $invitation->role,
-                'membership_status' => 'pending',
+                'membership_status' => 'active',
             ]
+        ]);
+    }
+
+    /**
+     * POST /api/invitations/{token}/decline
+     * Decline a household invitation.
+     * Requires: authenticated user who is the invited email owner.
+     */
+    public function declineInvitation(Request $request, $token)
+    {
+        $invitation = Invitation::where('token', $token)->first();
+
+        if (!$invitation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invitation not found.',
+            ], 404);
+        }
+
+        if ($invitation->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This invitation is no longer pending.',
+            ], 409);
+        }
+
+        $user = Auth::user();
+
+        if (strtolower($user->email) !== strtolower($invitation->invited_email)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This invitation is not for your email address.',
+            ], 403);
+        }
+
+        $invitation->update([
+            'status' => 'rejected',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Invitation declined.',
         ]);
     }
 

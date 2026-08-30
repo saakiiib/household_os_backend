@@ -12,6 +12,8 @@ use App\Models\DocumentFile;
 use App\Models\Renewal;
 use App\Models\RenewalVehicleService;
 use App\Models\Vehicle;
+use App\Models\Category;
+use App\Models\Subscription;
 use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -166,6 +168,12 @@ class ProfileController extends Controller
                 // Delete household members
                 HouseholdMember::where('household_id', $householdId)->delete();
 
+                // Delete categories (document & renewal) for the household
+                Category::where('household_id', $householdId)->delete();
+
+                // Delete the household's subscription records
+                Subscription::where('household_id', $householdId)->delete();
+
                 // Delete the household
                 $household->delete();
             }
@@ -175,6 +183,15 @@ class ProfileController extends Controller
 
             // Unassign user from tasks in other households
             Task::where('assigned_user_id', $user->id)->update(['assigned_user_id' => null]);
+
+            // Detach authorship/invite references so the user row can be deleted
+            // (these FKs are nullOnDelete after the account-delete migration).
+            Task::where('created_by_user_id', $user->id)->update(['created_by_user_id' => null]);
+            Document::where('created_by_user_id', $user->id)->update(['created_by_user_id' => null]);
+            Vehicle::where('created_by_user_id', $user->id)->update(['created_by_user_id' => null]);
+            Renewal::where('created_by_user_id', $user->id)->update(['created_by_user_id' => null]);
+            Invitation::where('invited_by_user_id', $user->id)->update(['invited_by_user_id' => null]);
+            Invitation::where('accepted_by_user_id', $user->id)->update(['accepted_by_user_id' => null]);
 
             // Cancel all pending invitations sent by this user
             Invitation::where('invited_by_user_id', $user->id)

@@ -93,9 +93,11 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     Route::post('households/{id}/regenerate-invite', [HouseholdController::class, 'regenerateInvite']);
     Route::post('households/{id}/abandon', [HouseholdController::class, 'abandonHousehold']);
     Route::post('households/leave', [HouseholdController::class, 'leave']);
+    Route::post('households/{id}/transfer-ownership', [HouseholdController::class, 'transferOwnership']);
 
     // Invitation acceptance
     Route::post('invitations/{token}/accept', [MembersController::class, 'acceptInvitation']);
+    Route::post('invitations/{token}/decline', [MembersController::class, 'declineInvitation']);
 
     // Household member routes
     Route::prefix('households/{household_id}')->group(function () {
