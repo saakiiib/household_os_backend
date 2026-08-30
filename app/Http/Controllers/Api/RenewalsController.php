@@ -267,6 +267,7 @@ class RenewalsController extends Controller
     public function update(Request $request, $household_id, $renewal_id)
     {
         $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
+        $oldRenewal = clone $renewal;
 
         if (!$this->canAccessRenewal($household_id, $renewal)) {
             return response()->json([
@@ -307,6 +308,35 @@ class RenewalsController extends Controller
             $renewal->update($request->only([
                 'title', 'category', 'assigned_user_id', 'frequency', 'due_date', 'amount', 'reminder_before', 'notes', 'status',
             ]));
+
+            // Rule 10: If assigned_user_id changed, notify the new assignee (Rule 3: Creator + Assignee).
+            $oldAssigned = $oldRenewal->assigned_user_id;
+            $newAssigned = $request->input('assigned_user_id', $oldAssigned);
+            if ($newAssigned !== null && $newAssigned !== $oldAssigned) {
+                // Verify new assignee is still an active member of this household.
+                $isMember = HouseholdMember::where('household_id', $household_id)
+                    ->where('user_id', $newAssigned)
+                    ->where('status', 'active')
+                    ->exists();
+
+                if ($isMember && $newAssigned !== Auth::id()) {
+                    app(\App\Services\NotificationService::class)->sendToUser(
+                        $newAssigned,
+                        'Renewal updated',
+                        'You have been assigned: ' . $renewal->title,
+                        'renewal_updated',
+                        [
+                            'module' => 'renewal',
+                            'action_type' => 'renewal',
+                            'action_id' => $renewal->id,
+                            'type' => 'renewal',
+                            'id' => $renewal->id,
+                            'household_id' => $household_id,
+                        ],
+                        'high'
+                    );
+                }
+            }
 
             if ($request->boolean('remove_document') && $renewal->document_file_path) {
                 $fullPath = $renewal->documentFullPath();
