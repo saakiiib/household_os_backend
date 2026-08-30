@@ -86,11 +86,9 @@ Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
     // Household CRUD
     Route::get('households', [HouseholdController::class, 'index']);
     Route::post('households', [HouseholdController::class, 'store']);
-    Route::post('households/join', [HouseholdController::class, 'joinByCode'])->withoutMiddleware(['throttle:60,1']);
     Route::get('households/{id}', [HouseholdController::class, 'show']);
     Route::patch('households/{id}', [HouseholdController::class, 'update']);
     Route::delete('households/{id}', [HouseholdController::class, 'destroy']);
-    Route::post('households/{id}/regenerate-invite', [HouseholdController::class, 'regenerateInvite']);
     Route::post('households/{id}/abandon', [HouseholdController::class, 'abandonHousehold']);
     Route::post('households/leave', [HouseholdController::class, 'leave']);
     Route::post('households/{id}/transfer-ownership', [HouseholdController::class, 'transferOwnership']);

@@ -63,15 +63,16 @@ class HouseholdController extends Controller
             ], 422);
         }
 
-        // Enforce single household per user
-        $existingActive = HouseholdMember::where('user_id', Auth::id())
-            ->where('status', 'active')
+        // Enforce single household per user (active OR pending)
+        $existingMembership = HouseholdMember::where('user_id', Auth::id())
+            ->whereIn('status', ['active', 'pending'])
             ->first();
 
-        if ($existingActive) {
+        if ($existingMembership) {
+            $existingHousehold = Household::find($existingMembership->household_id);
             return response()->json([
                 'success' => false,
-                'message' => 'You already belong to a household. Leave your current household first before creating a new one.',
+                'message' => 'You already belong to a household (' . ($existingHousehold->name ?? 'Unknown') . '). Leave your current household first before creating a new one.',
             ], 409);
         }
 
@@ -477,13 +478,10 @@ class HouseholdController extends Controller
             ], 403);
         }
 
-        // Delete all invitations for this household
-        Invitation::where('household_id', $id)->delete();
-
-        // Delete all household memberships
-        HouseholdMember::where('household_id', $id)->delete();
-
-        // Delete the household itself
+        // Let cascadeOnDelete handle invitations, members, tasks, documents,
+        // renewals, vehicles, subscriptions, payments, categories, activity
+        // logs, and document_files. Manually deleting them first caused
+        // deadlocks / timeouts on shared hosting.
         $household->delete();
 
         return response()->json([
@@ -516,12 +514,10 @@ class HouseholdController extends Controller
             ], 404);
         }
 
-        // A household creator cannot simply leave — they must transfer ownership
-        // or close the household first (spec: "Mary cannot simply leave because
-        // she owns the existing household"). Note: creator is identified via
-        // households.created_by_user_id, not the membership role.
-        $household = Household::find($householdId);
-        if ($household && $household->created_by_user_id === $user->id) {
+        // A household admin/creator cannot simply leave — they must transfer
+        // ownership or close the household first (spec: "Mary cannot simply
+        // leave because she owns the existing household").
+        if ($membership->isAdmin()) {
             return response()->json([
                 'success' => false,
                 'message' => 'You cannot leave a household you manage. Transfer ownership or close the household first.',

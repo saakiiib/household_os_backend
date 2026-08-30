@@ -230,25 +230,10 @@ class MembersController extends Controller
             'expires_at' => now()->addDays(7),
         ]);
 
-        // Send invitation email
-        $emailSent = true;
-        try {
-            $inviter = Auth::user();
-            $inviterName = $inviter->name ?? $inviter->email;
-            Notification::route('mail', $invitedEmail)
-                ->notify(new InvitationMail(
-                    $household->name,
-                    $invitation->token,
-                    $invitation->role,
-                    $inviterName
-                ));
-        } catch (\Exception $e) {
-            \Log::error('Invitation email failed for ' . $invitedEmail . ': ' . $e->getMessage());
-            $emailSent = false;
-        }
+        $emailSent = false;
 
-        // Send in-app/push notification to invited user if they have an account
         if ($invitedUser) {
+            // Existing user — send in-app/push notification only (no email, they'll see it in the app)
             try {
                 $inviter = Auth::user();
                 app(NotificationService::class)->sendToUser(
@@ -273,13 +258,30 @@ class MembersController extends Controller
             } catch (\Throwable $e) {
                 \Log::error('Failed to send invitation notification: ' . $e->getMessage());
             }
+        } else {
+            // New user — send email (they need it to know they were invited)
+            try {
+                $inviter = Auth::user();
+                $inviterName = $inviter->name ?? $inviter->email;
+                Notification::route('mail', $invitedEmail)
+                    ->notify(new InvitationMail(
+                        $household->name,
+                        $invitation->role,
+                        $inviterName
+                    ));
+                $emailSent = true;
+            } catch (\Exception $e) {
+                \Log::error('Invitation email failed for ' . $invitedEmail . ': ' . $e->getMessage());
+            }
         }
 
         return response()->json([
             'success' => true,
-            'message' => $emailSent
+            'message' => $invitedUser
                 ? 'Invitation sent successfully'
-                : 'Invitation created but email could not be sent. Please share the invite code manually.',
+                : ($emailSent
+                    ? 'Invitation sent successfully'
+                    : 'Invitation created but email could not be sent. Please share the invite code manually.'),
             'data' => [
                 'id' => $invitation->id,
                 'invited_email' => $invitation->invited_email,
@@ -689,6 +691,42 @@ class MembersController extends Controller
                 'success' => false,
                 'message' => 'Pending member not found.',
             ], 404);
+        }
+
+        // Check if user already belongs to another household
+        $otherActiveMembership = HouseholdMember::where('user_id', $targetMember->user_id)
+            ->where('household_id', '!=', $household_id)
+            ->where('status', 'active')
+            ->first();
+
+        if ($otherActiveMembership) {
+            $otherHousehold = \App\Models\Household::find($otherActiveMembership->household_id);
+            return response()->json([
+                'success' => false,
+                'message' => 'This user already belongs to another household (' . ($otherHousehold->name ?? 'Unknown') . '). They must leave their current household before being approved here.',
+                'error_code' => 'ALREADY_IN_HOUSEHOLD',
+                'data' => [
+                    'other_household_id' => $otherActiveMembership->household_id,
+                    'other_household_name' => $otherHousehold->name ?? 'Unknown',
+                ],
+            ], 409);
+        }
+
+        // Check if user is the creator of another household
+        $otherCreatedHousehold = \App\Models\Household::where('created_by_user_id', $targetMember->user_id)
+            ->where('id', '!=', $household_id)
+            ->first();
+
+        if ($otherCreatedHousehold) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This user owns another household (' . ($otherCreatedHousehold->name ?? 'Unknown') . '). They must transfer ownership or close it before joining.',
+                'error_code' => 'CREATOR_OF_HOUSEHOLD',
+                'data' => [
+                    'other_household_id' => $otherCreatedHousehold->id,
+                    'other_household_name' => $otherCreatedHousehold->name ?? 'Unknown',
+                ],
+            ], 409);
         }
 
         $targetMember->update([

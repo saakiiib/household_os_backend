@@ -412,25 +412,6 @@ class AuthController extends Controller
             ], 200);
         }
 
-        // Auto-mark invitations as accepted if user is already an active or pending member of that household
-        $userMemberships = HouseholdMember::where('user_id', $user->id)
-            ->whereIn('status', ['active', 'pending'])
-            ->get();
-
-        $activeHouseholdIds = $userMemberships->where('status', 'active')->pluck('household_id')->all();
-        $allMemberHouseholdIds = $userMemberships->pluck('household_id')->all();
-
-        if (!empty($activeHouseholdIds)) {
-            Invitation::whereIn('household_id', $activeHouseholdIds)
-                ->where('invited_email', $user->email)
-                ->where('status', 'pending')
-                ->update([
-                    'status' => 'accepted',
-                    'accepted_at' => now(),
-                    'accepted_by_user_id' => $user->id,
-                ]);
-        }
-
         // NOTE: A user who already belongs to a household MUST still see pending
         // invitations to OTHER households (spec: Mary in Parents' Home still
         // receives John's invite). The conflict is resolved privately at accept
@@ -439,7 +420,6 @@ class AuthController extends Controller
         $query = Invitation::with(['household', 'invitedBy'])
             ->where('invited_email', $user->email)
             ->where('status', 'pending')
-            ->whereNotIn('household_id', $allMemberHouseholdIds)
             ->where(function ($query) {
                 $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })

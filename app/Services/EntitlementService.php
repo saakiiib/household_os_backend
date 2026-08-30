@@ -22,7 +22,7 @@ class EntitlementService
     public const FREE_TASKS = 10;
     public const FREE_RENEWALS = 3;
     public const FREE_DOCUMENT_BYTES = 100 * 1024 * 1024; // 100 MB
-    public const FREE_MEMBERS = 3;
+    public const FREE_MEMBERS = 4;
 
     public const DOCUMENTS_PLAN_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB
 
