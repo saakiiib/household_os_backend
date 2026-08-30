@@ -13,26 +13,32 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tasks', function (Blueprint $table) {
+            $table->dropForeign(['created_by_user_id']);
             $table->foreignId('created_by_user_id')->nullable()->change();
             $table->foreign('created_by_user_id')->references('id')->on('users')->nullOnDelete();
         });
 
         Schema::table('documents', function (Blueprint $table) {
+            $table->dropForeign(['created_by_user_id']);
             $table->foreignId('created_by_user_id')->nullable()->change();
             $table->foreign('created_by_user_id')->references('id')->on('users')->nullOnDelete();
         });
 
         Schema::table('vehicles', function (Blueprint $table) {
+            $table->dropForeign(['created_by_user_id']);
             $table->foreignId('created_by_user_id')->nullable()->change();
             $table->foreign('created_by_user_id')->references('id')->on('users')->nullOnDelete();
         });
 
         Schema::table('renewals', function (Blueprint $table) {
+            $table->dropForeign(['created_by_user_id']);
             $table->foreignId('created_by_user_id')->nullable()->change();
             $table->foreign('created_by_user_id')->references('id')->on('users')->nullOnDelete();
         });
 
         Schema::table('invitations', function (Blueprint $table) {
+            $table->dropForeign(['invited_by_user_id']);
+            $table->dropForeign(['accepted_by_user_id']);
             $table->foreignId('invited_by_user_id')->nullable()->change();
             $table->foreign('invited_by_user_id')->references('id')->on('users')->nullOnDelete();
             $table->foreign('accepted_by_user_id')->references('id')->on('users')->nullOnDelete();
