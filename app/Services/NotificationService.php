@@ -12,8 +12,7 @@ use Illuminate\Support\Facades\Log;
 
 class NotificationService
 {
-    private ?Messaging $messaging = null;
-    private static ?string $fcmError = null;
+    public function __construct(protected Messaging $messaging) {}
 
     public function sendToUser(int $userId, string $title, string $body, string $type, array $data = [], string $priority = 'normal', ?User $user = null): void
     {
@@ -45,39 +44,18 @@ class NotificationService
         ]);
     }
 
-    private function getMessaging(): ?Messaging
-    {
-        if ($this->messaging !== null) {
-            return $this->messaging;
-        }
-
-        try {
-            $this->messaging = app(Messaging::class);
-            return $this->messaging;
-        } catch (\Throwable $e) {
-            if (self::$fcmError === null) {
-                self::$fcmError = $e->getMessage();
-                Log::error('[NotificationService] Firebase Messaging unavailable: ' . $e->getMessage());
-            }
-            return null;
-        }
-    }
-
     public function sendFcm(array $users, string $title, string $body, string $type, array $data, string $priority = 'normal'): void
     {
-        $messaging = $this->getMessaging();
-        if ($messaging === null) {
-            return;
-        }
-
         $tokens = [];
 
+        // Legacy single token per user (backwards compatible).
         foreach ($users as $user) {
             if (!empty($user->fcm_token)) {
                 $tokens[] = $user->fcm_token;
             }
         }
 
+        // All registered device tokens for these users.
         $userIds = collect($users)->pluck('id')->filter()->unique()->all();
         if (!empty($userIds)) {
             $deviceTokens = DeviceToken::whereIn('user_id', $userIds)->pluck('token')->all();
@@ -100,7 +78,7 @@ class NotificationService
                 $message = CloudMessage::new()
                     ->withNotification(FcmNotification::create($title, $body))
                     ->withData($payload);
-                $result = $messaging->sendMulticast($message, $chunk);
+                $result = $this->messaging->sendMulticast($message, $chunk);
                 Log::info('[NotificationService] FCM result: success=' . $result->successes()->count() . ' failures=' . $result->failures()->count());
             } catch (\Throwable $e) {
                 Log::error('[NotificationService] FCM Error: ' . $e->getMessage());

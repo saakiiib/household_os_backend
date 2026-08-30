@@ -13,7 +13,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(NotificationService::class, function ($app) {
-            return new NotificationService();
+            return new NotificationService($app->make(\Kreait\Firebase\Contract\Messaging::class));
         });
 
         $this->app->extend(AccessTokenRepositoryInterface::class, function ($repository) {
