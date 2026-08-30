@@ -712,19 +712,19 @@ class AuthController extends Controller
                     ]
                 ], 200);
             }
-            // Reactivate the existing pending membership as active (direct accept)
+            // Keep existing pending membership (needs admin approval)
             $existingPending->update([
                 'role' => $invitation->role,
-                'status' => 'active',
+                'status' => 'pending',
                 'joined_at' => now(),
             ]);
         } else {
-            // Create an active membership — the recipient has accepted the invitation
+            // Create pending membership — admin must approve
             HouseholdMember::create([
                 'household_id' => $invitation->household_id,
                 'user_id' => $user->id,
                 'role' => $invitation->role,
-                'status' => 'active',
+                'status' => 'pending',
                 'joined_at' => now(),
             ]);
         }

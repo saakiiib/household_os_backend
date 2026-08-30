@@ -186,7 +186,6 @@ class MembersController extends Controller
                 Notification::route('mail', $invitedEmail)
                     ->notify(new InvitationMail(
                         $household->name,
-                        $existingInvitation->token,
                         $existingInvitation->role,
                         $inviterName
                     ));
@@ -199,7 +198,7 @@ class MembersController extends Controller
                 'success' => true,
                 'message' => $emailSent
                     ? 'Invitation resent successfully.'
-                    : 'Invitation already sent. Could not resend email; share the code manually.',
+                    : 'Invitation already sent. Email could not be resent.',
                 'data' => [
                     'id' => $existingInvitation->id,
                     'invited_email' => $existingInvitation->invited_email,
@@ -390,12 +389,12 @@ class MembersController extends Controller
             ], 409);
         }
 
-        // No conflict: accept directly as a Member (spec: Accept -> Member -> Dashboard)
+        // No conflict: create membership as PENDING (spec: admin must approve)
         HouseholdMember::updateOrCreate(
             ['household_id' => $invitation->household_id, 'user_id' => $user->id],
             [
                 'role' => $invitation->role,
-                'status' => 'active',
+                'status' => 'pending',
                 'joined_at' => now(),
             ]
         );
@@ -416,7 +415,7 @@ class MembersController extends Controller
             'accepted_by_user_id' => $user->id,
         ]);
 
-        // Notify household admins that the user joined
+        // Notify household admins that a new member is waiting for approval
         try {
             $adminIds = HouseholdMember::where('household_id', $invitation->household_id)
                 ->where('role', 'admin')
@@ -429,9 +428,9 @@ class MembersController extends Controller
                 $userName = $user->name ?? $user->email;
                 app(NotificationService::class)->sendToUsers(
                     $adminIds,
-                    'New Member',
-                    $userName . ' accepted the invitation and joined ' . $invitation->household->name,
-                    'member_joined',
+                    'New Member Request',
+                    $userName . ' wants to join ' . $invitation->household->name . '. Review and approve.',
+                    'member_request',
                     [
                         'module' => 'household',
                         'action_type' => 'household',
@@ -443,21 +442,21 @@ class MembersController extends Controller
                         'user_email' => $user->email,
                         'user_name' => $userName,
                     ],
-                    'normal'
+                    'high'
                 );
             }
         } catch (\Throwable $e) {
-            \Log::error('Failed to send member joined notification: ' . $e->getMessage());
+            \Log::error('Failed to send member request notification: ' . $e->getMessage());
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'You have joined the household.',
+            'message' => 'Join request submitted. Waiting for approval from household admin.',
             'data' => [
                 'household_id' => $invitation->household_id,
                 'household_name' => $invitation->household->name,
                 'role' => $invitation->role,
-                'membership_status' => 'active',
+                'membership_status' => 'pending',
             ]
         ]);
     }
@@ -808,7 +807,7 @@ class MembersController extends Controller
 
         // Delete the associated invitation so user can be invited by other households
         Invitation::where('household_id', $household_id)
-            ->where('invited_email', User::find($userId)->email ?? '')
+            ->where('invited_email', User::find($userId)?->email ?? '')
             ->where('status', 'accepted')
             ->delete();
 
