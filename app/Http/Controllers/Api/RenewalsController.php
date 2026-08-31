@@ -178,19 +178,11 @@ class RenewalsController extends Controller
             ], 500);
         }
 
-        // Notify creator + assignee (Rule 3: notify creator + assignee only).
+        // Rule 7: do not notify the creator for an action they just performed.
+        // Only the assignee (when different from the creator) is notified.
         // Rule 8: verify household membership before sending.
         try {
             $recipients = [];
-            if ($renewal->created_by_user_id) {
-                $creatorMembership = HouseholdMember::where('household_id', $household_id)
-                    ->where('user_id', $renewal->created_by_user_id)
-                    ->where('status', 'active')
-                    ->exists();
-                if ($creatorMembership) {
-                    $recipients[] = $renewal->created_by_user_id;
-                }
-            }
             if ($renewal->assigned_user_id && $renewal->assigned_user_id !== $renewal->created_by_user_id) {
                 $assigneeMembership = HouseholdMember::where('household_id', $household_id)
                     ->where('user_id', $renewal->assigned_user_id)

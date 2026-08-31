@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Models\DeviceToken;
 use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\Invitation;
@@ -468,7 +469,15 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
-        $token = Auth::user()->token();
+        $user = $request->user();
+
+        // Detach all push tokens so the previous user stops receiving FCM
+        // notifications on this device. A logged-out user must not keep getting
+        // pushes meant for them (e.g. on a shared or returned device).
+        DeviceToken::where('user_id', $user->id)->delete();
+        $user->update(['fcm_token' => null]);
+
+        $token = $user->token();
         $token->revoke();
 
         return response()->json([
