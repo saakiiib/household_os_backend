@@ -8,10 +8,6 @@ use Illuminate\Database\Seeder;
 
 class SubscriptionPlanSeeder extends Seeder
 {
-    /**
-     * Pricing per command.txt §1 / §5.
-     * Monthly and annual of the same plan grant identical features (§8).
-     */
     public function run(): void
     {
         SubscriptionPlan::query()->delete();
@@ -23,6 +19,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'slug' => 'free',
                 'code' => 'free',
                 'apple_product_id' => null,
+                'google_product_id' => null,
                 'description' => 'Get started and stay organised. Free forever.',
                 'monthly_price' => 0.00,
                 'annual_price' => 0.00,
@@ -41,6 +38,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'slug' => 'tasks',
                 'code' => 'tasks',
                 'apple_product_id' => 'com.mentosoftware.householdos.tasks.monthly',
+                'google_product_id' => 'com.mentosoftware.hos.tasks.monthly',
                 'description' => 'Manage household obligations, assignments and recurring chores.',
                 'monthly_price' => 2.99,
                 'annual_price' => 29.99,
@@ -60,6 +58,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'slug' => 'renewals',
                 'code' => 'renewals',
                 'apple_product_id' => 'com.mentosoftware.householdos.renewals.monthly',
+                'google_product_id' => 'com.mentosoftware.hos.renewals.monthly',
                 'description' => 'Track insurance, MOT, tax and warranty renewals before they expire.',
                 'monthly_price' => 2.99,
                 'annual_price' => 29.99,
@@ -79,6 +78,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'slug' => 'essentials',
                 'code' => 'essentials',
                 'apple_product_id' => 'com.mentosoftware.householdos.essentials.monthly',
+                'google_product_id' => 'com.mentosoftware.hos.essentials.monthly',
                 'description' => 'Tasks + Renewals combined. Perfect for households that need both.',
                 'monthly_price' => 4.49,
                 'annual_price' => 44.99,
@@ -97,6 +97,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'slug' => 'documents',
                 'code' => 'documents',
                 'apple_product_id' => 'com.mentosoftware.householdos.documents.monthly',
+                'google_product_id' => 'com.mentosoftware.hos.documents.monthly',
                 'description' => 'Securely store and manage important household documents.',
                 'monthly_price' => 3.99,
                 'annual_price' => 39.99,
@@ -116,6 +117,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'slug' => 'complete',
                 'code' => 'complete',
                 'apple_product_id' => 'com.mentosoftware.householdos.complete.monthly',
+                'google_product_id' => 'com.mentosoftware.hos.complete.monthly',
                 'description' => 'Everything organised in one place. The complete HouseholdOS experience.',
                 'monthly_price' => 6.99,
                 'annual_price' => 69.99,
@@ -138,9 +140,9 @@ class SubscriptionPlanSeeder extends Seeder
         }
 
         // Seed the normalized product_plans mapping (command.txt §14) from the
-        // single source of truth in config/apple_products.php.
-        $products = config('apple_products.apple_products', []);
-        foreach ($products as $productId => $cfg) {
+        // single source of truth in config files.
+        $appleProducts = config('apple_products.apple_products', []);
+        foreach ($appleProducts as $productId => $cfg) {
             $plan = SubscriptionPlan::where('code', $cfg['plan'])->first();
             if (!$plan) {
                 continue;
@@ -148,6 +150,23 @@ class SubscriptionPlanSeeder extends Seeder
             DB::table('product_plans')->insert([
                 'plan_id' => $plan->id,
                 'provider' => 'apple',
+                'product_id' => $productId,
+                'billing_period' => $cfg['billing_period'],
+                'level' => $cfg['level'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $googleProducts = config('google_products.google_products', []);
+        foreach ($googleProducts as $productId => $cfg) {
+            $plan = SubscriptionPlan::where('code', $cfg['plan'])->first();
+            if (!$plan) {
+                continue;
+            }
+            DB::table('product_plans')->insert([
+                'plan_id' => $plan->id,
+                'provider' => 'google',
                 'product_id' => $productId,
                 'billing_period' => $cfg['billing_period'],
                 'level' => $cfg['level'],

@@ -76,6 +76,27 @@ class HouseholdController extends Controller
             ], 409);
         }
 
+        // Also check for accepted invitations (user accepted but hasn't been
+        // approved yet — the pending HouseholdMember should exist, but as a
+        // safety net we also guard against orphaned accepted invitations).
+        $acceptedInvitation = Invitation::where('invited_email', Auth::user()->email)
+            ->where('status', 'accepted')
+            ->first();
+
+        if ($acceptedInvitation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You have a pending join request for a household. Wait for approval or decline it before creating a new household.',
+            ], 409);
+        }
+
+        // Cancel any remaining pending invitations for this user since they
+        // are about to become the creator of a new household (one-household-
+        // per-user rule means they cannot accept others).
+        Invitation::where('invited_email', Auth::user()->email)
+            ->where('status', 'pending')
+            ->update(['status' => 'cancelled']);
+
         $household = Household::create([
             'name' => $request->name,
             'created_by_user_id' => Auth::id(),
@@ -517,11 +538,33 @@ class HouseholdController extends Controller
         // A household admin/creator cannot simply leave — they must transfer
         // ownership or close the household first (spec: "Mary cannot simply
         // leave because she owns the existing household").
+        //
+        // Exception: if the creator is the ONLY active member, they can leave
+        // (which effectively abandons the household).
         if ($membership->isAdmin()) {
+            $otherActiveMembers = HouseholdMember::where('household_id', $householdId)
+                ->where('status', 'active')
+                ->where('user_id', '!=', $user->id)
+                ->exists();
+
+            if ($otherActiveMembers) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You cannot leave a household you manage. Transfer ownership or close the household first.',
+                ], 403);
+            }
+
+            // Sole member (creator only) — deleting membership effectively
+            // abandons the household. Cascade rules will clean up related data.
+            $household = Household::find($householdId);
+            if ($household) {
+                $household->delete();
+            }
+
             return response()->json([
-                'success' => false,
-                'message' => 'You cannot leave a household you manage. Transfer ownership or close the household first.',
-            ], 403);
+                'success' => true,
+                'message' => 'You have left the household. The household has been deleted since you were the only member.',
+            ]);
         }
 
         $membership->delete();

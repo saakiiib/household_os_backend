@@ -12,52 +12,52 @@
 return [
 
     'google_products' => [
-        'com.mentosoftware.householdos.tasks.monthly' => [
+        'com.mentosoftware.hos.tasks.monthly' => [
             'plan' => 'tasks',
             'billing_period' => 'monthly',
             'level' => 3,
         ],
-        'com.mentosoftware.householdos.tasks.annual' => [
+        'com.mentosoftware.hos.tasks.annual' => [
             'plan' => 'tasks',
             'billing_period' => 'annual',
             'level' => 3,
         ],
-        'com.mentosoftware.householdos.renewals.monthly' => [
+        'com.mentosoftware.hos.renewals.monthly' => [
             'plan' => 'renewals',
             'billing_period' => 'monthly',
             'level' => 3,
         ],
-        'com.mentosoftware.householdos.renewals.annual' => [
+        'com.mentosoftware.hos.renewals.annual' => [
             'plan' => 'renewals',
             'billing_period' => 'annual',
             'level' => 3,
         ],
-        'com.mentosoftware.householdos.essentials.monthly' => [
+        'com.mentosoftware.hos.essentials.monthly' => [
             'plan' => 'essentials',
             'billing_period' => 'monthly',
             'level' => 2,
         ],
-        'com.mentosoftware.householdos.essentials.annual' => [
+        'com.mentosoftware.hos.essentials.annual' => [
             'plan' => 'essentials',
             'billing_period' => 'annual',
             'level' => 2,
         ],
-        'com.mentosoftware.householdos.documents.monthly' => [
+        'com.mentosoftware.hos.documents.monthly' => [
             'plan' => 'documents',
             'billing_period' => 'monthly',
             'level' => 2,
         ],
-        'com.mentosoftware.householdos.documents.annual' => [
+        'com.mentosoftware.hos.documents.annual' => [
             'plan' => 'documents',
             'billing_period' => 'annual',
             'level' => 2,
         ],
-        'com.mentosoftware.householdos.complete.monthly' => [
+        'com.mentosoftware.hos.complete.monthly' => [
             'plan' => 'complete',
             'billing_period' => 'monthly',
             'level' => 1,
         ],
-        'com.mentosoftware.householdos.complete.annual' => [
+        'com.mentosoftware.hos.complete.annual' => [
             'plan' => 'complete',
             'billing_period' => 'annual',
             'level' => 1,
