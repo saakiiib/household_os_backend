@@ -458,10 +458,10 @@ class TasksController extends Controller
         return $query->exists();
     }
 
-    private function isHouseholdAdmin(int $householdId, int $userId): bool
+    private function isHouseholdAdmin(int|string $householdId, int|string|null $userId): bool
     {
-        $membership = HouseholdMember::where('household_id', $householdId)
-            ->where('user_id', $userId)
+        $membership = HouseholdMember::where('household_id', (int) $householdId)
+            ->where('user_id', (int) $userId)
             ->where('status', 'active')
             ->first();
 
