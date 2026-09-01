@@ -19,5 +19,30 @@ class UserSeeder extends Seeder
             'status' => 'active',
             'email_verified_at' => now(),
         ]);
+
+        User::create([
+            'first_name' => 'Play',
+            'last_name' => 'Reviewer',
+            'email' => 'playreview@householdos.app',
+            'password' => Hash::make('PlayReview@2026'),
+            'is_admin' => false,
+            'status' => 'active',
+            'email_verified_at' => now(),
+        ]);
+    }
+
+    public static function seedReviewer(): void
+    {
+        User::updateOrCreate(
+            ['email' => 'playreview@householdos.app'],
+            [
+                'first_name' => 'Play',
+                'last_name' => 'Reviewer',
+                'password' => Hash::make('PlayReview@2026'),
+                'is_admin' => false,
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
     }
 }

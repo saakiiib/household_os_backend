@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\LoginController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
+use Database\Seeders\UserSeeder;
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -59,6 +60,8 @@ Route::get('/clean-db', function () {
     }
 
     DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+
+    UserSeeder::seedReviewer();
 
     return response()->json([
         'success' => true,
