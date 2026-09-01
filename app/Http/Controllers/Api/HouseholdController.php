@@ -114,21 +114,24 @@ class HouseholdController extends Controller
             'joined_at' => now(),
         ]);
 
-        // Create 3-month free trial on premium plan for this household
-        $premiumPlan = SubscriptionPlan::where('slug', 'household_premium')->first();
-        if ($premiumPlan) {
+        // Create 1-month free trial on Complete plan for this household
+        $completePlan = SubscriptionPlan::where('code', 'complete')
+            ->orWhere('slug', 'complete')
+            ->first();
+        if ($completePlan) {
             $now = now();
-            $trialEnd = $now->copy()->addMonths(3);
+            $trialEnd = $now->copy()->addMonth();
             Subscription::create([
                 'user_id' => Auth::id(),
+                'subscriber_user_id' => Auth::id(),
                 'household_id' => $household->id,
-                'subscription_plan_id' => $premiumPlan->id,
+                'subscription_plan_id' => $completePlan->id,
                 'status' => 'trial',
                 'trial_started_at' => $now,
                 'trial_ends_at' => $trialEnd,
                 'current_period_start' => $now,
                 'current_period_end' => $trialEnd,
-                'expires_at' => $trialEnd->copy()->addDays(3),
+                'expires_at' => $trialEnd,
             ]);
         }
 

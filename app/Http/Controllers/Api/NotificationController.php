@@ -18,11 +18,19 @@ class NotificationController extends Controller
     {
         $query = Notification::where('user_id', $request->user()->id);
 
-        // When `unread=1` is requested (the notification bell/inbox), return only
-        // unread items so the list acts as an "unread-only" view and read items
-        // are naturally unlisted. Without the flag, all notifications are returned.
+        // Optional: `unread=1` returns only unread items (the notification bell
+        // inbox). Without the flag, all notifications (read + unread) are
+        // returned so the history view can show the full timeline.
         if ($request->boolean('unread')) {
             $query->whereNull('read_at');
+        }
+
+        // Optional: `days=N` limits the result set to the last N days. Defaults
+        // to 30 so the list stays scannable. Pass `days=0` (or a negative
+        // number) to disable the cutoff entirely.
+        $days = $request->input('days', 30);
+        if (is_numeric($days) && (int) $days > 0) {
+            $query->where('created_at', '>=', Carbon::now()->subDays((int) $days));
         }
 
         $notifications = $query->latest()->paginate(20);

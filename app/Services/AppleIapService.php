@@ -197,6 +197,25 @@ class AppleIapService
                     'code' => 'SUBSCRIPTION_LINKED_ELSEWHERE',
                 ];
             }
+
+            // Rule 8: Prevent Duplicate Subscriptions
+            $existingPaidSub = Subscription::where('household_id', $household->id)
+                ->whereIn('status', ['active', 'grace_period'])
+                ->where('original_transaction_id', '!=', $originalTransactionId)
+                ->first();
+
+            if ($existingPaidSub && ($existingPaidSub->subscriber_user_id ?? $existingPaidSub->user_id) !== $user->id) {
+                Log::warning('AppleIapService: duplicate purchase attempt on already-paid household', [
+                    'household_id' => $household->id,
+                    'user_id' => $user->id,
+                    'existing_sub_id' => $existingPaidSub->id,
+                ]);
+                return [
+                    'success' => false,
+                    'message' => 'Your household already has an active subscription.',
+                    'code' => 'DUPLICATE_SUBSCRIPTION',
+                ];
+            }
         }
 
         $plan = SubscriptionPlan::where('code', $productConfig['plan'])->first();

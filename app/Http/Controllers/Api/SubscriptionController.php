@@ -65,13 +65,30 @@ class SubscriptionController extends Controller
             ]);
         }
 
-        $subscription->load('plan');
+        $subscription->load(['plan', 'subscriber', 'user']);
+        $household = $user->activeHousehold();
+
+        $payerId = $subscription->subscriber_user_id ?? $subscription->user_id;
+        $isSubscriber = ($user->id === $payerId);
+        $isCreator = $household ? ($household->created_by_user_id === $user->id) : false;
+        $payer = $subscription->subscriber ?? $subscription->user;
+        $payerName = $payer ? ($payer->first_name ? $payer->first_name . ' ' . $payer->last_name : ($payer->name ?? $payer->email)) : null;
+
+        $hasActivePaidOrTrial = $subscription->isActive() || $subscription->isTrial() || $subscription->isInGracePeriod();
+        $canPurchase = !$hasActivePaidOrTrial;
+        $canManage = $isSubscriber;
 
         return response()->json([
             'success' => true,
             'data' => [
                 'id' => $subscription->id,
                 'status' => $subscription->status,
+                'subscriber_user_id' => $payerId,
+                'is_subscriber' => $isSubscriber,
+                'is_creator' => $isCreator,
+                'payer_name' => $payerName,
+                'can_manage' => $canManage,
+                'can_purchase' => $canPurchase,
                 'plan' => [
                     'id' => $subscription->plan->id,
                     'name' => $subscription->plan->name,
@@ -86,7 +103,7 @@ class SubscriptionController extends Controller
                 'expires_at' => $subscription->expires_at?->toIso8601String(),
                 'cancelled_at' => $subscription->cancelled_at?->toIso8601String(),
                 'payment_method' => $subscription->payment_method,
-                'billing_type' => $this->guessBillingType($subscription),
+                'billing_type' => $subscription->billing_period ?? $this->guessBillingType($subscription),
                 'days_remaining' => $subscription->daysRemaining(),
                 'days_until_renewal' => $subscription->daysUntilRenewal(),
                 'grace_days_remaining' => $subscription->graceDaysRemaining(),
