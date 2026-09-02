@@ -72,7 +72,7 @@ return [
     ],
 
     'google_play' => [
-        'package_name' => env('GOOGLE_PLAY_PACKAGE_NAME', 'com.householdosapp.household'),
+        'package_name' => env('GOOGLE_PLAY_PACKAGE_NAME', 'com.mentosoftware.householdos'),
         'service_account_json' => env('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON', ''),
     ],
 
