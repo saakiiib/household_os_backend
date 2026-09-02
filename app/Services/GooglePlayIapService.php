@@ -21,7 +21,13 @@ class GooglePlayIapService
     public function __construct()
     {
         $this->packageName = config('services.google_play.package_name', '');
-        $this->serviceAccountJson = config('services.google_play.service_account_json', '');
+
+        $jsonPath = config('services.google_play.service_account_json_path', '');
+        if (!empty($jsonPath) && file_exists($jsonPath)) {
+            $this->serviceAccountJson = file_get_contents($jsonPath);
+        } else {
+            $this->serviceAccountJson = '';
+        }
     }
 
     /**
