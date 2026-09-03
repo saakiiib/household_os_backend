@@ -648,6 +648,14 @@ class AppleIapService
             $subscription = Subscription::create($data);
         }
 
+        // Ensure only one active subscription per household. Any other active
+        // subscriptions are marked as replaced so the household shows only
+        // the latest purchase.
+        Subscription::where('household_id', $household->id)
+            ->where('id', '!=', $subscription->id)
+            ->where('status', 'active')
+            ->update(['status' => 'replaced']);
+
         if ($this->recordTransaction($subscription, $latestTransactionId, $originalTransactionId, $productId, $environment, $purchaseDateMs, $expiresDateMs)) {
             $this->recordPayment($subscription, $latestTransactionId);
         }
