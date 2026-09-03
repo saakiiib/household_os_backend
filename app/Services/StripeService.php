@@ -201,9 +201,18 @@ class StripeService
             $periodStart = $now;
         }
 
+        $plan = SubscriptionPlan::find($planId);
+        if (!$plan) {
+            \Log::error('Stripe confirm: plan not found', ['plan_id' => $planId]);
+            return;
+        }
+
         $data = [
-            'subscription_plan_id' => $planId,
+            'subscription_plan_id' => $plan->id,
             'status' => 'active',
+            'plan_status' => 'paid',
+            'paid_plan' => $plan->slug,
+            'billing_period' => $paymentType,
             'payment_method' => 'stripe',
             'stripe_subscription_id' => $session->subscription ?? null,
             'stripe_customer_id' => $session->customer ?? null,

@@ -5,13 +5,14 @@ namespace App\Console\Commands;
 use App\Services\NotificationService;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Models\HouseholdMember;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 
 class CheckSubscriptionExpiry extends Command
 {
     protected $signature = 'subscription:check-expiry';
-    protected $description = 'Check for expiring/expired subscriptions and send notifications';
+    protected $description = 'Check for expiring/expired subscriptions and trial expiries';
 
     public function handle(): int
     {
@@ -22,7 +23,8 @@ class CheckSubscriptionExpiry extends Command
 
         try {
             $this->handleGracePeriodTransitions();
-            $this->sendExpiryWarnings();
+            $this->handleTrialExpiry();
+            $this->sendPaidExpiryWarnings();
         } finally {
             Cache::forget('subscription-check-running');
         }
@@ -78,22 +80,81 @@ class CheckSubscriptionExpiry extends Command
     }
 
     /**
-     * Send notification warnings at 7, 3, 1 days before renewal, and on expiry.
+     * Handle trial expiry:
+     * - Notify at 7d, 3d, 1d before trial_ends_at
+     * - Auto-downgrade to free when trial_ends_at has passed and no active paid sub
      */
-    private function sendExpiryWarnings(): void
+    private function handleTrialExpiry(): void
     {
         $now = now();
 
-        // 7 days before renewal
+        // Send trial expiry warnings
+        $this->sendTrialWarnings(7, 'trial_7d');
+        $this->sendTrialWarnings(3, 'trial_3d');
+        $this->sendTrialWarnings(1, 'trial_1d');
+
+        // Auto-downgrade expired trials to free
+        $expiredTrials = Subscription::where('status', 'trial')
+            ->where('plan_status', 'trial_complete')
+            ->where('trial_ends_at', '<=', $now)
+            ->get();
+
+        foreach ($expiredTrials as $sub) {
+            // Only downgrade if no other active paid subscription exists
+            $hasPaid = Subscription::where('household_id', $sub->household_id)
+                ->where('plan_status', 'paid')
+                ->where('status', 'active')
+                ->exists();
+
+            if (!$hasPaid) {
+                $sub->update([
+                    'status' => 'expired',
+                    'plan_status' => 'free',
+                    'paid_plan' => null,
+                    'billing_period' => null,
+                ]);
+
+                $this->line("Trial expired → Free: Household #{$sub->household_id}");
+
+                // Notify all household members
+                $members = HouseholdMember::where('household_id', $sub->household_id)
+                    ->where('status', 'active')
+                    ->with('user')
+                    ->get();
+
+                foreach ($members as $member) {
+                    if ($member->user) {
+                        app(NotificationService::class)->sendToUser(
+                            $member->user->id,
+                            'Trial ended',
+                            'Your Complete trial has ended. You are now on the Free plan with limited features.',
+                            'trial_expiry',
+                            [
+                                'subscription_id' => $sub->id,
+                                'household_id' => $sub->household_id,
+                                'plan_name' => $sub->plan?->name,
+                                'type' => 'trial_expired',
+                                'action' => 'view_subscription',
+                            ],
+                            'high'
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Send paid subscription renewal warnings at 7, 3, 1 days before renewal.
+     */
+    private function sendPaidExpiryWarnings(): void
+    {
         $this->sendWarningAtDays(7, 'renewal_7d');
-
-        // 3 days before renewal
         $this->sendWarningAtDays(3, 'renewal_3d');
-
-        // 1 day before renewal
         $this->sendWarningAtDays(1, 'renewal_1d');
 
         // Grace period warnings
+        $now = now();
         $graceWarning = Subscription::where('status', 'grace_period')
             ->whereNotNull('expires_at')
             ->where('expires_at', '>', $now)
@@ -128,37 +189,92 @@ class CheckSubscriptionExpiry extends Command
         }
     }
 
+    private function sendTrialWarnings(int $days, string $key): void
+    {
+        $now = now();
+        $targetDate = $now->copy()->addDays($days);
+
+        $trials = Subscription::where('status', 'trial')
+            ->where('plan_status', 'trial_complete')
+            ->whereNotNull('trial_ends_at')
+            ->whereDate('trial_ends_at', $targetDate->toDateString())
+            ->with(['plan'])
+            ->get();
+
+        foreach ($trials as $sub) {
+            if ($this->alreadyNotified($sub, $key)) continue;
+
+            // Notify all household members
+            $members = HouseholdMember::where('household_id', $sub->household_id)
+                ->where('status', 'active')
+                ->with('user')
+                ->get();
+
+            foreach ($members as $member) {
+                if (!$member->user) continue;
+
+                $message = match ($days) {
+                    7 => 'Your Complete trial ends in 7 days. Choose a plan or continue with Free.',
+                    3 => 'Your Complete trial ends in 3 days. Choose how you\'d like to continue.',
+                    1 => 'Your Complete trial ends tomorrow. Choose a plan or continue with Free.',
+                    default => "Your Complete trial ends in {$days} days.",
+                };
+
+                app(NotificationService::class)->sendToUser(
+                    $member->user->id,
+                    $days <= 1 ? 'Trial ending soon' : 'Trial reminder',
+                    $message,
+                    'trial_expiry',
+                    [
+                        'subscription_id' => $sub->id,
+                        'household_id' => $sub->household_id,
+                        'plan_name' => $sub->plan?->name,
+                        'type' => 'trial_warning',
+                        'days_remaining' => $days,
+                        'action' => 'view_subscription',
+                    ],
+                    $days <= 1 ? 'high' : 'normal'
+                );
+            }
+
+            $this->markNotified($sub, $key);
+            $this->line("Trial {$days}d warning sent: Household #{$sub->household_id}");
+        }
+    }
+
     private function sendWarningAtDays(int $days, string $key): void
     {
         $now = now();
         $targetDate = $now->copy()->addDays($days);
 
         $subs = Subscription::where('status', 'active')
+            ->where('plan_status', 'paid')
             ->whereNotNull('current_period_end')
             ->whereDate('current_period_end', $targetDate->toDateString())
             ->with(['user', 'plan'])
             ->get();
 
         foreach ($subs as $sub) {
-            if (!$this->alreadyNotified($sub, $key)) {
-                if ($sub->user) {
-                    app(NotificationService::class)->sendToUser(
-                        $sub->user->id,
-                        'Subscription renewal reminder',
-                        "Your {$sub->plan?->name} subscription renews in {$days} day" . ($days > 1 ? 's' : ''),
-                        'subscription_expiry',
-                        [
-                            'subscription_id' => $sub->id,
-                            'household_id' => $sub->household_id,
-                            'plan_name' => $sub->plan?->name,
-                            'type' => 'renewal',
-                            'action' => 'view_subscription',
-                        ],
-                        'high'
-                    );
-                }
-                $this->markNotified($sub, $key);
+            if ($this->alreadyNotified($sub, $key)) continue;
+
+            if ($sub->user) {
+                app(NotificationService::class)->sendToUser(
+                    $sub->user->id,
+                    'Subscription renewal reminder',
+                    "Your {$sub->plan?->name} subscription renews in {$days} day" . ($days > 1 ? 's' : ''),
+                    'subscription_expiry',
+                    [
+                        'subscription_id' => $sub->id,
+                        'household_id' => $sub->household_id,
+                        'plan_name' => $sub->plan?->name,
+                        'type' => 'renewal',
+                        'action' => 'view_subscription',
+                    ],
+                    'high'
+                );
             }
+
+            $this->markNotified($sub, $key);
         }
     }
 

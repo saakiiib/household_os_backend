@@ -127,6 +127,8 @@ class HouseholdController extends Controller
                 'household_id' => $household->id,
                 'subscription_plan_id' => $completePlan->id,
                 'status' => 'trial',
+                'plan_status' => 'trial_complete',
+                'paid_plan' => null,
                 'trial_started_at' => $now,
                 'trial_ends_at' => $trialEnd,
                 'current_period_start' => $now,

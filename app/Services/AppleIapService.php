@@ -611,6 +611,8 @@ class AppleIapService
             'household_id' => $household->id,
             'subscription_plan_id' => $plan->id,
             'status' => $status,
+            'plan_status' => 'paid',
+            'paid_plan' => $plan->code,
             'provider' => 'apple',
             'product_id' => $productId,
             'billing_period' => $billingPeriod,

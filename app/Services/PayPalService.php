@@ -303,6 +303,9 @@ class PayPalService
         $subData = [
             'subscription_plan_id' => $plan->id,
             'status' => 'active',
+            'plan_status' => 'paid',
+            'paid_plan' => $plan->slug,
+            'billing_period' => $paymentType,
             'payment_method' => 'paypal',
             'paypal_subscription_id' => $orderId,
             'current_period_start' => $periodStart,

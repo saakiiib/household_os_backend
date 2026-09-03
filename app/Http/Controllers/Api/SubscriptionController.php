@@ -83,6 +83,8 @@ class SubscriptionController extends Controller
             'data' => [
                 'id' => $subscription->id,
                 'status' => $subscription->status,
+                'plan_status' => $subscription->plan_status,
+                'paid_plan' => $subscription->paid_plan,
                 'subscriber_user_id' => $payerId,
                 'is_subscriber' => $isSubscriber,
                 'is_creator' => $isCreator,
