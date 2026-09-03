@@ -66,10 +66,12 @@ class Household extends Model
 
     /**
      * Get the household's subscription (one per household).
+     * Prefer the newest record so an active paid subscription is returned
+     * instead of an older trial record when both exist.
      */
     public function subscription()
     {
-        return $this->hasOne(Subscription::class);
+        return $this->hasOne(Subscription::class)->orderByDesc('id');
     }
 
     /**

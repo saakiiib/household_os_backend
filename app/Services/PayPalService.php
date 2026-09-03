@@ -324,12 +324,11 @@ class PayPalService
             $subscription = Subscription::create($subData);
         }
 
-        // Ensure only one active subscription per household. Any other active
+        // Ensure only one active subscription per household. Any other
         // subscriptions are marked as replaced so the household shows only
         // the latest purchase.
         Subscription::where('household_id', $householdId)
             ->where('id', '!=', $subscription->id)
-            ->where('status', 'active')
             ->update(['status' => 'replaced']);
 
         // Update payment record
