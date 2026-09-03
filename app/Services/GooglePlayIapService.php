@@ -136,6 +136,7 @@ class GooglePlayIapService
         \Carbon\Carbon $expiresAt,
         ?\Carbon\Carbon $purchaseDate = null,
         bool $autoRenewing = true,
+        bool $isRestored = false,
     ): Subscription {
         $household = $user->activeHousehold();
 
