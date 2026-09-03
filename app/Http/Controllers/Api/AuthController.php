@@ -399,14 +399,14 @@ class AuthController extends Controller
     {
         $user = Auth::user();
 
-        Log::info('pendingInvitations called', [
-            'user_id' => $user?->id,
-            'email' => $user?->email,
-            'verified' => (bool) ($user?->email_verified_at),
-        ]);
+        // Log::info('pendingInvitations called', [
+        //     'user_id' => $user?->id,
+        //     'email' => $user?->email,
+        //     'verified' => (bool) ($user?->email_verified_at),
+        // ]);
 
         if (!$user || !$user->email) {
-            Log::info('pendingInvitations: no authenticated email');
+            // Log::info('pendingInvitations: no authenticated email');
             return response()->json([
                 'success' => true,
                 'data' => null,
@@ -426,19 +426,19 @@ class AuthController extends Controller
             })
             ->latest('id');
 
-        Log::info('pendingInvitations query built', [
-            'sql_email' => $user->email,
-        ]);
+        // Log::info('pendingInvitations query built', [
+        //     'sql_email' => $user->email,
+        // ]);
 
         $invitation = $query->first();
 
-        Log::info('pendingInvitations result', [
-            'found' => (bool) $invitation,
-            'invitation_id' => $invitation?->id,
-            'household_id' => $invitation?->household_id,
-            'invited_email' => $invitation?->invited_email,
-            'status' => $invitation?->status,
-        ]);
+        // Log::info('pendingInvitations result', [
+        //     'found' => (bool) $invitation,
+        //     'invitation_id' => $invitation?->id,
+        //     'household_id' => $invitation?->household_id,
+        //     'invited_email' => $invitation?->invited_email,
+        //     'status' => $invitation?->status,
+        // ]);
 
         if (!$invitation || $invitation->household?->status !== 'active') {
             return response()->json([
