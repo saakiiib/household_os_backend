@@ -586,6 +586,20 @@ class AppleIapService
             ? \Carbon\Carbon::createFromTimestampMs($expiresDateMs)
             : now()->addMonth();
 
+        // If household has an active trial ending in the future, align the paid
+        // subscription to start from trial_ends_at so the user doesn't lose
+        // remaining trial days.
+        $trialSubscription = Subscription::where('household_id', $household->id)
+            ->where('status', 'trial')
+            ->where('trial_ends_at', '>', now())
+            ->first();
+
+        if ($trialSubscription && $trialSubscription->trial_ends_at) {
+            $trialEnd = $trialSubscription->trial_ends_at;
+            $periodStart = $trialEnd;
+            $periodEnd = $billingPeriod === 'annual' ? $trialEnd->copy()->addYear() : $trialEnd->copy()->addMonth();
+        }
+
         $status = $this->mapAppleStatus($appleStatus);
 
         $subscription = Subscription::where('original_transaction_id', $originalTransactionId)->first()
@@ -611,6 +625,8 @@ class AppleIapService
             'expires_at' => $periodEnd,
             'cancelled_at' => null,
             'last_verified_at' => now(),
+            'trial_started_at' => null,
+            'trial_ends_at' => null,
             'metadata' => array_merge(
                 is_array($subscription?->metadata) ? $subscription->metadata : [],
                 $deviceId ? ['device_id' => $deviceId] : [],

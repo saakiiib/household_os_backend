@@ -283,12 +283,29 @@ class PayPalService
         $periodEnd = $paymentType === 'annual' ? $now->copy()->addYear() : $now->copy()->addMonth();
         $expiresAt = $periodEnd->copy()->addDays(Subscription::GRACE_PERIOD_DAYS);
 
+        // If household has an active trial ending in the future, align the paid
+        // subscription to start from trial_ends_at so the user doesn't lose
+        // remaining trial days.
+        $trialSubscription = Subscription::where('household_id', $householdId)
+            ->where('status', 'trial')
+            ->where('trial_ends_at', '>', now())
+            ->first();
+
+        if ($trialSubscription && $trialSubscription->trial_ends_at) {
+            $trialEnd = $trialSubscription->trial_ends_at;
+            $periodStart = $trialEnd;
+            $periodEnd = $paymentType === 'annual' ? $trialEnd->copy()->addYear() : $trialEnd->copy()->addMonth();
+            $expiresAt = $periodEnd->copy()->addDays(Subscription::GRACE_PERIOD_DAYS);
+        } else {
+            $periodStart = $now;
+        }
+
         $subData = [
             'subscription_plan_id' => $plan->id,
             'status' => 'active',
             'payment_method' => 'paypal',
             'paypal_subscription_id' => $orderId,
-            'current_period_start' => $now,
+            'current_period_start' => $periodStart,
             'current_period_end' => $periodEnd,
             'expires_at' => $expiresAt,
             'trial_started_at' => null,

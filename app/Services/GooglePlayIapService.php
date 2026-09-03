@@ -152,6 +152,20 @@ class GooglePlayIapService
         $periodStart = $purchaseDate ?? now();
         $periodEnd = $expiresAt;
 
+        // If household has an active trial ending in the future, align the paid
+        // subscription to start from trial_ends_at so the user doesn't lose
+        // remaining trial days.
+        $trialSubscription = Subscription::where('household_id', $household->id)
+            ->where('status', 'trial')
+            ->where('trial_ends_at', '>', now())
+            ->first();
+
+        if ($trialSubscription && $trialSubscription->trial_ends_at) {
+            $trialEnd = $trialSubscription->trial_ends_at;
+            $periodStart = $trialEnd;
+            $periodEnd = $billingType === 'annual' ? $trialEnd->copy()->addYear() : $trialEnd->copy()->addMonth();
+        }
+
         $subscription = Subscription::where('household_id', $household->id)->first();
 
         $data = [
@@ -170,6 +184,8 @@ class GooglePlayIapService
             'original_transaction_id' => $orderId,
             'latest_transaction_id' => $orderId,
             'last_verified_at' => now(),
+            'trial_started_at' => null,
+            'trial_ends_at' => null,
         ];
 
         // Merge auto_renewing into metadata
@@ -182,8 +198,6 @@ class GooglePlayIapService
         if ($subscription) {
             $subscription->update($data);
         } else {
-            $data['trial_started_at'] = null;
-            $data['trial_ends_at'] = null;
             $subscription = Subscription::create($data);
         }
 
