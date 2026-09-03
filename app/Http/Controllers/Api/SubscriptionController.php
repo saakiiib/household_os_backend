@@ -74,8 +74,8 @@ class SubscriptionController extends Controller
         $payer = $subscription->subscriber ?? $subscription->user;
         $payerName = $payer ? ($payer->first_name ? $payer->first_name . ' ' . $payer->last_name : ($payer->name ?? $payer->email)) : null;
 
-        $hasActivePaidOrTrial = $subscription->isActive() || $subscription->isTrial() || $subscription->isInGracePeriod();
-        $canPurchase = !$hasActivePaidOrTrial;
+        $hasActivePaidSubscription = $subscription->isActive() && $subscription->status !== 'trial';
+        $canPurchase = !$hasActivePaidSubscription;
         $canManage = $isSubscriber;
 
         return response()->json([
