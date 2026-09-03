@@ -169,6 +169,7 @@ class GooglePlayIapService
             'google_order_id' => $orderId,
             'original_transaction_id' => $orderId,
             'latest_transaction_id' => $orderId,
+            'last_verified_at' => now(),
         ];
 
         // Merge auto_renewing into metadata

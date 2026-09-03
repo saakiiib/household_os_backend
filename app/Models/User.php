@@ -110,9 +110,16 @@ class User extends Authenticatable implements MustVerifyEmail
             return null;
         }
 
-        // Auto-expire if period ended
+        // Auto-expire if period ended and not recently re-verified.
+        // Avoids immediately marking sandbox purchases as expired before the
+        // user can see the active state.
         if ($subscription->status !== 'expired' && $subscription->isExpired()) {
-            $subscription->update(['status' => 'expired']);
+            $recentlyVerified = $subscription->last_verified_at
+                && now()->diffInMinutes($subscription->last_verified_at) < 10;
+
+            if (!$recentlyVerified) {
+                $subscription->update(['status' => 'expired']);
+            }
         }
 
         return $subscription;
