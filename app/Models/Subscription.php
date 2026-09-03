@@ -137,7 +137,12 @@ class Subscription extends Model
             return true;
         }
         if ($this->expires_at && now()->isAfter($this->expires_at)) {
-            return true;
+            $recentlyVerified = $this->last_verified_at
+                && now()->diffInMinutes($this->last_verified_at) < 10;
+
+            if (!$recentlyVerified) {
+                return true;
+            }
         }
         return false;
     }
