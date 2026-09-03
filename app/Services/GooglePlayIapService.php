@@ -86,7 +86,8 @@ class GooglePlayIapService
             ]);
 
             // Check payment state
-            // paymentState: 0=pending, 1=approved, 2=free trial, 3=pending (upgrade/downgrade)
+            // paymentState: 0=pending, 1=approved, 2=free trial
+            // Mapped from v2 subscriptionState: ACTIVE/IN_GRACE_PERIOD=1, PENDING=0
             $paymentState = $result['paymentState'] ?? -1;
             if ($paymentState != 1 && $paymentState != 2) {
                 Log::warning('GooglePlayIapService: payment not approved', ['paymentState' => $paymentState]);
@@ -410,27 +411,59 @@ class GooglePlayIapService
 
     /**
      * Verify subscription with Google Play Developer API.
+     * Uses the v2 API (purchases.subscriptionsv2.get) as the v1 endpoint
+     * (purchases.subscriptions.get) is deprecated and restricted.
      */
     private function _verifySubscription(string $accessToken, string $purchaseToken, string $subscriptionId): ?array
     {
-        if (empty($subscriptionId)) {
-            Log::warning('GooglePlayIapService: missing subscriptionId for verification');
+        if (empty($purchaseToken)) {
+            Log::warning('GooglePlayIapService: missing purchaseToken for verification');
             return null;
         }
 
-        // GET .../purchases/subscriptions/{subscriptionId}/tokens/{token}
+        // GET .../purchases/subscriptionsv2/tokens/{token}
+        // Note: v2 endpoint does not include subscriptionId in the URL path.
         $url = sprintf(
-            '%s/%s/purchases/subscriptions/%s/tokens/%s',
+            '%s/%s/purchases/subscriptionsv2/tokens/%s',
             self::API_BASE,
             $this->packageName,
-            $subscriptionId,
             $purchaseToken
         );
 
         $response = Http::withToken($accessToken)->get($url);
 
         if ($response->successful()) {
-            return $response->json();
+            $data = $response->json();
+
+            // Normalize v2 response to match the legacy v1 format expected
+            // by the rest of the code (paymentState, orderId, expiryTimeMillis, etc.)
+            $subscriptionState = $data['subscriptionState'] ?? 'SUBSCRIPTION_STATE_PENDING';
+
+            $paymentState = match ($subscriptionState) {
+                'SUBSCRIPTION_STATE_ACTIVE',
+                'SUBSCRIPTION_STATE_IN_GRACE_PERIOD' => 1,
+
+                'SUBSCRIPTION_STATE_PENDING' => 0,
+
+                default => 0,
+            };
+
+            $lineItem = $data['lineItems'][0] ?? [];
+            $expiryTime = $lineItem['expiryTime'] ?? null;
+            $startTime = $data['startTime'] ?? null;
+            $latestOrderId = $data['latestOrderId'] ?? null;
+            $autoRenewing = $lineItem['autoRenewingPlan']['autoRenewEnabled'] ?? false;
+
+            return [
+                'paymentState' => $paymentState,
+                'orderId' => $latestOrderId,
+                'expiryTimeMillis' => $expiryTime ? \Carbon\Carbon::parse($expiryTime)->valueOf() : null,
+                'startTimeMillis' => $startTime ? \Carbon\Carbon::parse($startTime)->valueOf() : null,
+                'autoRenewing' => $autoRenewing,
+                'subscriptionState' => $subscriptionState,
+                'productId' => $lineItem['productId'] ?? $subscriptionId,
+                'testPurchase' => $data['testPurchase'] ?? null,
+            ];
         }
 
         Log::warning('GooglePlayIapService: subscription verification failed', [
