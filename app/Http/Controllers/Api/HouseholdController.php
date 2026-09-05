@@ -547,16 +547,23 @@ class HouseholdController extends Controller
         // Exception: if the creator is the ONLY active member, they can leave
         // (which effectively abandons the household).
         if ($membership->isAdmin()) {
-            $otherActiveMembers = HouseholdMember::where('household_id', $householdId)
+            $hasOtherMembers = HouseholdMember::where('household_id', $householdId)
                 ->where('status', 'active')
                 ->where('user_id', '!=', $user->id)
                 ->exists();
 
-            if ($otherActiveMembers) {
+            if ($hasOtherMembers) {
+                $household = Household::find($householdId);
                 return response()->json([
                     'success' => false,
-                    'message' => 'You cannot leave a household you manage. Transfer ownership or close the household first.',
-                ], 403);
+                    'error_code' => 'CREATOR_OF_HOUSEHOLD',
+                    'message' => 'You are an admin or creator of ' . ($household->name ?? 'this household') . '. Before leaving, you need to transfer ownership to another member or close the household.',
+                    'data' => [
+                        'current_household_id' => $householdId,
+                        'current_household_name' => $household->name ?? null,
+                        'has_other_members' => true,
+                    ],
+                ], 409);
             }
 
             // Sole member (creator only) — deleting membership effectively
