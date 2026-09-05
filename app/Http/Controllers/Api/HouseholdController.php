@@ -22,7 +22,9 @@ class HouseholdController extends Controller
      */
     public function index(Request $request)
     {
-        $households = $request->user()->households()->get();
+        $households = $request->user()->households()
+            ->wherePivot('status', '!=', 'removed')
+            ->get();
 
         return response()->json([
             'success' => true,
@@ -79,8 +81,18 @@ class HouseholdController extends Controller
         // Also check for accepted invitations (user accepted but hasn't been
         // approved yet — the pending HouseholdMember should exist, but as a
         // safety net we also guard against orphaned accepted invitations).
+        // Ignore if the user's membership was removed (they're free to create).
         $acceptedInvitation = Invitation::where('invited_email', Auth::user()->email)
             ->where('status', 'accepted')
+            ->whereHas('household', function ($q) {
+                $q->where('status', 'active');
+            })
+            ->whereNotIn('household_id', function ($q) {
+                $q->select('household_id')
+                    ->from('household_members')
+                    ->where('user_id', Auth::id())
+                    ->where('status', 'removed');
+            })
             ->first();
 
         if ($acceptedInvitation) {

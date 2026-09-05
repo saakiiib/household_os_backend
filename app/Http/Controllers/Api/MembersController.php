@@ -630,6 +630,17 @@ class MembersController extends Controller
 
         $targetMember->update(['status' => 'removed']);
 
+        // Also void any invitation for this user to this household so they
+        // can create a new household without being blocked by an
+        // 'accepted' invitation that was never approved.
+        $targetUser = $targetMember->user;
+        if ($targetUser) {
+            Invitation::where('household_id', $household_id)
+                ->where('invited_email', $targetUser->email)
+                ->whereIn('status', ['pending', 'accepted'])
+                ->update(['status' => 'cancelled']);
+        }
+
         // Notify the removed member
         try {
             $household = Household::find($household_id);

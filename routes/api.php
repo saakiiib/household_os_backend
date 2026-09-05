@@ -75,7 +75,7 @@ Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
 | Protected Routes (Authenticated)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:api', 'throttle:60,1'])->group(function () {
+Route::middleware(['auth:api', 'throttle:120,1'])->group(function () {
     Route::get('invitations/pending', [AuthController::class, 'pendingInvitations']);
 
     // Profile
