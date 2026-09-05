@@ -25,6 +25,7 @@ class CheckSubscriptionExpiry extends Command
             $this->handleGracePeriodTransitions();
             $this->handleTrialExpiry();
             $this->sendPaidExpiryWarnings();
+            $this->refreshAppleSubscriptions();
         } finally {
             Cache::forget('subscription-check-running');
         }
@@ -69,7 +70,13 @@ class CheckSubscriptionExpiry extends Command
 
         foreach ($toExpired as $sub) {
             if ($sub->provider === 'apple') {
-                app(\App\Services\AppleIapService::class)->refreshFromApple($sub);
+                // For Apple subscriptions, always refresh with Apple first
+                // Only mark as expired if Apple confirms it
+                $refreshed = app(\App\Services\AppleIapService::class)->refreshFromApple($sub);
+                if ($refreshed && $sub->fresh()->status === 'expired') {
+                    $sub->markExpired();
+                    $this->line("Expired (Apple confirmed): Household #{$sub->household_id}");
+                }
                 continue;
             }
             if (!$sub->isActive()) {
@@ -289,5 +296,23 @@ class CheckSubscriptionExpiry extends Command
         $meta = $sub->metadata ?? [];
         $meta["notified_{$key}"] = now()->toIso8601String();
         $sub->update(['metadata' => $meta]);
+    }
+
+    /**
+     * Periodically refresh ALL active Apple subscriptions to keep last_verified_at current.
+     * This prevents false expiration due to stale last_verified_at.
+     */
+    private function refreshAppleSubscriptions(): void
+    {
+        $appleSubs = Subscription::where('provider', 'apple')
+            ->whereIn('status', ['active', 'grace_period', 'billing_retry'])
+            ->get();
+
+        foreach ($appleSubs as $sub) {
+            $refreshed = app(\App\Services\AppleIapService::class)->refreshFromApple($sub);
+            if ($refreshed) {
+                $this->line("Refreshed Apple subscription: Household #{$sub->household_id}");
+            }
+        }
     }
 }
