@@ -21,8 +21,8 @@ class EntitlementService
     // Free tier (command.txt §19).
     public const FREE_TASKS = 10;
     public const FREE_RENEWALS = 3;
-    public const FREE_DOCUMENT_BYTES = 100 * 1024 * 1024; // 100 MB
-    public const FREE_MEMBERS = 4;
+    public const FREE_DOCUMENT_BYTES = 10 * 1024 * 1024; // 10 MB
+    public const MAX_MEMBERS = 6; // All plans (free + paid) capped at 6 members
 
     public const DOCUMENTS_PLAN_BYTES = 5 * 1024 * 1024 * 1024; // 5 GB
 
@@ -121,17 +121,14 @@ class EntitlementService
 
     /**
      * Whether another member can be added to the household.
-     * Free tier is capped at FREE_MEMBERS; paid plans are unlimited.
+     * All plans (free + paid) are capped at MAX_MEMBERS.
      */
     public function canAddMember(Household $household): bool
     {
-        if ($this->getPlanCode($household) === 'free') {
-            $count = HouseholdMember::where('household_id', $household->id)
-                ->where('status', 'active')
-                ->count();
-            return $count < self::FREE_MEMBERS;
-        }
-        return true;
+        $count = HouseholdMember::where('household_id', $household->id)
+            ->where('status', 'active')
+            ->count();
+        return $count < self::MAX_MEMBERS;
     }
 
     public function getStorageUsed(Household $household): int

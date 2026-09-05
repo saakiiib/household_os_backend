@@ -361,8 +361,9 @@ class StripeService
 
         $subscription->update([
             'status' => 'active',
-            'current_period_start' => now()->timestamp($invoice->period_start),
-            'current_period_end' => now()->timestamp($invoice->period_end),
+            'current_period_start' => \Carbon\Carbon::createFromTimestamp($invoice->period_start),
+            'current_period_end' => \Carbon\Carbon::createFromTimestamp($invoice->period_end),
+            'expires_at' => \Carbon\Carbon::createFromTimestamp($invoice->period_end),
         ]);
 
         $this->recordPayment(

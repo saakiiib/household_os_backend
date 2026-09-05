@@ -22,10 +22,8 @@ class CheckSubscriptionExpiry extends Command
         }
 
         try {
-            $this->handleGracePeriodTransitions();
             $this->handleTrialExpiry();
             $this->sendPaidExpiryWarnings();
-            $this->refreshAppleSubscriptions();
         } finally {
             Cache::forget('subscription-check-running');
         }
@@ -35,56 +33,14 @@ class CheckSubscriptionExpiry extends Command
     }
 
     /**
-     * Move active subscriptions to grace period, and grace period to expired.
+     * NO automatic expiry based on local timestamps.
      *
-     * command.txt §51 Rule 10: Apple billing status — not this cron — decides
-     * expiry/renewal for Apple subscriptions. So for provider=apple rows we
-     * re-verify with Apple instead of transitioning locally. Legacy
-     * Stripe/PayPal subscriptions keep the local transitions.
+     * - Apple subscriptions: expiry is determined by Apple's live data
+     *   (refreshed on-demand when user opens a screen, NOT by this cron).
+     * - Stripe/PayPal: expiry is determined by webhooks (renewal/failure).
+     *
+     * This cron only handles deterministic trial expiry and sends warnings.
      */
-    private function handleGracePeriodTransitions(): void
-    {
-        $now = now();
-
-        // Active subscriptions past their period_end but not yet past expires_at → grace period
-        $toGrace = Subscription::where('status', 'active')
-            ->whereNotNull('current_period_end')
-            ->where('current_period_end', '<', $now)
-            ->where(function ($q) use ($now) {
-                $q->whereNull('expires_at')->orWhere('expires_at', '>', $now);
-            })
-            ->get();
-
-        foreach ($toGrace as $sub) {
-            if ($sub->provider === 'apple') {
-                app(\App\Services\AppleIapService::class)->refreshFromApple($sub);
-                continue;
-            }
-            $sub->moveToGracePeriod();
-            $this->line("Moved to grace period: Household #{$sub->household_id}");
-        }
-
-        // Grace period / cancelled subscriptions past their access window → expired
-        $toExpired = Subscription::whereIn('status', ['grace_period', 'cancelled'])
-            ->get();
-
-        foreach ($toExpired as $sub) {
-            if ($sub->provider === 'apple') {
-                // For Apple subscriptions, always refresh with Apple first
-                // Only mark as expired if Apple confirms it
-                $refreshed = app(\App\Services\AppleIapService::class)->refreshFromApple($sub);
-                if ($refreshed && $sub->fresh()->status === 'expired') {
-                    $sub->markExpired();
-                    $this->line("Expired (Apple confirmed): Household #{$sub->household_id}");
-                }
-                continue;
-            }
-            if (!$sub->isActive()) {
-                $sub->markExpired();
-                $this->line("Expired: Household #{$sub->household_id}");
-            }
-        }
-    }
 
     /**
      * Handle trial expiry:
@@ -296,23 +252,5 @@ class CheckSubscriptionExpiry extends Command
         $meta = $sub->metadata ?? [];
         $meta["notified_{$key}"] = now()->toIso8601String();
         $sub->update(['metadata' => $meta]);
-    }
-
-    /**
-     * Periodically refresh ALL active Apple subscriptions to keep last_verified_at current.
-     * This prevents false expiration due to stale last_verified_at.
-     */
-    private function refreshAppleSubscriptions(): void
-    {
-        $appleSubs = Subscription::where('provider', 'apple')
-            ->whereIn('status', ['active', 'grace_period', 'billing_retry'])
-            ->get();
-
-        foreach ($appleSubs as $sub) {
-            $refreshed = app(\App\Services\AppleIapService::class)->refreshFromApple($sub);
-            if ($refreshed) {
-                $this->line("Refreshed Apple subscription: Household #{$sub->household_id}");
-            }
-        }
     }
 }

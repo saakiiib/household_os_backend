@@ -52,6 +52,11 @@ class SubscriptionController extends Controller
     /**
      * Get current household's subscription.
      * Subscription is per-household, not per-user.
+     *
+     * On-demand Apple refresh: when the user opens a screen that calls this
+     * endpoint, the server re-verifies the Apple subscription with Apple's
+     * App Store Server API. This is the ONLY place expiry is decided for
+     * Apple IAP — no cron, no local timestamp logic.
      */
     public function current(Request $request): JsonResponse
     {
@@ -63,6 +68,30 @@ class SubscriptionController extends Controller
                 'success' => true,
                 'data' => null,
             ]);
+        }
+
+        // On-demand provider refresh — re-query the store for the authoritative
+        // current state. This is throttled to once every 5 minutes per
+        // household to avoid hitting rate limits.
+        $lastVerified = $subscription->last_verified_at;
+        $stale = !$lastVerified || $lastVerified->lt(now()->subMinutes(5));
+        if ($stale) {
+            try {
+                if ($subscription->provider === 'apple') {
+                    app(\App\Services\AppleIapService::class)->refreshFromApple($subscription);
+                    $subscription->refresh();
+                } elseif ($subscription->provider === 'google_play') {
+                    app(\App\Services\GooglePlayIapService::class)->refreshFromGoogle($subscription);
+                    $subscription->refresh();
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('SubscriptionController@current: provider refresh failed', [
+                    'household_id' => $subscription->household_id,
+                    'provider' => $subscription->provider,
+                    'error' => $e->getMessage(),
+                ]);
+                // Continue with local data — do not break the request.
+            }
         }
 
         $subscription->load(['plan', 'subscriber', 'user']);

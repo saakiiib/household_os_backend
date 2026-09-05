@@ -835,14 +835,49 @@ class AppleIapService
         }
 
         $tx = $statusResult['transaction'] ?? [];
-        $status = $this->mapAppleStatus((int) ($statusResult['status'] ?? self::STATUS_ACTIVE));
+        $appleStatusCode = (int) ($statusResult['status'] ?? self::STATUS_ACTIVE);
+        $newStatus = $this->mapAppleStatus($appleStatusCode);
 
         $periodEnd = isset($tx['expiresDate'])
             ? \Carbon\Carbon::createFromTimestampMs((int) $tx['expiresDate'])
             : $subscription->current_period_end;
 
+        // CRITICAL: Never downgrade a currently-active subscription based on
+        // a single Apple re-query. Apple's status can be stale/transient, and
+        // overwriting local 'active' with a momentary 'expired' from Apple
+        // would lock the user out until the next refresh. We trust Apple's
+        // expiresDate, but we only accept a status downgrade if Apple confirms
+        // the expiresDate has actually passed.
+        $currentStatus = $subscription->status;
+        $finalStatus = $newStatus;
+        if ($currentStatus === 'active' && in_array($newStatus, ['expired', 'revoked'], true)) {
+            $appleExpires = isset($tx['expiresDate'])
+                ? \Carbon\Carbon::createFromTimestampMs((int) $tx['expiresDate'])
+                : null;
+            if ($appleExpires && now()->isAfter($appleExpires)) {
+                // Apple's expiresDate is genuinely in the past — accept the downgrade.
+                $finalStatus = $newStatus;
+                Log::info('AppleIapService: applying Apple downgrade (expiresDate in past)', [
+                    'subscription_id' => $subscription->id,
+                    'old' => $currentStatus,
+                    'new' => $finalStatus,
+                    'apple_expires' => $appleExpires->toIso8601String(),
+                ]);
+            } else {
+                // Apple says expired but expiresDate is still in the future —
+                // keep the local 'active' status to avoid false expiry.
+                $finalStatus = 'active';
+                Log::warning('AppleIapService: ignoring Apple downgrade (expiresDate in future)', [
+                    'subscription_id' => $subscription->id,
+                    'apple_returned_status' => $newStatus,
+                    'apple_expires' => $appleExpires?->toIso8601String(),
+                    'now' => now()->toIso8601String(),
+                ]);
+            }
+        }
+
         $subscription->update([
-            'status' => $status,
+            'status' => $finalStatus,
             'latest_transaction_id' => $tx['transactionId'] ?? $subscription->latest_transaction_id,
             'current_period_end' => $periodEnd,
             'expires_at' => $periodEnd,
@@ -857,7 +892,7 @@ class AppleIapService
 
         Log::info('AppleIapService: applyRawStatus updated subscription', [
             'subscription_id' => $subscription->id,
-            'status' => $status,
+            'status' => $finalStatus,
             'auto_renew' => $subscription->auto_renew,
             'expires_at' => $subscription->expires_at?->toIso8601String(),
         ]);

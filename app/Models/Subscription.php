@@ -138,15 +138,28 @@ class Subscription extends Model
         if ($this->status === 'expired') {
             return true;
         }
+        // Use the authoritative expires_at for expiry check. For Apple, only
+        // apply on-demand (Apple re-queries live). For Google/Stripe/PayPal,
+        // the expires_at is set by webhooks or verify flows and is authoritative.
         if ($this->expires_at && now()->isAfter($this->expires_at)) {
-            $recentlyVerified = $this->last_verified_at
-                && now()->diffInMinutes($this->last_verified_at) < 10;
-
-            if (!$recentlyVerified) {
-                return true;
-            }
+            return true;
         }
         return false;
+    }
+
+    /**
+     * Check if a downgrade is allowed (after current period ends)
+     */
+    public function canDowngradeNow(): bool
+    {
+        if ($this->status !== 'active' && $this->status !== 'grace_period') {
+            return true; // Already expired, can downgrade anytime
+        }
+        // Can only downgrade after current_period_end has passed
+        if ($this->current_period_end && now()->isBefore($this->current_period_end)) {
+            return false;
+        }
+        return true;
     }
 
     public function daysRemaining(): int
