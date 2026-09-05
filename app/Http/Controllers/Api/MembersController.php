@@ -179,26 +179,59 @@ class MembersController extends Controller
             ->first();
 
         if ($existingInvitation) {
-            $emailSent = true;
-            try {
-                $inviter = Auth::user();
-                $inviterName = $inviter->name ?? $inviter->email;
-                Notification::route('mail', $invitedEmail)
-                    ->notify(new InvitationMail(
-                        $household->name,
-                        $existingInvitation->role,
-                        $inviterName
-                    ));
-            } catch (\Exception $e) {
-                \Log::error('Invitation resend failed for ' . $invitedEmail . ': ' . $e->getMessage());
-                $emailSent = false;
+            $notificationSent = false;
+            $inviter = Auth::user();
+            $inviterName = $inviter->name ?? $inviter->email;
+
+            // Check if invited user already has an account
+            $existingUser = User::where('email', $invitedEmail)->first();
+
+            if ($existingUser) {
+                // Existing user — send FCM push notification (they'll see it in the app)
+                try {
+                    app(NotificationService::class)->sendToUser(
+                        $existingUser->id,
+                        'Household Invitation',
+                        $inviterName . ' invited you to join ' . $household->name,
+                        'invitation',
+                        [
+                            'module' => 'household',
+                            'action_type' => 'household',
+                            'action_id' => $household->id,
+                            'type' => 'invitation',
+                            'id' => $existingInvitation->id,
+                            'household_id' => $household->id,
+                            'household_name' => $household->name,
+                            'invited_email' => $existingInvitation->invited_email,
+                            'inviter_name' => $inviterName,
+                            'invitation_token' => $existingInvitation->token,
+                        ],
+                        'high'
+                    );
+                    $notificationSent = true;
+                } catch (\Throwable $e) {
+                    \Log::error('Invitation push resend failed for ' . $invitedEmail . ': ' . $e->getMessage());
+                }
+            } else {
+                // New user — send email (they need it to know they were invited)
+                try {
+                    Notification::route('mail', $invitedEmail)
+                        ->notify(new InvitationMail(
+                            $household->name,
+                            $existingInvitation->role,
+                            $inviterName
+                        ));
+                    $notificationSent = true;
+                } catch (\Exception $e) {
+                    \Log::error('Invitation email resend failed for ' . $invitedEmail . ': ' . $e->getMessage());
+                }
             }
 
             return response()->json([
                 'success' => true,
-                'message' => $emailSent
+                'message' => $notificationSent
                     ? 'Invitation resent successfully.'
-                    : 'Invitation already sent. Email could not be resent.',
+                    : 'Invitation already sent. Notification could not be resent.',
                 'data' => [
                     'id' => $existingInvitation->id,
                     'invited_email' => $existingInvitation->invited_email,
