@@ -52,6 +52,11 @@ Route::get('/clean-db', function () {
         'tasks',
         'users',
         'vehicles',
+        'device_tokens',
+        'oauth_access_tokens',
+        'oauth_refresh_tokens',
+        'oauth_auth_codes',
+        'oauth_device_codes',
     ];
 
     foreach ($tables as $table) {
