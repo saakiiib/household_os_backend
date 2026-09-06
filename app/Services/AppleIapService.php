@@ -899,7 +899,7 @@ class AppleIapService
                 $tx['purchaseDate'] ?? null,
                 $tx['expiresDate'] ?? null
             );
-            if ($created && ($status === 'active' || $status === 'grace_period')) {
+            if ($created && ($finalStatus === 'active' || $finalStatus === 'grace_period')) {
                 $this->recordPayment($subscription, $tx['transactionId']);
             }
         }

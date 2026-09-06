@@ -103,7 +103,7 @@ class SubscriptionController extends Controller
         $payer = $subscription->subscriber ?? $subscription->user;
         $payerName = $payer ? ($payer->first_name ? $payer->first_name . ' ' . $payer->last_name : ($payer->name ?? $payer->email)) : null;
 
-        $hasActivePaidSubscription = $subscription->isActive() && $subscription->status !== 'trial';
+        $hasActivePaidSubscription = $subscription->isActive() && !$subscription->isTrial();
         $canPurchase = !$hasActivePaidSubscription;
         $canManage = $isSubscriber;
 
@@ -115,8 +115,8 @@ class SubscriptionController extends Controller
             ? $entitlementService->getPlanCode($household)
             : 'free';
         $accessState = match (true) {
-            $subscription->status === 'trial' && $subscription->isActive() => 'trial',
-            $subscription->isActive() && $subscription->status !== 'trial' => 'paid',
+            $subscription->isTrial() && $subscription->isActive() => 'trial',
+            $subscription->isActive() && !$subscription->isTrial() => 'paid',
             default => 'free',
         };
 

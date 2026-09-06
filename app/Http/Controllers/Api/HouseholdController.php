@@ -132,7 +132,7 @@ class HouseholdController extends Controller
             ->first();
         if ($completePlan) {
             $now = now();
-            $trialEnd = $now->copy()->addMonth();
+            $trialEnd = $now->copy()->addDays(30);
             Subscription::create([
                 'user_id' => Auth::id(),
                 'subscriber_user_id' => Auth::id(),

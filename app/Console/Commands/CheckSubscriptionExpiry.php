@@ -75,6 +75,9 @@ class CheckSubscriptionExpiry extends Command
                     'plan_status' => 'free',
                     'paid_plan' => null,
                     'billing_period' => null,
+                    'trial_started_at' => null,
+                    'trial_ends_at' => null,
+                    'subscription_plan_id' => null,
                 ]);
 
                 $this->line("Trial expired → Free: Household #{$sub->household_id}");

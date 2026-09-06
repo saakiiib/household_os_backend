@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Stripe;
 use Stripe\Customer;
@@ -177,9 +178,6 @@ class StripeService
             ->where('status', 'pending')
             ->first();
 
-        // Find or create subscription
-        $subscription = Subscription::where('household_id', $householdId)->first();
-
         $now = now();
         $periodEnd = $paymentType === 'annual' ? $now->copy()->addYear() : $now->copy()->addMonth();
         $expiresAt = $periodEnd->copy()->addDays(Subscription::GRACE_PERIOD_DAYS);
@@ -224,33 +222,33 @@ class StripeService
             'cancelled_at' => null,
         ];
 
-        if ($subscription) {
-            $subscription->update($data);
-        } else {
-            $data['user_id'] = $user->id;
-            $data['household_id'] = $householdId;
-            $subscription = Subscription::create($data);
-        }
+        DB::transaction(function () use ($user, $householdId, $data, $payment, $planId, $session, $sessionId, &$subscription) {
+            $subscription = Subscription::where('household_id', $householdId)->first();
+            if ($subscription) {
+                $subscription->update($data);
+            } else {
+                $data['user_id'] = $user->id;
+                $data['household_id'] = $householdId;
+                $subscription = Subscription::create($data);
+            }
 
-        // Ensure only one active subscription per household. Any other
-        // subscriptions are marked as replaced so the household shows only
-        // the latest purchase.
-        Subscription::where('household_id', $householdId)
-            ->where('id', '!=', $subscription->id)
-            ->update(['status' => 'replaced']);
+            Subscription::where('household_id', $householdId)
+                ->where('id', '!=', $subscription->id)
+                ->update(['status' => 'replaced']);
 
-        if ($payment) {
-            $payment->update([
-                'subscription_id' => $subscription->id,
-                'status' => 'succeeded',
-            ]);
-        } else {
-            $this->recordPayment(
-                $user, $subscription, $planId,
-                $session->amount_total / 100, 'succeeded',
-                $sessionId
-            );
-        }
+            if ($payment) {
+                $payment->update([
+                    'subscription_id' => $subscription->id,
+                    'status' => 'succeeded',
+                ]);
+            } else {
+                $this->recordPayment(
+                    $user, $subscription, $planId,
+                    $session->amount_total / 100, 'succeeded',
+                    $sessionId
+                );
+            }
+        });
 
         \Log::info('Stripe confirm: subscription activated', [
             'household_id' => $householdId,
@@ -317,37 +315,64 @@ class StripeService
         $planId = $session->metadata->plan_id ?? null;
         $paymentType = $session->metadata->payment_type ?? 'monthly';
 
-        // Find existing subscription for this household, or create new
-        $subscription = Subscription::where('household_id', $householdId)->first();
-
-        $now = now();
-        $periodEnd = $paymentType === 'annual' ? $now->copy()->addYear() : $now->copy()->addMonth();
-        $expiresAt = $periodEnd->copy()->addDays(\App\Models\Subscription::GRACE_PERIOD_DAYS);
-
-        $data = [
-            'subscription_plan_id' => $planId,
-            'status' => 'active',
-            'payment_method' => 'stripe',
-            'stripe_subscription_id' => $session->subscription,
-            'stripe_customer_id' => $session->customer,
-            'current_period_start' => $now,
-            'current_period_end' => $periodEnd,
-            'expires_at' => $expiresAt,
-            'trial_started_at' => null,
-            'trial_ends_at' => null,
-            'cancelled_at' => null,
-        ];
-
-        if ($subscription) {
-            $subscription->update($data);
-        } else {
-            $data['user_id'] = $user->id;
-            $data['household_id'] = $householdId;
-            $subscription = Subscription::create($data);
+        $plan = SubscriptionPlan::find($planId);
+        if (!$plan) {
+            \Log::error('Stripe webhook: plan not found', ['plan_id' => $planId]);
+            return;
         }
 
-        // Record payment linked to household
-        $this->recordPayment($user, $subscription, $planId, $session->amount_total / 100, 'succeeded', $session->payment_intent);
+        DB::transaction(function () use ($user, $householdId, $plan, $paymentType, $session) {
+            $now = now();
+
+            $trialSubscription = Subscription::where('household_id', $householdId)
+                ->where('status', 'trial')
+                ->where('trial_ends_at', '>', now())
+                ->first();
+
+            if ($trialSubscription && $trialSubscription->trial_ends_at) {
+                $periodStart = $trialSubscription->trial_ends_at;
+            } else {
+                $periodStart = $now;
+            }
+
+            $periodEnd = $paymentType === 'annual'
+                ? $periodStart->copy()->addYear()
+                : $periodStart->copy()->addMonth();
+            $expiresAt = $periodEnd->copy()->addDays(\App\Models\Subscription::GRACE_PERIOD_DAYS);
+
+            $subscription = Subscription::where('household_id', $householdId)->first();
+
+            $data = [
+                'subscription_plan_id' => $plan->id,
+                'status' => 'active',
+                'plan_status' => 'paid',
+                'paid_plan' => $plan->slug,
+                'billing_period' => $paymentType,
+                'payment_method' => 'stripe',
+                'stripe_subscription_id' => $session->subscription,
+                'stripe_customer_id' => $session->customer,
+                'current_period_start' => $periodStart,
+                'current_period_end' => $periodEnd,
+                'expires_at' => $expiresAt,
+                'trial_started_at' => null,
+                'trial_ends_at' => null,
+                'cancelled_at' => null,
+            ];
+
+            if ($subscription) {
+                $subscription->update($data);
+            } else {
+                $data['user_id'] = $user->id;
+                $data['household_id'] = $householdId;
+                $subscription = Subscription::create($data);
+            }
+
+            Subscription::where('household_id', $householdId)
+                ->where('id', '!=', $subscription->id)
+                ->update(['status' => 'replaced']);
+
+            $this->recordPayment($user, $subscription, $plan->id, $session->amount_total / 100, 'succeeded', $session->payment_intent);
+        });
     }
 
     private function handleInvoicePaid($invoice): void

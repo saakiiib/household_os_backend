@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -276,9 +277,6 @@ class PayPalService
         }
         $householdId = $payment->household_id;
 
-        // Find or create subscription for this household
-        $subscription = Subscription::where('household_id', $householdId)->first();
-
         $now = now();
         $periodEnd = $paymentType === 'annual' ? $now->copy()->addYear() : $now->copy()->addMonth();
         $expiresAt = $periodEnd->copy()->addDays(Subscription::GRACE_PERIOD_DAYS);
@@ -300,42 +298,41 @@ class PayPalService
             $periodStart = $now;
         }
 
-        $subData = [
-            'subscription_plan_id' => $plan->id,
-            'status' => 'active',
-            'plan_status' => 'paid',
-            'paid_plan' => $plan->slug,
-            'billing_period' => $paymentType,
-            'payment_method' => 'paypal',
-            'paypal_subscription_id' => $orderId,
-            'current_period_start' => $periodStart,
-            'current_period_end' => $periodEnd,
-            'expires_at' => $expiresAt,
-            'trial_started_at' => null,
-            'trial_ends_at' => null,
-            'cancelled_at' => null,
-        ];
+        DB::transaction(function () use ($user, $householdId, $plan, $paymentType, $payment, &$subscription, $periodStart, $periodEnd, $expiresAt, $orderId) {
+            $subData = [
+                'subscription_plan_id' => $plan->id,
+                'status' => 'active',
+                'plan_status' => 'paid',
+                'paid_plan' => $plan->slug,
+                'billing_period' => $paymentType,
+                'payment_method' => 'paypal',
+                'paypal_subscription_id' => $orderId,
+                'current_period_start' => $periodStart,
+                'current_period_end' => $periodEnd,
+                'expires_at' => $expiresAt,
+                'trial_started_at' => null,
+                'trial_ends_at' => null,
+                'cancelled_at' => null,
+            ];
 
-        if ($subscription) {
-            $subscription->update($subData);
-        } else {
-            $subData['user_id'] = $user->id;
-            $subData['household_id'] = $householdId;
-            $subscription = Subscription::create($subData);
-        }
+            $subscription = Subscription::where('household_id', $householdId)->first();
+            if ($subscription) {
+                $subscription->update($subData);
+            } else {
+                $subData['user_id'] = $user->id;
+                $subData['household_id'] = $householdId;
+                $subscription = Subscription::create($subData);
+            }
 
-        // Ensure only one active subscription per household. Any other
-        // subscriptions are marked as replaced so the household shows only
-        // the latest purchase.
-        Subscription::where('household_id', $householdId)
-            ->where('id', '!=', $subscription->id)
-            ->update(['status' => 'replaced']);
+            Subscription::where('household_id', $householdId)
+                ->where('id', '!=', $subscription->id)
+                ->update(['status' => 'replaced']);
 
-        // Update payment record
-        $payment->update([
-            'subscription_id' => $subscription->id,
-            'status' => 'succeeded',
-        ]);
+            $payment->update([
+                'subscription_id' => $subscription->id,
+                'status' => 'succeeded',
+            ]);
+        });
 
         Log::info('PayPal activateFromCapture: success', [
             'order_id' => $orderId,
