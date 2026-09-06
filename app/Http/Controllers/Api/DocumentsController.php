@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Document;
 use App\Models\DocumentFile;
 use App\Models\Household;
+use App\Models\HouseholdMember;
 use App\Services\EntitlementService;
 use App\Services\FileEncryptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class DocumentsController extends Controller
 {
@@ -30,6 +33,19 @@ class DocumentsController extends Controller
     public function index(Request $request, $household_id)
     {
         $userId = Auth::id();
+
+        // Caller must be an active member of this household
+        $isActiveMember = HouseholdMember::where('household_id', $household_id)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->exists();
+
+        if (!$isActiveMember) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have access to this household.',
+            ], 403);
+        }
 
         $query = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id'])
             ->where('household_id', $household_id);
@@ -82,14 +98,34 @@ class DocumentsController extends Controller
      */
     public function store(Request $request, $household_id)
     {
+        $userId = Auth::id();
+
+        // Must be an active member to create documents in this household
+        $isActiveMember = HouseholdMember::where('household_id', $household_id)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->exists();
+
+        if (!$isActiveMember) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to add documents to this household.',
+            ], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'title'             => 'required|string|max:255',
             'category'          => 'required|string|max:100',
             'description'       => 'nullable|string|max:2000',
             'due_date'          => 'nullable|date',
-            'visibility'        => 'nullable|in:all,specific',
-            'allowed_user_ids'  => 'nullable|array',
-            'allowed_user_ids.*' => 'integer|exists:users,id',
+            'visibility'        => 'required|in:all,specific',
+            'allowed_user_ids'  => 'required_if:visibility,specific|array|min:1',
+            'allowed_user_ids.*' => [
+                'integer',
+                Rule::exists('household_members', 'user_id')
+                    ->where('household_id', (int) $household_id)
+                    ->where('status', 'active'),
+            ],
         ]);
 
         if ($validator->fails()) {
@@ -100,13 +136,8 @@ class DocumentsController extends Controller
             ], 422);
         }
 
-        $visibility = $request->input('visibility', 'specific');
-        $allowedUserIds = $request->input('allowed_user_ids', []);
-
-        // If visibility is 'all', ignore allowed_user_ids
-        if ($visibility === 'all') {
-            $allowedUserIds = [];
-        }
+        $visibility = $request->input('visibility');
+        $allowedUserIds = $visibility === 'all' ? [] : $request->input('allowed_user_ids', []);
 
         $files = [];
         if ($request->hasFile('files')) {
@@ -164,7 +195,7 @@ class DocumentsController extends Controller
         try {
             $document = Document::create([
                 'household_id'       => $household_id,
-                'created_by_user_id' => Auth::id(),
+                'created_by_user_id' => $userId,
                 'title'              => $request->title,
                 'category'           => $request->category,
                 'description'        => $request->description,
@@ -200,7 +231,7 @@ class DocumentsController extends Controller
                 $this->fileService->delete($path);
             }
 
-            \Log::error('Document store failed: ' . $e->getMessage());
+            Log::error('Document store failed: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -213,7 +244,7 @@ class DocumentsController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Document created successfully',
-            'data' => $this->formatDocument($document, Auth::id()),
+            'data' => $this->formatDocument($document, $userId),
         ], 201);
     }
 
@@ -248,14 +279,38 @@ class DocumentsController extends Controller
     {
         $document = Document::where('household_id', $household_id)->findOrFail($document_id);
 
+        if (!$document->canUserManage(Auth::id())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the document creator can modify this document.',
+            ], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'title'             => 'sometimes|string|max:255',
             'category'          => 'sometimes|string|max:100',
             'description'       => 'nullable|string|max:2000',
             'due_date'          => 'nullable|date',
-            'visibility'        => 'nullable|in:all,specific',
-            'allowed_user_ids'  => 'nullable|array',
-            'allowed_user_ids.*' => 'integer|exists:users,id',
+            'visibility'        => 'sometimes|in:all,specific',
+            'allowed_user_ids'  => [
+                Rule::requiredIf(fn() => $request->input('visibility') === 'specific'),
+                'nullable',
+                'array',
+                function ($attribute, $value, $fail) use ($request, $document) {
+                    $effectiveVisibility = $request->input('visibility', $document->visibility);
+                    if ($effectiveVisibility === 'specific' && $request->has('allowed_user_ids')) {
+                        if (!is_array($value) || count($value) === 0) {
+                            $fail('At least one active household member must be selected for specific visibility.');
+                        }
+                    }
+                },
+            ],
+            'allowed_user_ids.*' => [
+                'integer',
+                Rule::exists('household_members', 'user_id')
+                    ->where('household_id', (int) $household_id)
+                    ->where('status', 'active'),
+            ],
         ]);
 
         if ($validator->fails()) {
@@ -280,11 +335,9 @@ class DocumentsController extends Controller
         $document->update($updateData);
 
         // Update allowed members for 'specific' visibility
-        if ($request->has('visibility') && $request->visibility === 'specific') {
-            $allowedUserIds = $request->input('allowed_user_ids', []);
-            $document->allowedMembers()->sync($allowedUserIds);
-        } elseif ($request->has('allowed_user_ids') && $document->visibility === 'specific') {
-            $document->allowedMembers()->sync($request->allowed_user_ids);
+        $effectiveVisibility = $request->input('visibility', $document->visibility);
+        if ($effectiveVisibility === 'specific' && $request->has('allowed_user_ids')) {
+            $document->allowedMembers()->sync($request->input('allowed_user_ids', []));
         }
 
         $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id']);
@@ -303,6 +356,13 @@ class DocumentsController extends Controller
     {
         $document = Document::where('household_id', $household_id)->findOrFail($document_id);
 
+        if (!$document->canUserManage(Auth::id())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the document creator can delete this document.',
+            ], 403);
+        }
+
         DB::beginTransaction();
 
         try {
@@ -316,7 +376,7 @@ class DocumentsController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Document delete failed: ' . $e->getMessage());
+            Log::error('Document delete failed: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -336,6 +396,13 @@ class DocumentsController extends Controller
     public function uploadFiles(Request $request, $household_id, $document_id)
     {
         $document = Document::where('household_id', $household_id)->findOrFail($document_id);
+
+        if (!$document->canUserManage(Auth::id())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the document creator can upload files to this document.',
+            ], 403);
+        }
 
         if (!$request->hasFile('files')) {
             return response()->json([
@@ -417,7 +484,7 @@ class DocumentsController extends Controller
                 $this->fileService->delete($path);
             }
 
-            \Log::error('File upload failed: ' . $e->getMessage());
+            Log::error('File upload failed: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -437,7 +504,14 @@ class DocumentsController extends Controller
      */
     public function deleteFile($household_id, $document_id, $file_id)
     {
-        Document::where('household_id', $household_id)->findOrFail($document_id);
+        $document = Document::where('household_id', $household_id)->findOrFail($document_id);
+
+        if (!$document->canUserManage(Auth::id())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only the document creator can delete files from this document.',
+            ], 403);
+        }
 
         $file = DocumentFile::where('id', $file_id)
             ->where('document_id', $document_id)
@@ -451,7 +525,7 @@ class DocumentsController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('File delete failed: ' . $e->getMessage());
+            Log::error('File delete failed: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,

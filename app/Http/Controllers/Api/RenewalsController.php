@@ -11,28 +11,35 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class RenewalsController extends Controller
 {
     /**
      * GET /api/households/{household_id}/renewals
+     * Every active household member can see all household renewals.
      */
     public function index(Request $request, $household_id)
     {
-        $userId = Auth::id();
-
-        $query = Renewal::with(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices'])
-            ->where('household_id', $household_id);
-
-        // Visibility: non-admins only see renewals they created or are assigned to.
-        if (!$this->isHouseholdAdmin($household_id, $userId)) {
-            $query->where(function ($q) use ($userId) {
-                $q->where('created_by_user_id', $userId)
-                  ->orWhere('assigned_user_id', $userId);
-            });
+        if (!$this->canViewRenewal($household_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have access to this household.',
+            ], 403);
         }
+
+        $query = Renewal::with([
+            'createdBy:id,first_name,last_name,email,avatar',
+            'assignedUser:id,first_name,last_name,email,avatar',
+            'vehicle:id,title',
+            'vehicleServices'
+        ])->where('household_id', $household_id);
+
+        // Visibility: Shared household feature - every active member can view all household renewals.
+        // No creator/assignee filter here.
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -68,12 +75,25 @@ class RenewalsController extends Controller
      */
     public function store(Request $request, $household_id)
     {
+        if (!$this->canViewRenewal($household_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to add renewals to this household.',
+            ], 403);
+        }
+
         $baseRules = [
             'title'             => 'required|string|max:255',
             'renewal_type'      => 'required|in:standard,vehicle',
             'vehicle_id'        => 'required_if:renewal_type,vehicle|nullable|exists:vehicles,id',
             'category'          => 'nullable|string|max:100',
-            'assigned_user_id'  => 'nullable|exists:users,id',
+            'assigned_user_id'  => [
+                'nullable',
+                'integer',
+                Rule::exists('household_members', 'user_id')
+                    ->where('household_id', (int) $household_id)
+                    ->where('status', 'active'),
+            ],
             'frequency'         => 'required|in:monthly,quarterly,annual',
             'due_date'          => 'required_if:renewal_type,standard|nullable|date',
             'amount'            => 'nullable|numeric|min:0',
@@ -178,45 +198,37 @@ class RenewalsController extends Controller
             ], 500);
         }
 
-        // Rule 7: do not notify the creator for an action they just performed.
-        // Only the assignee (when different from the creator) is notified.
-        // Rule 8: verify household membership before sending.
+        // Notification: Only notify assigned user if different from creator
         try {
-            $recipients = [];
             if ($renewal->assigned_user_id && $renewal->assigned_user_id !== $renewal->created_by_user_id) {
                 $assigneeMembership = HouseholdMember::where('household_id', $household_id)
                     ->where('user_id', $renewal->assigned_user_id)
                     ->where('status', 'active')
                     ->exists();
                 if ($assigneeMembership) {
-                    $recipients[] = $renewal->assigned_user_id;
+                    app(\App\Services\NotificationService::class)->sendToUser(
+                        $renewal->assigned_user_id,
+                        'New Renewal Added',
+                        "'{$renewal->title}' has been added — due " . ($renewal->due_date ? $renewal->due_date->format('d M Y') : 'soon'),
+                        'renewal_created',
+                        [
+                            'module' => 'renewal',
+                            'action_type' => 'renewal',
+                            'action_id' => $renewal->id,
+                            'type' => 'renewal',
+                            'id' => $renewal->id,
+                            'household_id' => $household_id,
+                            'title' => $renewal->title,
+                        ],
+                        'normal'
+                    );
                 }
             }
-            $recipients = array_unique($recipients);
-
-            if (!empty($recipients)) {
-                app(\App\Services\NotificationService::class)->sendToUsers(
-                    $recipients,
-                    'New Renewal Added',
-                    "'{$renewal->title}' has been added — due " . ($renewal->due_date ? $renewal->due_date->format('d M Y') : 'soon'),
-                    'renewal_created',
-                    [
-                        'module' => 'renewal',
-                        'action_type' => 'renewal',
-                        'action_id' => $renewal->id,
-                        'type' => 'renewal',
-                        'id' => $renewal->id,
-                        'household_id' => $household_id,
-                        'title' => $renewal->title,
-                    ],
-                    'normal'
-                );
-            }
         } catch (\Throwable $e) {
-            \Log::error('Failed to send renewal creation notification: ' . $e->getMessage());
+            Log::error('Failed to send renewal creation notification: ' . $e->getMessage());
         }
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -227,11 +239,20 @@ class RenewalsController extends Controller
 
     /**
      * GET /api/households/{household_id}/renewals/{renewal_id}
+     * Any active household member can view details.
      */
     public function show($household_id, $renewal_id)
     {
+        if (!$this->canViewRenewal($household_id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to view this renewal.',
+            ], 403);
+        }
+
         $renewal = Renewal::with([
                 'createdBy:id,first_name,last_name,email,avatar',
+                'assignedUser:id,first_name,last_name,email,avatar',
                 'vehicle:id,title',
                 'vehicleServices',
                 'parent:id,title,due_date,status,amount',
@@ -239,13 +260,6 @@ class RenewalsController extends Controller
             ])
             ->where('household_id', $household_id)
             ->findOrFail($renewal_id);
-
-        if (!$this->canAccessRenewal($household_id, $renewal)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You do not have permission to view this renewal.',
-            ], 403);
-        }
 
         return response()->json([
             'success' => true,
@@ -255,23 +269,30 @@ class RenewalsController extends Controller
 
     /**
      * PATCH /api/households/{household_id}/renewals/{renewal_id}
+     * Creator only can edit core details or reassign.
      */
     public function update(Request $request, $household_id, $renewal_id)
     {
         $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
         $oldRenewal = clone $renewal;
 
-        if (!$this->canAccessRenewal($household_id, $renewal)) {
+        if (!$this->canManageRenewal($renewal)) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to modify this renewal.',
+                'message' => 'Only the renewal creator can modify this renewal.',
             ], 403);
         }
 
         $validator = Validator::make($request->all(), [
             'title'             => 'sometimes|string|max:255',
             'category'          => 'nullable|string|max:100',
-            'assigned_user_id'  => 'nullable|exists:users,id',
+            'assigned_user_id'  => [
+                'nullable',
+                'integer',
+                Rule::exists('household_members', 'user_id')
+                    ->where('household_id', (int) $household_id)
+                    ->where('status', 'active'),
+            ],
             'frequency'         => 'sometimes|in:monthly,quarterly,annual',
             'due_date'          => 'sometimes|date',
             'amount'            => 'nullable|numeric|min:0',
@@ -301,22 +322,19 @@ class RenewalsController extends Controller
                 'title', 'category', 'assigned_user_id', 'frequency', 'due_date', 'amount', 'reminder_before', 'notes', 'status',
             ]));
 
-            // Rule 10: If assigned_user_id changed, notify the new assignee (Rule 3: Creator + Assignee).
+            // Reassignment notifications:
+            // If assigned_user_id changed:
             $oldAssigned = $oldRenewal->assigned_user_id;
-            $newAssigned = $request->input('assigned_user_id', $oldAssigned);
-            if ($newAssigned !== null && $newAssigned !== $oldAssigned) {
-                // Verify new assignee is still an active member of this household.
-                $isMember = HouseholdMember::where('household_id', $household_id)
-                    ->where('user_id', $newAssigned)
-                    ->where('status', 'active')
-                    ->exists();
+            $newAssigned = $request->has('assigned_user_id') ? $request->input('assigned_user_id') : $oldAssigned;
 
-                if ($isMember && $newAssigned !== Auth::id()) {
+            if ($request->has('assigned_user_id') && (int) $newAssigned !== (int) $oldAssigned) {
+                // Notify new assignee
+                if (!empty($newAssigned) && (int) $newAssigned !== (int) Auth::id()) {
                     app(\App\Services\NotificationService::class)->sendToUser(
                         $newAssigned,
-                        'Renewal updated',
+                        'Renewal assigned',
                         'You have been assigned: ' . $renewal->title,
-                        'renewal_updated',
+                        'renewal_assigned',
                         [
                             'module' => 'renewal',
                             'action_type' => 'renewal',
@@ -326,6 +344,25 @@ class RenewalsController extends Controller
                             'household_id' => $household_id,
                         ],
                         'high'
+                    );
+                }
+
+                // Notify previous assignee
+                if (!empty($oldAssigned) && (int) $oldAssigned !== (int) Auth::id()) {
+                    app(\App\Services\NotificationService::class)->sendToUser(
+                        $oldAssigned,
+                        'Renewal unassigned',
+                        'You are no longer assigned to: ' . $renewal->title,
+                        'renewal_unassigned',
+                        [
+                            'module' => 'renewal',
+                            'action_type' => 'renewal',
+                            'action_id' => $renewal->id,
+                            'type' => 'renewal',
+                            'id' => $renewal->id,
+                            'household_id' => $household_id,
+                        ],
+                        'normal'
                     );
                 }
             }
@@ -387,7 +424,7 @@ class RenewalsController extends Controller
             ], 500);
         }
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -398,15 +435,16 @@ class RenewalsController extends Controller
 
     /**
      * DELETE /api/households/{household_id}/renewals/{renewal_id}
+     * Creator only can delete.
      */
     public function destroy($household_id, $renewal_id)
     {
         $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
 
-        if (!$this->canAccessRenewal($household_id, $renewal)) {
+        if (!$this->canManageRenewal($renewal)) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to delete this renewal.',
+                'message' => 'Only the renewal creator can delete this renewal.',
             ], 403);
         }
 
@@ -420,17 +458,18 @@ class RenewalsController extends Controller
 
     /**
      * GET /api/households/{household_id}/renewals/{renewal_id}/download
+     * Any active household member can download the document.
      */
     public function download($household_id, $renewal_id)
     {
-        $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
-
-        if (!$this->canAccessRenewal($household_id, $renewal)) {
+        if (!$this->canViewRenewal($household_id)) {
             return response()->json([
                 'success' => false,
                 'message' => 'You do not have permission to view this renewal.',
             ], 403);
         }
+
+        $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
 
         if (!$renewal->document_file_path) {
             return response()->json([
@@ -453,15 +492,16 @@ class RenewalsController extends Controller
 
     /**
      * PATCH /api/households/{household_id}/renewals/{renewal_id}/complete
+     * Creator OR Assigned member only.
      */
     public function complete($household_id, $renewal_id)
     {
         $renewal = Renewal::where('household_id', $household_id)->findOrFail($renewal_id);
 
-        if (!$this->canAccessRenewal($household_id, $renewal)) {
+        if (!$this->canActOnRenewal($renewal)) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to modify this renewal.',
+                'message' => 'Only the renewal creator or assigned member can mark this renewal as complete.',
             ], 403);
         }
 
@@ -474,7 +514,7 @@ class RenewalsController extends Controller
 
         $renewal->update(['status' => 'completed']);
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -485,15 +525,17 @@ class RenewalsController extends Controller
 
     /**
      * POST /api/households/{household_id}/renewals/{renewal_id}/renew
+     * Creator OR Assigned member only.
+     * Preserves original creator and assignee.
      */
     public function renew(Request $request, $household_id, $renewal_id)
     {
         $renewal = Renewal::with('vehicleServices')->where('household_id', $household_id)->findOrFail($renewal_id);
 
-        if (!$this->canAccessRenewal($household_id, $renewal)) {
+        if (!$this->canActOnRenewal($renewal)) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to renew this renewal.',
+                'message' => 'Only the renewal creator or assigned member can renew this renewal.',
             ], 403);
         }
 
@@ -521,7 +563,7 @@ class RenewalsController extends Controller
         try {
             $newRenewal = Renewal::create([
                 'household_id'       => $household_id,
-                'created_by_user_id' => Auth::id(),
+                'created_by_user_id' => $renewal->created_by_user_id, // Preserves original creator!
                 'assigned_user_id'   => $renewal->assigned_user_id,
                 'parent_renewal_id'  => $renewal->id,
                 'renewal_type'       => $renewal->renewal_type,
@@ -555,7 +597,7 @@ class RenewalsController extends Controller
             ], 500);
         }
 
-        $newRenewal->load(['createdBy:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
+        $newRenewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
 
         return response()->json([
             'success' => true,
@@ -564,26 +606,35 @@ class RenewalsController extends Controller
         ], 201);
     }
 
-    private function isHouseholdAdmin(int|string $householdId, int|string|null $userId): bool
+    /**
+     * Permission helper: Any active household member can view renewals.
+     */
+    private function canViewRenewal($householdId): bool
     {
-        $membership = HouseholdMember::where('household_id', (int) $householdId)
-            ->where('user_id', (int) $userId)
+        return HouseholdMember::where('household_id', (int) $householdId)
+            ->where('user_id', Auth::id())
             ->where('status', 'active')
-            ->first();
-
-        return $membership && $membership->isAdmin();
+            ->exists();
     }
 
-    private function canAccessRenewal($household_id, Renewal $renewal): bool
+    /**
+     * Permission helper: Creator OR Assigned member only can act (complete, renew).
+     * No automatic coordinator/admin override.
+     */
+    private function canActOnRenewal(Renewal $renewal): bool
     {
         $userId = Auth::id();
 
-        if ($this->isHouseholdAdmin($household_id, $userId)) {
-            return true;
-        }
+        return (int) $renewal->created_by_user_id === (int) $userId
+            || (int) $renewal->assigned_user_id === (int) $userId;
+    }
 
-        return $renewal->created_by_user_id === $userId
-            || $renewal->assigned_user_id === $userId;
+    /**
+     * Permission helper: Creator only can manage (edit, reassign, delete).
+     */
+    private function canManageRenewal(Renewal $renewal): bool
+    {
+        return (int) $renewal->created_by_user_id === (int) Auth::id();
     }
 
     private function formatRenewal(Renewal $renewal): array

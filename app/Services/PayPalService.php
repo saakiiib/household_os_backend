@@ -278,25 +278,16 @@ class PayPalService
         $householdId = $payment->household_id;
 
         $now = now();
+        $periodStart = $now;
         $periodEnd = $paymentType === 'annual' ? $now->copy()->addYear() : $now->copy()->addMonth();
         $expiresAt = $periodEnd->copy()->addDays(Subscription::GRACE_PERIOD_DAYS);
 
-        // If household has an active trial ending in the future, align the paid
-        // subscription to start from trial_ends_at so the user doesn't lose
-        // remaining trial days.
-        $trialSubscription = Subscription::where('household_id', $householdId)
-            ->where('status', 'trial')
-            ->where('trial_ends_at', '>', now())
-            ->first();
-
-        if ($trialSubscription && $trialSubscription->trial_ends_at) {
-            $trialEnd = $trialSubscription->trial_ends_at;
-            $periodStart = $trialEnd;
-            $periodEnd = $paymentType === 'annual' ? $trialEnd->copy()->addYear() : $trialEnd->copy()->addMonth();
-            $expiresAt = $periodEnd->copy()->addDays(Subscription::GRACE_PERIOD_DAYS);
-        } else {
-            $periodStart = $now;
-        }
+        // The HouseholdOS trial ends IMMEDIATELY when a paid subscription
+        // activates. The paid period always starts from the purchase date
+        // (now) — we never manufacture an expiry by extending from
+        // trial_ends_at. The trial entitlement is dropped because the paid
+        // subscription clears trial_started_at/trial_ends_at below, so
+        // EntitlementService naturally resolves the paid plan.
 
         DB::transaction(function () use ($user, $householdId, $plan, $paymentType, $payment, &$subscription, $periodStart, $periodEnd, $expiresAt, $orderId) {
             $subData = [

@@ -53,6 +53,37 @@ class Renewal extends Model
         return $this->hasMany(RenewalVehicleService::class);
     }
 
+    /**
+     * Check if a user can view this renewal.
+     * Any active household member can view household renewals.
+     */
+    public function canUserView(int $userId): bool
+    {
+        return HouseholdMember::where('household_id', $this->household_id)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->exists();
+    }
+
+    /**
+     * Check if a user can act on this renewal (complete, renew, start).
+     * Creator OR Assigned member only.
+     */
+    public function canUserAct(int $userId): bool
+    {
+        return $this->created_by_user_id === $userId
+            || $this->assigned_user_id === $userId;
+    }
+
+    /**
+     * Check if a user can manage this renewal (edit details, change assignee, delete).
+     * Creator only.
+     */
+    public function canUserManage(int $userId): bool
+    {
+        return $this->created_by_user_id === $userId;
+    }
+
     public function getIsOverdueAttribute(): bool
     {
         if (!$this->due_date || $this->status === 'completed') return false;

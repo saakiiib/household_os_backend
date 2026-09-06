@@ -22,16 +22,16 @@ class TasksController extends Controller
     {
         $userId = Auth::id();
 
+        // Verify that the authenticated user is an active member of the requested household.
+        if (!$this->isHouseholdMember($household_id, $userId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not an active member of this household.',
+            ], 403);
+        }
+
         $query = Task::with(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name'])
             ->where('household_id', $household_id);
-
-        // Visibility: non-admins only see tasks they created or are assigned to.
-        if (!$this->isHouseholdAdmin($household_id, $userId)) {
-            $query->where(function ($q) use ($userId) {
-                $q->where('created_by_user_id', $userId)
-                  ->orWhere('assigned_user_id', $userId);
-            });
-        }
 
         // Text search — title, description, assigned member name
         if ($request->filled('search')) {
@@ -196,6 +196,16 @@ class TasksController extends Controller
      */
     public function show($household_id, $task_id)
     {
+        $userId = Auth::id();
+
+        // Any active household member can view any task in this household.
+        if (!$this->isHouseholdMember($household_id, $userId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to view this task.',
+            ], 403);
+        }
+
         $task = Task::with([
                 'assignedUser:id,first_name,last_name,email,avatar',
                 'createdBy:id,first_name,last_name',
@@ -204,13 +214,6 @@ class TasksController extends Controller
             ])
             ->where('household_id', $household_id)
             ->findOrFail($task_id);
-
-        if (!$this->canAccessTask($household_id, $task)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You do not have permission to view this task.',
-            ], 403);
-        }
 
         return response()->json([
             'success' => true,
@@ -226,7 +229,7 @@ class TasksController extends Controller
     {
         $task = Task::where('household_id', $household_id)->findOrFail($task_id);
 
-        if (!$this->canAccessTask($household_id, $task)) {
+        if (!$this->canModifyTask($household_id, $task)) {
             return response()->json([
                 'success' => false,
                 'message' => 'You do not have permission to modify this task.',
@@ -341,10 +344,10 @@ class TasksController extends Controller
     {
         $task = Task::where('household_id', $household_id)->findOrFail($task_id);
 
-        if (!$this->canAccessTask($household_id, $task)) {
+        if (!$this->canDeleteTask($household_id, $task)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only the task creator, assignee, or an admin can delete tasks.',
+                'message' => 'Only the task creator or an admin can delete tasks.',
             ], 403);
         }
 
@@ -430,6 +433,32 @@ class TasksController extends Controller
             ActivityController::log($household_id, Auth::id(), 'task', $newTask->id, 'repeated', 'Task repeated');
         }
 
+        // Rule 4: Notify creator if completed by assignee and creator != assignee
+        if ($task->created_by_user_id && $task->created_by_user_id !== Auth::id()) {
+            try {
+                if ($this->isHouseholdMember($household_id, $task->created_by_user_id)) {
+                    $completedByName = Auth::user() ? Auth::user()->name : 'A member';
+                    app(NotificationService::class)->sendToUser(
+                        $task->created_by_user_id,
+                        'Task completed',
+                        "{$completedByName} completed: {$task->title}",
+                        'task_completed',
+                        [
+                            'module' => 'task',
+                            'action_type' => 'task',
+                            'action_id' => $task->id,
+                            'type' => 'task',
+                            'id' => $task->id,
+                            'household_id' => $household_id,
+                        ],
+                        'normal'
+                    );
+                }
+            } catch (\Throwable $e) {
+                \Log::error("TASK COMPLETE: Notification failed: " . $e->getMessage());
+            }
+        }
+
         $task->load(['assignedUser:id,first_name,last_name,email,avatar', 'createdBy:id,first_name,last_name']);
 
         return response()->json([
@@ -458,6 +487,14 @@ class TasksController extends Controller
         return $query->exists();
     }
 
+    private function isHouseholdMember(int|string $householdId, int|string|null $userId): bool
+    {
+        return HouseholdMember::where('household_id', (int) $householdId)
+            ->where('user_id', (int) $userId)
+            ->where('status', 'active')
+            ->exists();
+    }
+
     private function isHouseholdAdmin(int|string $householdId, int|string|null $userId): bool
     {
         $membership = HouseholdMember::where('household_id', (int) $householdId)
@@ -468,7 +505,7 @@ class TasksController extends Controller
         return $membership && $membership->isAdmin();
     }
 
-    private function canAccessTask($household_id, Task $task): bool
+    private function canModifyTask(int|string $household_id, Task $task): bool
     {
         $userId = Auth::id();
 
@@ -478,6 +515,17 @@ class TasksController extends Controller
 
         return $task->created_by_user_id === $userId
             || $task->assigned_user_id === $userId;
+    }
+
+    private function canDeleteTask(int|string $household_id, Task $task): bool
+    {
+        $userId = Auth::id();
+
+        if ($this->isHouseholdAdmin($household_id, $userId)) {
+            return true;
+        }
+
+        return $task->created_by_user_id === $userId;
     }
 
     private function formatTask(Task $task): array
