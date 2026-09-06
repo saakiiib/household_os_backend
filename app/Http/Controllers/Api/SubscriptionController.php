@@ -107,6 +107,19 @@ class SubscriptionController extends Controller
         $canPurchase = !$hasActivePaidSubscription;
         $canManage = $isSubscriber;
 
+        // Normalised entitlement state — single source of truth that the
+        // client should display instead of mixing status / is_active /
+        // plan_status / paid_plan / is_trial (which can be contradictory).
+        $entitlementService = new EntitlementService();
+        $effectivePlan = $household
+            ? $entitlementService->getPlanCode($household)
+            : 'free';
+        $accessState = match (true) {
+            $subscription->status === 'trial' && $subscription->isActive() => 'trial',
+            $subscription->isActive() && $subscription->status !== 'trial' => 'paid',
+            default => 'free',
+        };
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -120,6 +133,9 @@ class SubscriptionController extends Controller
                 'payer_name' => $payerName,
                 'can_manage' => $canManage,
                 'can_purchase' => $canPurchase,
+                // Normalised state — Flutter should display this, not infer.
+                'access_state' => $accessState,
+                'effective_plan' => $effectivePlan,
                 'plan' => [
                     'id' => $subscription->plan->id,
                     'name' => $subscription->plan->name,

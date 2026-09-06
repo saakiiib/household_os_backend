@@ -95,8 +95,11 @@ class Subscription extends Model
 
     public function isActive(): bool
     {
+        // A trial is active only while status == trial AND trial_ends_at is in
+        // the future. An expired trial naturally falls back to Lifetime Free.
         if ($this->status === 'trial') {
-            return true;
+            return $this->trial_ends_at !== null
+                && now()->isBefore($this->trial_ends_at);
         }
         // A cancelled subscription retains access until the end of the paid
         // period (current_period_end), matching the cancel confirmation message.

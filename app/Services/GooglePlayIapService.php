@@ -8,6 +8,7 @@ use App\Models\SubscriptionTransaction;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class GooglePlayIapService
@@ -152,104 +153,96 @@ class GooglePlayIapService
         $periodStart = $purchaseDate ?? now();
         $periodEnd = $expiresAt;
 
-        // If household has an active trial ending in the future, align the paid
-        // subscription to start from trial_ends_at so the user doesn't lose
-        // remaining trial days.
-        $trialSubscription = Subscription::where('household_id', $household->id)
-            ->where('status', 'trial')
-            ->where('trial_ends_at', '>', now())
-            ->first();
+        // The HouseholdOS trial is controlled entirely by the backend. Apple/Google
+        // dates are authoritative — do NOT manufacture an expiry date locally.
 
-        if ($trialSubscription && $trialSubscription->trial_ends_at) {
-            $trialEnd = $trialSubscription->trial_ends_at;
-            $periodStart = $trialEnd;
-            $periodEnd = $billingType === 'annual' ? $trialEnd->copy()->addYear() : $trialEnd->copy()->addMonth();
-        }
+        $existingSubscription = Subscription::where('household_id', $household->id)->first();
 
-        $subscription = Subscription::where('household_id', $household->id)->first();
-
-        $data = [
-            'user_id' => $user->id,
-            'household_id' => $household->id,
-            'subscription_plan_id' => $plan->id,
-            'status' => 'active',
-            'plan_status' => 'paid',
-            'paid_plan' => $plan->slug,
-            'billing_period' => $billingType,
-            'provider' => 'google_play',
-            'current_period_start' => $periodStart,
-            'current_period_end' => $periodEnd,
-            'expires_at' => $periodEnd,
-            'cancelled_at' => null,
-            'payment_method' => 'google_play',
-            'google_product_id' => $googleProductId,
-            'google_order_id' => $orderId,
-            'original_transaction_id' => $orderId,
-            'latest_transaction_id' => $orderId,
-            'last_verified_at' => now(),
-            'trial_started_at' => null,
-            'trial_ends_at' => null,
-        ];
-
-        // Merge auto_renewing into metadata
-        $existingMetadata = ($subscription?->metadata) ?? [];
-        $data['metadata'] = array_merge($existingMetadata, [
-            'auto_renewing' => $autoRenewing,
-            'google_product_id' => $googleProductId,
-        ]);
-
-        if ($subscription) {
-            $subscription->update($data);
-        } else {
-            $subscription = Subscription::create($data);
-        }
-
-        // Ensure only one active subscription per household. Any other
-        // subscriptions are marked as replaced so the household shows only
-        // the latest purchase.
-        Subscription::where('household_id', $household->id)
-            ->where('id', '!=', $subscription->id)
-            ->update(['status' => 'replaced']);
-
-        // Record the payment
-        $amount = $billingType === 'annual' ? $plan->annual_price : $plan->monthly_price;
-        Payment::create([
-            'user_id' => $user->id,
-            'household_id' => $household->id,
-            'subscription_id' => $subscription->id,
-            'subscription_plan_id' => $plan->id,
-            'amount' => $amount,
-            'currency' => 'gbp',
-            'payment_method' => 'google_play',
-            'gateway' => 'google_play',
-            'gateway_payment_id' => $orderId,
-            'status' => 'completed',
-            'metadata' => [
+        $subscription = DB::transaction(function () use ($user, $household, $plan, $billingType, $googleProductId, $orderId, $autoRenewing, $isRestored, $existingSubscription, $periodStart, $periodEnd) {
+            $data = [
+                'user_id' => $user->id,
+                'household_id' => $household->id,
+                'subscription_plan_id' => $plan->id,
+                'status' => 'active',
+                'plan_status' => 'paid',
+                'paid_plan' => $plan->slug,
+                'billing_period' => $billingType,
+                'provider' => 'google_play',
+                'current_period_start' => $periodStart,
+                'current_period_end' => $periodEnd,
+                'expires_at' => $periodEnd,
+                'cancelled_at' => null,
+                'payment_method' => 'google_play',
                 'google_product_id' => $googleProductId,
-                'order_id' => $orderId,
+                'google_order_id' => $orderId,
+                'original_transaction_id' => $orderId,
+                'latest_transaction_id' => $orderId,
+                'last_verified_at' => now(),
+                'trial_started_at' => null,
+                'trial_ends_at' => null,
+            ];
+
+            // Merge auto_renewing into metadata
+            $existingMetadata = ($existingSubscription?->metadata) ?? [];
+            $data['metadata'] = array_merge($existingMetadata, [
                 'auto_renewing' => $autoRenewing,
-            ],
-        ]);
+                'google_product_id' => $googleProductId,
+            ]);
 
-        // Record the transaction for a full audit trail.
-        SubscriptionTransaction::create([
-            'subscription_id' => $subscription->id,
-            'transaction_id' => $orderId,
-            'original_transaction_id' => $orderId,
-            'product_id' => $googleProductId,
-            'environment' => 'google_play',
-            'purchase_date' => $purchaseDate,
-            'expires_date' => $expiresAt,
-            'transaction_reason' => $isRestored ? 'restore' : 'purchase',
-        ]);
+            if ($existingSubscription) {
+                $existingSubscription->update($data);
+                $subscription = $existingSubscription;
+            } else {
+                $subscription = Subscription::create($data);
+            }
 
-        Log::info('GooglePlayIapService: subscription activated', [
-            'user_id' => $user->id,
-            'household_id' => $household->id,
-            'plan' => $planSlug,
-            'expires_at' => $expiresAt->toIso8601String(),
-            'auto_renewing' => $autoRenewing,
-        ]);
+            // Ensure only one active subscription per household.
+            Subscription::where('household_id', $household->id)
+                ->where('id', '!=', $subscription->id)
+                ->update(['status' => 'replaced']);
+
+            // Record the payment
+            $amount = $billingType === 'annual' ? $plan->annual_price : $plan->monthly_price;
+            Payment::create([
+                'user_id' => $user->id,
+                'household_id' => $household->id,
+                'subscription_id' => $subscription->id,
+                'subscription_plan_id' => $plan->id,
+                'amount' => $amount,
+                'currency' => 'gbp',
+                'payment_method' => 'google_play',
+                'gateway' => 'google_play',
+                'gateway_payment_id' => $orderId,
+                'status' => 'completed',
+                'metadata' => [
+                    'google_product_id' => $googleProductId,
+                    'order_id' => $orderId,
+                    'auto_renewing' => $autoRenewing,
+                ],
+            ]);
+
+            // Record the transaction for a full audit trail.
+            SubscriptionTransaction::create([
+                'subscription_id' => $subscription->id,
+                'transaction_id' => $orderId,
+                'original_transaction_id' => $orderId,
+                'product_id' => $googleProductId,
+                'environment' => 'google_play',
+                'purchase_date' => $periodStart,
+                'expires_date' => $periodEnd,
+                'transaction_reason' => $isRestored ? 'restore' : 'purchase',
+            ]);
+
+            Log::info('GooglePlayIapService: subscription activated', [
+                'user_id' => $user->id,
+                'household_id' => $household->id,
+                'plan' => $plan->slug,
+                'expires_at' => $periodEnd->toIso8601String(),
+                'auto_renewing' => $autoRenewing,
+            ]);
+
+            return $subscription;
+        });
 
         return $subscription;
     }

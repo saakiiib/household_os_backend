@@ -12,6 +12,7 @@ use App\Models\SubscriptionPlan;
 use App\Models\SubscriptionTransaction;
 use App\Models\User;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 
@@ -586,88 +587,79 @@ class AppleIapService
             ? \Carbon\Carbon::createFromTimestampMs($expiresDateMs)
             : now()->addMonth();
 
-        // If household has an active trial ending in the future, align the paid
-        // subscription to start from trial_ends_at so the user doesn't lose
-        // remaining trial days.
-        $trialSubscription = Subscription::where('household_id', $household->id)
-            ->where('status', 'trial')
-            ->where('trial_ends_at', '>', now())
-            ->first();
-
-        if ($trialSubscription && $trialSubscription->trial_ends_at) {
-            $trialEnd = $trialSubscription->trial_ends_at;
-            $periodStart = $trialEnd;
-            $periodEnd = $billingPeriod === 'annual' ? $trialEnd->copy()->addYear() : $trialEnd->copy()->addMonth();
-        }
-
         $status = $this->mapAppleStatus($appleStatus);
 
-        $subscription = Subscription::where('original_transaction_id', $originalTransactionId)->first()
+        $existingSubscription = Subscription::where('original_transaction_id', $originalTransactionId)->first()
             ?? Subscription::where('household_id', $household->id)->first();
 
-        $data = [
-            'user_id' => $user->id,
-            'subscriber_user_id' => $user->id,
-            'household_id' => $household->id,
-            'subscription_plan_id' => $plan->id,
-            'status' => $status,
-            'plan_status' => 'paid',
-            'paid_plan' => $plan->code,
-            'provider' => 'apple',
-            'product_id' => $productId,
-            'billing_period' => $billingPeriod,
-            'original_transaction_id' => $originalTransactionId,
-            'apple_original_transaction_id' => $originalTransactionId,
-            'latest_transaction_id' => $latestTransactionId,
-            'environment' => $environment,
-            'auto_renew' => $autoRenew === 1,
-            'app_account_token' => $appAccountToken,
-            'current_period_start' => $periodStart,
-            'current_period_end' => $periodEnd,
-            'expires_at' => $periodEnd,
-            'cancelled_at' => null,
-            'last_verified_at' => now(),
-            'trial_started_at' => null,
-            'trial_ends_at' => null,
-            'metadata' => array_merge(
-                is_array($subscription?->metadata) ? $subscription->metadata : [],
-                $deviceId ? ['device_id' => $deviceId] : [],
-            ),
-        ];
+        $subscription = DB::transaction(function () use ($user, $household, $plan, $productId, $billingPeriod, $originalTransactionId, $latestTransactionId, $environment, $purchaseDateMs, $expiresDateMs, $appAccountToken, $deviceId, $status, $existingSubscription) {
+            $data = [
+                'user_id' => $user->id,
+                'subscriber_user_id' => $user->id,
+                'household_id' => $household->id,
+                'subscription_plan_id' => $plan->id,
+                'status' => $status,
+                'plan_status' => 'paid',
+                'paid_plan' => $plan->code,
+                'provider' => 'apple',
+                'product_id' => $productId,
+                'billing_period' => $billingPeriod,
+                'original_transaction_id' => $originalTransactionId,
+                'apple_original_transaction_id' => $originalTransactionId,
+                'latest_transaction_id' => $latestTransactionId,
+                'environment' => $environment,
+                'auto_renew' => $autoRenew === 1,
+                'app_account_token' => $appAccountToken,
+                'current_period_start' => $periodStart,
+                'current_period_end' => $periodEnd,
+                'expires_at' => $periodEnd,
+                'cancelled_at' => null,
+                'last_verified_at' => now(),
+                'trial_started_at' => null,
+                'trial_ends_at' => null,
+                'metadata' => array_merge(
+                    is_array($existingSubscription?->metadata) ? $existingSubscription->metadata : [],
+                    $deviceId ? ['device_id' => $deviceId] : [],
+                ),
+            ];
 
-        if ($subscription) {
-            Log::info('AppleIapService: updating existing subscription', [
+            if ($existingSubscription) {
+                Log::info('AppleIapService: updating existing subscription', [
+                    'subscription_id' => $existingSubscription->id,
+                    'household_id' => $household->id,
+                ]);
+                $existingSubscription->update($data);
+                $subscription = $existingSubscription;
+            } else {
+                Log::info('AppleIapService: creating new subscription', [
+                    'household_id' => $household->id,
+                    'plan_code' => $plan->code,
+                    'original_transaction_id' => $originalTransactionId,
+                ]);
+                $subscription = Subscription::create($data);
+            }
+
+            // Ensure only one active subscription per household. Any other
+            // subscriptions are marked as replaced so the household shows only
+            // the latest purchase.
+            Subscription::where('household_id', $household->id)
+                ->where('id', '!=', $subscription->id)
+                ->update(['status' => 'replaced']);
+
+            if ($this->recordTransaction($subscription, $latestTransactionId, $originalTransactionId, $productId, $environment, $purchaseDateMs, $expiresDateMs)) {
+                $this->recordPayment($subscription, $latestTransactionId);
+            }
+
+            Log::info('AppleIapService: subscription activated/updated', [
                 'subscription_id' => $subscription->id,
                 'household_id' => $household->id,
+                'plan' => $plan->code,
+                'status' => $status,
+                'expires_at' => $subscription->expires_at?->toIso8601String(),
             ]);
-            $subscription->update($data);
-        } else {
-            Log::info('AppleIapService: creating new subscription', [
-                'household_id' => $household->id,
-                'plan_code' => $plan->code,
-                'original_transaction_id' => $originalTransactionId,
-            ]);
-            $subscription = Subscription::create($data);
-        }
 
-        // Ensure only one active subscription per household. Any other
-        // subscriptions are marked as replaced so the household shows only
-        // the latest purchase.
-        Subscription::where('household_id', $household->id)
-            ->where('id', '!=', $subscription->id)
-            ->update(['status' => 'replaced']);
-
-        if ($this->recordTransaction($subscription, $latestTransactionId, $originalTransactionId, $productId, $environment, $purchaseDateMs, $expiresDateMs)) {
-            $this->recordPayment($subscription, $latestTransactionId);
-        }
-
-        Log::info('AppleIapService: subscription activated/updated', [
-            'subscription_id' => $subscription->id,
-            'household_id' => $household->id,
-            'plan' => $plan->code,
-            'status' => $status,
-            'expires_at' => $subscription->expires_at?->toIso8601String(),
-        ]);
+            return $subscription;
+        });
 
         return $subscription;
     }
