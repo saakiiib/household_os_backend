@@ -120,35 +120,41 @@ Route::middleware(['auth:api', 'throttle:120,1'])->group(function () {
         Route::get('activities', [ActivityController::class, 'index']);
 
         // Tasks
-        Route::get('tasks', [TasksController::class, 'index']);
-        Route::post('tasks', [TasksController::class, 'store']);
-        Route::get('tasks/{task_id}', [TasksController::class, 'show']);
-        Route::patch('tasks/{task_id}', [TasksController::class, 'update']);
-        Route::delete('tasks/{task_id}', [TasksController::class, 'destroy']);
-        Route::patch('tasks/{task_id}/complete', [TasksController::class, 'complete']);
-        Route::patch('tasks/{task_id}/start', [TasksController::class, 'startInProgress']);
+        Route::middleware('household.role')->group(function () {
+            Route::get('tasks', [TasksController::class, 'index']);
+            Route::post('tasks', [TasksController::class, 'store']);
+            Route::get('tasks/{task_id}', [TasksController::class, 'show']);
+            Route::patch('tasks/{task_id}', [TasksController::class, 'update']);
+            Route::delete('tasks/{task_id}', [TasksController::class, 'destroy']);
+            Route::patch('tasks/{task_id}/complete', [TasksController::class, 'complete']);
+            Route::patch('tasks/{task_id}/start', [TasksController::class, 'startInProgress']);
+        });
 
         // Documents
-        Route::get('documents', [DocumentsController::class, 'index']);
-        Route::post('documents', [DocumentsController::class, 'store']);
-        Route::get('documents/{document_id}', [DocumentsController::class, 'show']);
-        Route::patch('documents/{document_id}', [DocumentsController::class, 'update']);
-        Route::delete('documents/{document_id}', [DocumentsController::class, 'destroy']);
+        Route::middleware('household.role')->group(function () {
+            Route::get('documents', [DocumentsController::class, 'index']);
+            Route::post('documents', [DocumentsController::class, 'store']);
+            Route::get('documents/{document_id}', [DocumentsController::class, 'show']);
+            Route::patch('documents/{document_id}', [DocumentsController::class, 'update']);
+            Route::delete('documents/{document_id}', [DocumentsController::class, 'destroy']);
 
-        // Document files
-        Route::post('documents/{document_id}/files', [DocumentsController::class, 'uploadFiles']);
-        Route::delete('documents/{document_id}/files/{file_id}', [DocumentsController::class, 'deleteFile']);
-        Route::get('documents/{document_id}/files/{file_id}/download', [DocumentsController::class, 'downloadFile']);
+            // Document files
+            Route::post('documents/{document_id}/files', [DocumentsController::class, 'uploadFiles']);
+            Route::delete('documents/{document_id}/files/{file_id}', [DocumentsController::class, 'deleteFile']);
+            Route::get('documents/{document_id}/files/{file_id}/download', [DocumentsController::class, 'downloadFile']);
+        });
 
         // Renewals
-        Route::get('renewals', [RenewalsController::class, 'index']);
-        Route::post('renewals', [RenewalsController::class, 'store']);
-        Route::get('renewals/{renewal_id}', [RenewalsController::class, 'show']);
-        Route::patch('renewals/{renewal_id}', [RenewalsController::class, 'update']);
-        Route::delete('renewals/{renewal_id}', [RenewalsController::class, 'destroy']);
-        Route::patch('renewals/{renewal_id}/complete', [RenewalsController::class, 'complete']);
-        Route::post('renewals/{renewal_id}/renew', [RenewalsController::class, 'renew']);
-        Route::get('renewals/{renewal_id}/download', [RenewalsController::class, 'download']);
+        Route::middleware('household.role')->group(function () {
+            Route::get('renewals', [RenewalsController::class, 'index']);
+            Route::post('renewals', [RenewalsController::class, 'store']);
+            Route::get('renewals/{renewal_id}', [RenewalsController::class, 'show']);
+            Route::patch('renewals/{renewal_id}', [RenewalsController::class, 'update']);
+            Route::delete('renewals/{renewal_id}', [RenewalsController::class, 'destroy']);
+            Route::patch('renewals/{renewal_id}/complete', [RenewalsController::class, 'complete']);
+            Route::post('renewals/{renewal_id}/renew', [RenewalsController::class, 'renew']);
+            Route::get('renewals/{renewal_id}/download', [RenewalsController::class, 'download']);
+        });
 
         // Vehicles
         Route::get('vehicles', [VehiclesController::class, 'index']);

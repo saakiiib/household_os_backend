@@ -28,19 +28,7 @@ class HouseholdController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $households->map(fn($h) => [
-                'id'            => $h->id,
-                'name'          => $h->name,
-                'description'   => $h->description,
-                'invite_code'   => $h->invite_code,
-                'privacy_level' => $h->privacy_level,
-                'status'        => $h->status,
-                'created_by_user_id' => $h->created_by_user_id,
-                'member_count'  => $h->householdMembers()->where('status', 'active')->count(),
-                'created_at'    => $h->created_at,
-                'user_role'     => $h->pivot->role ?? null,
-                'membership_status' => $h->pivot->status ?? null,
-            ]),
+            'data' => $households->map(fn($h) => $this->formatHousehold($h)),
         ]);
     }
 
@@ -115,6 +103,7 @@ class HouseholdController extends Controller
             'description' => $request->description,
             'privacy_level' => $request->privacy_level ?? 'private',
             'status' => 'active',
+            'app_account_token' => (string) Str::uuid(),
         ]);
 
         // Automatically make the creator an admin
@@ -155,18 +144,7 @@ class HouseholdController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Household created successfully',
-            'data' => [
-                'id' => $household->id,
-                'name' => $household->name,
-                'description' => $household->description,
-                'invite_code' => $household->invite_code,
-                'privacy_level' => $household->privacy_level,
-                'status' => $household->status,
-                'created_by_user_id' => Auth::id(),
-                'member_count' => 1,
-                'user_role' => 'admin',
-                'created_at' => $household->created_at,
-            ]
+            'data' => $this->formatHousehold($household),
         ], 201);
     }
 
@@ -199,20 +177,7 @@ class HouseholdController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => [
-                'id' => $household->id,
-                'name' => $household->name,
-                'description' => $household->description,
-                'profile_picture' => $household->profile_picture,
-                'invite_code' => $household->invite_code,
-                'privacy_level' => $household->privacy_level,
-                'status' => $household->status,
-                'created_by_user_id' => $household->created_by_user_id,
-                'member_count' => $memberCount,
-                'user_role' => $membership->role,
-                'created_at' => $household->created_at,
-                'updated_at' => $household->updated_at,
-            ]
+            'data' => $this->formatHousehold($household, $membership),
         ]);
     }
 
@@ -700,5 +665,35 @@ class HouseholdController extends Controller
                 'new_owner_user_id' => $newOwnerId,
             ]
         ]);
+    }
+
+    /**
+     * Format household data for API responses.
+     */
+    private function formatHousehold(Household $household, ?HouseholdMember $membership = null): array
+    {
+        $memberCount = $household->householdMembers()->where('status', 'active')->count();
+
+        $data = [
+            'id' => $household->id,
+            'name' => $household->name,
+            'description' => $household->description,
+            'profile_picture' => $household->profile_picture,
+            'invite_code' => $household->invite_code,
+            'privacy_level' => $household->privacy_level,
+            'status' => $household->status,
+            'app_account_token' => $household->app_account_token,
+            'created_by_user_id' => $household->created_by_user_id,
+            'member_count' => $memberCount,
+            'created_at' => $household->created_at,
+            'updated_at' => $household->updated_at,
+        ];
+
+        if ($membership) {
+            $data['user_role'] = $membership->role;
+            $data['membership_status'] = $membership->status;
+        }
+
+        return $data;
     }
 }

@@ -38,17 +38,15 @@ class Document extends Model
     /**
      * Check if a user can view this document.
      * Rule:
-     * - Creator can always view their own document.
-     * - Any other user MUST be an active member of this document's household.
-     * - If active member, access is granted if visibility is 'all'
-     *   OR if visibility is 'specific' and the user is in allowedMembers.
+     * - User MUST be an active member of this document's household.
+     * - If active member, access is granted if:
+     *   - Creator of the document, OR
+     *   - Visibility is 'all', OR
+     *   - Visibility is 'specific' and user is in allowedMembers.
      */
     public function canUserView(int $userId): bool
     {
-        if ($this->created_by_user_id === $userId) {
-            return true;
-        }
-
+        // First: user must be an active member of the household
         $isActiveMember = HouseholdMember::where('household_id', $this->household_id)
             ->where('user_id', $userId)
             ->where('status', 'active')
@@ -56,6 +54,11 @@ class Document extends Model
 
         if (!$isActiveMember) {
             return false;
+        }
+
+        // Then: check permissions for active members
+        if ($this->created_by_user_id === $userId) {
+            return true;
         }
 
         if ($this->visibility === 'all') {
@@ -71,10 +74,21 @@ class Document extends Model
 
     /**
      * Check if a user can manage (update, delete, upload/delete files) this document.
-     * Rule: Only the document creator can manage it.
+     * Rule: User must be an active household member AND the document creator.
      */
     public function canUserManage(int $userId): bool
     {
+        // First: user must be an active member of the household
+        $isActiveMember = HouseholdMember::where('household_id', $this->household_id)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->exists();
+
+        if (!$isActiveMember) {
+            return false;
+        }
+
+        // Then: only the creator can manage
         return $this->created_by_user_id === $userId;
     }
 

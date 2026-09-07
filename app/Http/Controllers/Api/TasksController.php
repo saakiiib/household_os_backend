@@ -1,7 +1,5 @@
 <?php
 
-namespace App\Http\Controllers\Api;
-
 use App\Http\Controllers\Controller;
 use App\Models\Household;
 use App\Models\HouseholdMember;
@@ -11,6 +9,7 @@ use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class TasksController extends Controller
 {
@@ -85,6 +84,15 @@ class TasksController extends Controller
      */
     public function store(Request $request, $household_id)
     {
+        $userId = Auth::id();
+
+        if (!$this->isHouseholdMember($household_id, $userId)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You are not an active member of this household.',
+            ], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'title'             => 'required|string|max:255',
             'description'       => 'nullable|string|max:2000',
@@ -97,7 +105,13 @@ class TasksController extends Controller
             'snooze'            => 'nullable|boolean',
             'repeat'            => 'nullable|in:does_not_repeat,daily,weekly,monthly',
             'notes'             => 'nullable|string|max:2000',
-            'assigned_user_id'  => 'required|integer|exists:users,id',
+            'assigned_user_id'  => [
+                'required',
+                'integer',
+                Rule::exists('household_members', 'user_id')
+                    ->where('household_id', (int) $household_id)
+                    ->where('status', 'active'),
+            ],
         ]);
 
         if ($validator->fails()) {
@@ -249,7 +263,13 @@ class TasksController extends Controller
             'snooze'            => 'nullable|boolean',
             'repeat'            => 'nullable|in:does_not_repeat,daily,weekly,monthly',
             'notes'             => 'nullable|string|max:2000',
-            'assigned_user_id'  => 'sometimes|integer|exists:users,id',
+            'assigned_user_id'  => [
+                'sometimes',
+                'integer',
+                Rule::exists('household_members', 'user_id')
+                    ->where('household_id', (int) $household_id)
+                    ->where('status', 'active'),
+            ],
         ]);
 
         if ($validator->fails()) {

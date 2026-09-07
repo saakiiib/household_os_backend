@@ -29,8 +29,6 @@ class GoogleIapController extends Controller
         $request->validate([
             'receipt_data' => 'required|string',
             'product_id' => 'required|string',
-            'plan_slug' => 'required|string',
-            'billing_type' => 'required|in:monthly,annual',
             'transaction_id' => 'required|string',
             'is_restored' => 'boolean',
         ]);

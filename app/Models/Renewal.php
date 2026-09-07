@@ -67,20 +67,34 @@ class Renewal extends Model
 
     /**
      * Check if a user can act on this renewal (complete, renew, start).
-     * Creator OR Assigned member only.
+     * User must be an active household member AND (creator OR assigned user).
      */
     public function canUserAct(int $userId): bool
     {
+        if (!HouseholdMember::where('household_id', $this->household_id)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->exists()) {
+            return false;
+        }
+
         return $this->created_by_user_id === $userId
             || $this->assigned_user_id === $userId;
     }
 
     /**
      * Check if a user can manage this renewal (edit details, change assignee, delete).
-     * Creator only.
+     * User must be an active household member AND the creator.
      */
     public function canUserManage(int $userId): bool
     {
+        if (!HouseholdMember::where('household_id', $this->household_id)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->exists()) {
+            return false;
+        }
+
         return $this->created_by_user_id === $userId;
     }
 

@@ -62,14 +62,16 @@ class GooglePlayIapService
             Log::info('GooglePlayIapService: got access token');
 
             // Resolve plan + billing period from the central product config so
-            // the server (not the client) is the source of truth. Falls back
-            // to the app-provided values if no config entry exists.
+            // the server (not the client) is the source of truth. The client
+            // should never send plan/billing info to Google - only the receipt.
             $googleProducts = config('google_products.google_products', []);
-            if (!empty($googleProducts) && isset($googleProducts[$googleProductId])) {
-                $cfg = $googleProducts[$googleProductId];
-                $planSlug = $cfg['plan'] ?? $planSlug;
-                $billingType = $cfg['billing_period'] ?? $billingType;
+            if (empty($googleProducts) || !isset($googleProducts[$googleProductId])) {
+                Log::warning('GooglePlayIapService: unknown Google product ID in config', ['product_id' => $googleProductId]);
+                return ['success' => false, 'message' => 'Unknown Google product.'];
             }
+            $cfg = $googleProducts[$googleProductId];
+            $planSlug = $cfg['plan'] ?? throw new \Exception('plan slug missing in config for ' . $googleProductId);
+            $billingType = $cfg['billing_period'] ?? throw new \Exception('billing_period missing in config for ' . $googleProductId);
 
             // Verify the subscription with Google Play Developer API
             $result = $this->_verifySubscription($accessToken, $receiptData, $googleProductId);

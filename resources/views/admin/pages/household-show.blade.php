@@ -73,6 +73,9 @@
                             @endif
                         </p>
                         <p class="mb-2"><strong>Invite Code:</strong> <code>{{ $household->invite_code }}</code></p>
+                        @if($household->app_account_token)
+                            <p class="mb-2"><strong>Apple Account Token:</strong> <code class="small">{{ $household->app_account_token }}</code></p>
+                        @endif
                         <p class="mb-2"><strong>Created:</strong> {{ $household->created_at->format('d M Y') }}</p>
                         @if($household->subscription)
                             <p class="mb-0"><strong>Plan:</strong>
