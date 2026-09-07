@@ -11,8 +11,10 @@ use App\Models\Payment;
 use App\Models\Task;
 use App\Models\Renewal;
 use App\Models\Document;
+use App\Models\DocumentFile;
 use App\Models\Invitation;
 use App\Models\ActivityLog;
+use App\Services\EntitlementService;
 
 class DashboardController extends Controller
 {
@@ -21,15 +23,30 @@ class DashboardController extends Controller
         $totalHouseholds = Household::count();
         $totalUsers = User::count();
         $activeSubscriptions = Subscription::where('status', 'active')->count();
+        $trialSubscriptions = Subscription::where('status', 'trial')->count();
+        $expiredSubscriptions = Subscription::where('status', 'expired')->count();
         $monthlyRevenue = (float) Payment::where('status', 'succeeded')
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->sum('amount');
         $totalRevenue = (float) Payment::where('status', 'succeeded')->sum('amount');
         $totalDocuments = Document::count();
+        $totalTasks = Task::count();
         $tasksToday = Task::whereDate('due_date', now()->toDateString())->count();
+        $pendingTasks = Task::where('status', 'pending')->count();
+        $inProgressTasks = Task::where('status', 'in_progress')->count();
+        $completedTasks = Task::where('status', 'completed')->count();
+        $totalRenewals = Renewal::count();
         $renewalsDue = Renewal::where('status', '!=', 'completed')
             ->whereDate('due_date', '<=', now()->addDays(7)->toDateString())->count();
+        $pendingRenewals = Renewal::where('status', 'pending')->count();
+        $completedRenewals = Renewal::where('status', 'completed')->count();
+
+        // Storage stats
+        $totalStorageUsed = (int) DocumentFile::sum('file_size');
+        $storageUsedMB = round($totalStorageUsed / 1024 / 1024, 2);
+        $freeStorageMB = round(EntitlementService::FREE_DOCUMENT_BYTES / 1024 / 1024, 0);
+        $paidStorageGB = round(EntitlementService::DOCUMENTS_PLAN_BYTES / 1024 / 1024 / 1024, 1);
 
         $trend = [
             'households' => $this->monthOverMonth(Household::class),
@@ -87,8 +104,10 @@ class DashboardController extends Controller
         ];
 
         return view('admin.pages.dashboard', compact(
-            'totalHouseholds', 'totalUsers', 'activeSubscriptions', 'monthlyRevenue',
-            'totalRevenue', 'totalDocuments', 'tasksToday', 'renewalsDue',
+            'totalHouseholds', 'totalUsers', 'activeSubscriptions', 'trialSubscriptions', 'expiredSubscriptions',
+            'monthlyRevenue', 'totalRevenue', 'totalDocuments', 'totalTasks', 'tasksToday', 'pendingTasks',
+            'inProgressTasks', 'completedTasks', 'totalRenewals', 'renewalsDue', 'pendingRenewals', 'completedRenewals',
+            'storageUsedMB', 'freeStorageMB', 'paidStorageGB',
             'trend', 'growthLabels', 'growthUsers', 'growthHouseholds',
             'revenueLabels', 'revenueSeries', 'recentActivities', 'health'
         ));

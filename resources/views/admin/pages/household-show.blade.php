@@ -56,6 +56,28 @@
             </div>
         </div>
     </div>
+    <div class="row">
+        <div class="col-xl-3 col-md-6">
+            <div class="card card-animate">
+                <div class="card-body">
+                    <p class="text-uppercase fw-medium text-muted text-truncate mb-0">Storage Used</p>
+                    <h4 class="fs-22 fw-semibold mt-3 mb-0">{{ round($stats['storage_used'] / 1024 / 1024, 2) }} MB</h4>
+                    <span class="text-muted">of {{ $stats['plan_code'] === 'free' ? '10 MB' : '5 GB' }} ({{ ucfirst($stats['plan_code']) }} plan)</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+            <div class="card card-animate">
+                <div class="card-body">
+                    <p class="text-uppercase fw-medium text-muted text-truncate mb-0">Active Plan</p>
+                    <h4 class="fs-22 fw-semibold mt-3 mb-0">{{ ucfirst($stats['plan_code']) }}</h4>
+                    @if($stats['storage_limit'])
+                        <span class="text-muted">{{ round($stats['storage_used'] / $stats['storage_limit'] * 100, 1) }}% storage used</span>
+                    @endif
+                </div>
+            </div>
+        </div>
+    </div>
 
     {{-- Household Info --}}
     <div class="row">
@@ -73,9 +95,6 @@
                             @endif
                         </p>
                         <p class="mb-2"><strong>Invite Code:</strong> <code>{{ $household->invite_code }}</code></p>
-                        @if($household->app_account_token)
-                            <p class="mb-2"><strong>Apple Account Token:</strong> <code class="small">{{ $household->app_account_token }}</code></p>
-                        @endif
                         <p class="mb-2"><strong>Created:</strong> {{ $household->created_at->format('d M Y') }}</p>
                         @if($household->subscription)
                             <p class="mb-0"><strong>Plan:</strong>

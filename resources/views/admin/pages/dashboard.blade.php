@@ -26,8 +26,8 @@
                     ['label' => 'Active Subscriptions', 'value' => number_format($activeSubscriptions), 'icon' => 'ri-vip-crown-line', 'key' => 'subscriptions'],
                     ['label' => 'Monthly Revenue', 'value' => '£' . number_format($monthlyRevenue, 2), 'icon' => 'ri-money-pound-circle-line', 'key' => 'revenue'],
                     ['label' => 'Documents Stored', 'value' => number_format($totalDocuments), 'icon' => 'ri-folder-line', 'key' => 'documents'],
-                    ['label' => 'Tasks Today', 'value' => number_format($tasksToday), 'icon' => 'ri-task-line', 'key' => 'tasks'],
-                    ['label' => 'Renewals Due', 'value' => number_format($renewalsDue), 'icon' => 'ri-refresh-line', 'key' => 'renewals'],
+                    ['label' => 'Tasks (Pending/In Progress)', 'value' => number_format($pendingTasks + $inProgressTasks), 'icon' => 'ri-task-line', 'key' => 'tasks'],
+                    ['label' => 'Renewals Due (7 days)', 'value' => number_format($renewalsDue), 'icon' => 'ri-refresh-line', 'key' => 'renewals'],
                 ];
             @endphp
             @foreach ($kpis as $k)
@@ -58,6 +58,73 @@
                     </div>
                 </div>
             @endforeach
+        </div>
+
+        <div class="row">
+            <div class="col-xl-3 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-2 text-truncate">Total Storage Used</p>
+                                <h4 class="mb-0">{{ $storageUsedMB }} MB</h4>
+                            </div>
+                            <div class="avatar-sm">
+                                <span class="avatar-title bg-soft-info text-info rounded fs-3"><i class="ri-hard-drive-2-line"></i></span>
+                            </div>
+                        </div>
+                        <p class="mt-3 mb-0 text-muted fs-13">Free plan: {{ $freeStorageMB }} MB limit</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-2 text-truncate">Paid Plan Storage</p>
+                                <h4 class="mb-0">{{ $paidStorageGB }} GB</h4>
+                            </div>
+                            <div class="avatar-sm">
+                                <span class="avatar-title bg-soft-success text-success rounded fs-3"><i class="ri-hard-drive-2-line"></i></span>
+                            </div>
+                        </div>
+                        <p class="mt-3 mb-0 text-muted fs-13">Document Locker / Complete plan</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-2 text-truncate">Trial Subscriptions</p>
+                                <h4 class="mb-0">{{ number_format($trialSubscriptions) }}</h4>
+                            </div>
+                            <div class="avatar-sm">
+                                <span class="avatar-title bg-soft-warning text-warning rounded fs-3"><i class="ri-time-line"></i></span>
+                            </div>
+                        </div>
+                        <p class="mt-3 mb-0 text-muted fs-13">Active free trials</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex">
+                            <div class="flex-grow-1">
+                                <p class="text-muted mb-2 text-truncate">Expired Subscriptions</p>
+                                <h4 class="mb-0">{{ number_format($expiredSubscriptions) }}</h4>
+                            </div>
+                            <div class="avatar-sm">
+                                <span class="avatar-title bg-soft-danger text-danger rounded fs-3"><i class="ri-close-circle-line"></i></span>
+                            </div>
+                        </div>
+                        <p class="mt-3 mb-0 text-muted fs-13">Expired / cancelled</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="row">

@@ -28,7 +28,7 @@ class DocumentController extends Controller
 
     public function show(Document $document)
     {
-        $document->load('household', 'createdBy', 'files', 'allowedMembers');
+        $document->load('household', 'createdBy', 'files');
 
         $siblingDocs = Document::where('household_id', $document->household_id)
             ->where('id', '!=', $document->id)

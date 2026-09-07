@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Household;
+use App\Services\EntitlementService;
 use Yajra\DataTables\Facades\DataTables;
 
 class HouseholdController extends Controller
@@ -82,6 +83,9 @@ class HouseholdController extends Controller
             'renewals_overdue' => $renewals->filter(fn($r) => $r->is_overdue)->count(),
             'documents_total' => $documents->count(),
             'payments_total' => $household->payments->where('status', 'succeeded')->sum('amount'),
+            'storage_used' => (new EntitlementService())->getStorageUsed($household),
+            'storage_limit' => (new EntitlementService())->getLimits((new EntitlementService())->getPlanCode($household))['documents_bytes'],
+            'plan_code' => (new EntitlementService())->getPlanCode($household),
         ];
 
         return view('admin.pages.household-show', compact('household', 'tasks', 'renewals', 'documents', 'stats'));

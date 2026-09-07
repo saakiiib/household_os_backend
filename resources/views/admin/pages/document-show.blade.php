@@ -36,17 +36,6 @@
                             @endif
                         </p>
                         <p class="mb-2"><strong>Due Date:</strong> {{ $document->due_date ? $document->due_date->format('d M Y') : '-' }}</p>
-                        <p class="mb-2"><strong>Visibility:</strong>
-                            @php $vcls = match($document->visibility) { 'all' => 'success', 'specific' => 'info', default => 'secondary' }; @endphp
-                            <span class="badge badge-soft-{{ $vcls }}">{{ ucfirst($document->visibility ?? 'all') }}</span>
-                        </p>
-                        @if($document->visibility === 'specific' && $document->allowedMembers->count())
-                            <p class="mb-2"><strong>Allowed Members:</strong>
-                                @foreach($document->allowedMembers as $member)
-                                    <a href="{{ route('admin.users.show', $member) }}" class="badge bg-soft-primary text-primary">{{ $member->name }}</a>
-                                @endforeach
-                            </p>
-                        @endif
                         <p class="mb-0"><strong>Created:</strong> {{ $document->created_at->format('d M Y') }}</p>
                     </div>
                 </div>

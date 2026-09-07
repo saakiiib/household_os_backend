@@ -26,15 +26,6 @@
                                 N/A
                             @endif
                         </p>
-                        @if($subscription->subscriber_user_id)
-                            <p class="mb-2"><strong>Subscriber (Payer):</strong>
-                                @if($subscription->subscriber)
-                                    <a href="{{ route('admin.users.show', $subscription->subscriber) }}">{{ $subscription->subscriber->name }}</a>
-                                @else
-                                    {{ $subscription->subscriber_user_id }}
-                                @endif
-                            </p>
-                        @endif
                         <p class="mb-2"><strong>Household:</strong>
                             @if($subscription->household)
                                 <a href="{{ route('admin.households.show', $subscription->household) }}">{{ $subscription->household->name }}</a>
@@ -56,19 +47,7 @@
                             <p class="mb-2"><strong>Trial Ends:</strong> {{ $subscription->trial_ends_at->format('d M Y') }}</p>
                         @endif
                         @if($subscription->cancelled_at)
-                            <p class="mb-2"><strong>Cancelled:</strong> {{ $subscription->cancelled_at->format('d M Y') }}</p>
-                        @endif
-                        @if($subscription->provider)
-                            <p class="mb-2"><strong>Provider:</strong> {{ ucfirst($subscription->provider) }}</p>
-                        @endif
-                        @if($subscription->product_id)
-                            <p class="mb-2"><strong>Product ID:</strong> <code>{{ $subscription->product_id }}</code></p>
-                        @endif
-                        @if($subscription->original_transaction_id)
-                            <p class="mb-2"><strong>Original Transaction:</strong> <code>{{ $subscription->original_transaction_id }}</code></p>
-                        @endif
-                        @if($subscription->app_account_token)
-                            <p class="mb-0"><strong>Apple Account Token:</strong> <code class="small">{{ $subscription->app_account_token }}</code></p>
+                            <p class="mb-0"><strong>Cancelled:</strong> {{ $subscription->cancelled_at->format('d M Y') }}</p>
                         @endif
                     </div>
                 </div>
