@@ -78,7 +78,7 @@ class UserController extends Controller
             'tasks_created' => $tasksAsCreator->count(),
             'tasks_assigned' => $tasksAsAssignee->count(),
             'payments_count' => $user->payments->count(),
-            'payments_total' => $user->payments->where('status', 'succeeded')->sum('amount'),
+            'payments_total' => $user->payments->whereIn('status', ['succeeded', 'completed'])->sum('amount'),
         ];
 
         return view('admin.pages.user-show', compact('user', 'tasksAsCreator', 'tasksAsAssignee', 'stats'));

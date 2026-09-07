@@ -36,7 +36,7 @@ class PaymentController extends Controller
         }
 
         $totalPayments = \App\Models\Payment::count();
-        $succeededPayments = \App\Models\Payment::where('status', 'succeeded')->count();
+        $succeededPayments = \App\Models\Payment::whereIn('status', ['succeeded', 'completed'])->count();
         $failedPayments = \App\Models\Payment::where('status', 'failed')->count();
         $refundedPayments = \App\Models\Payment::where('status', 'refunded')->count();
 

@@ -299,8 +299,8 @@ class PagesController extends Controller
 
     protected function revenueData(): array
     {
-        $totalRevenue = (float) Payment::where('status', 'succeeded')->sum('amount');
-        $monthRevenue = (float) Payment::where('status', 'succeeded')
+        $totalRevenue = (float) Payment::whereIn('status', ['succeeded', 'completed'])->sum('amount');
+        $monthRevenue = (float) Payment::whereIn('status', ['succeeded', 'completed'])
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->sum('amount');
@@ -314,11 +314,11 @@ class PagesController extends Controller
         ];
 
         $trend = $this->dailySeries(
-            fn($d) => (float) Payment::where('status', 'succeeded')
+            fn($d) => (float) Payment::whereIn('status', ['succeeded', 'completed'])
                 ->whereDate('created_at', $d->toDateString())->sum('amount')
         );
 
-        $findings = Payment::with('user', 'household')->where('status', 'succeeded')
+        $findings = Payment::with('user', 'household')->whereIn('status', ['succeeded', 'completed'])
             ->latest()->take(6)->get()->map(
                 fn($p) => [
                     'title' => 'Payment ' . ($p->gateway_payment_id ?: '#' . $p->id),

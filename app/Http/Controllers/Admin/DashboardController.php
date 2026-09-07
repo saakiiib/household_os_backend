@@ -25,11 +25,11 @@ class DashboardController extends Controller
         $activeSubscriptions = Subscription::where('status', 'active')->count();
         $trialSubscriptions = Subscription::where('status', 'trial')->count();
         $expiredSubscriptions = Subscription::where('status', 'expired')->count();
-        $monthlyRevenue = (float) Payment::where('status', 'succeeded')
+        $monthlyRevenue = (float) Payment::whereIn('status', ['succeeded', 'completed'])
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->sum('amount');
-        $totalRevenue = (float) Payment::where('status', 'succeeded')->sum('amount');
+        $totalRevenue = (float) Payment::whereIn('status', ['succeeded', 'completed'])->sum('amount');
         $totalDocuments = Document::count();
         $totalTasks = Task::count();
         $tasksToday = Task::whereDate('due_date', now()->toDateString())->count();
@@ -75,7 +75,7 @@ class DashboardController extends Controller
         for ($i = 11; $i >= 0; $i--) {
             $m = now()->subMonths($i);
             $revenueLabels[] = $m->format('M');
-            $revenueSeries[] = (float) Payment::where('status', 'succeeded')
+            $revenueSeries[] = (float) Payment::whereIn('status', ['succeeded', 'completed'])
                 ->whereYear('created_at', $m->year)
                 ->whereMonth('created_at', $m->month)->sum('amount');
         }
@@ -129,10 +129,10 @@ class DashboardController extends Controller
 
     private function revenueTrend()
     {
-        $thisMonth = (float) Payment::where('status', 'succeeded')
+        $thisMonth = (float) Payment::whereIn('status', ['succeeded', 'completed'])
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)->sum('amount');
-        $lastMonth = (float) Payment::where('status', 'succeeded')
+        $lastMonth = (float) Payment::whereIn('status', ['succeeded', 'completed'])
             ->whereMonth('created_at', now()->subMonth()->month)
             ->whereYear('created_at', now()->subMonth()->year)->sum('amount');
 

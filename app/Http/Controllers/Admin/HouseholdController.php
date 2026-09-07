@@ -82,7 +82,7 @@ class HouseholdController extends Controller
             'renewals_total' => $renewals->count(),
             'renewals_overdue' => $renewals->filter(fn($r) => $r->is_overdue)->count(),
             'documents_total' => $documents->count(),
-            'payments_total' => $household->payments->where('status', 'succeeded')->sum('amount'),
+            'payments_total' => $household->payments->whereIn('status', ['succeeded', 'completed'])->sum('amount'),
             'storage_used' => (new EntitlementService())->getStorageUsed($household),
             'storage_limit' => (new EntitlementService())->getLimits((new EntitlementService())->getPlanCode($household))['documents_bytes'],
             'plan_code' => (new EntitlementService())->getPlanCode($household),
