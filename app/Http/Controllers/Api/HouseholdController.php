@@ -28,7 +28,7 @@ class HouseholdController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $households->map(fn($h) => $this->formatHousehold($h)),
+            'data' => $households->map(fn($h) => $this->formatHousehold($h, $h->pivot)),
         ]);
     }
 
@@ -141,10 +141,15 @@ class HouseholdController extends Controller
         // Seed default categories for this household
         app(CategoriesController::class)->seed($household->id);
 
+        $membership = HouseholdMember::where('household_id', $household->id)
+            ->where('user_id', Auth::id())
+            ->where('status', 'active')
+            ->first();
+
         return response()->json([
             'success' => true,
             'message' => 'Household created successfully',
-            'data' => $this->formatHousehold($household),
+            'data' => $this->formatHousehold($household, $membership),
         ], 201);
     }
 
