@@ -28,7 +28,10 @@ class PaymentController extends Controller
                     return '<span class="badge badge-soft-' . $cls . '">' . ucfirst($p->status) . '</span>';
                 })
                 ->addColumn('date_fmt', fn($p) => $p->created_at->format('d M Y'))
-                ->rawColumns(['user_link', 'household_link', 'status_badge'])
+                ->addColumn('action', function ($p) {
+                    return '<a href="' . route('admin.payments.show', $p) . '" class="btn btn-sm btn-light"><i class="ri-eye-line"></i></a>';
+                })
+                ->rawColumns(['user_link', 'household_link', 'status_badge', 'action'])
                 ->make(true);
         }
 

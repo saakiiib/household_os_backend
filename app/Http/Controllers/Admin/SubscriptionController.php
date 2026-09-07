@@ -27,7 +27,10 @@ class SubscriptionController extends Controller
                     return '<span class="badge badge-soft-' . $cls . '">' . ucfirst($s->status) . '</span>';
                 })
                 ->addColumn('period_end_fmt', fn($s) => $s->current_period_end ? $s->current_period_end->format('d M Y') : '-')
-                ->rawColumns(['user_link', 'household_link', 'status_badge'])
+                ->addColumn('action', function ($s) {
+                    return '<a href="' . route('admin.subscriptions.show', $s) . '" class="btn btn-sm btn-light"><i class="ri-eye-line"></i></a>';
+                })
+                ->rawColumns(['user_link', 'household_link', 'status_badge', 'action'])
                 ->make(true);
         }
 
