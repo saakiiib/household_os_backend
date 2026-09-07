@@ -67,11 +67,11 @@ Route::get('/clean-db', function () {
 
     DB::statement('SET FOREIGN_KEY_CHECKS = 1');
 
-    UserSeeder::seedReviewer();
+    (new UserSeeder())->run();
 
     return response()->json([
         'success' => true,
-        'message' => 'Database cleaned successfully.',
+        'message' => 'Database cleaned and seeded successfully.',
     ]);
 });
 
