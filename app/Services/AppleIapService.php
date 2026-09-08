@@ -178,6 +178,25 @@ class AppleIapService
         // another household. If the Apple purchase is already linked to a
         // different HouseholdOS household, flag it for support instead.
         $household = $user->activeHousehold();
+
+        // Security rule: the appAccountToken inside Apple's SIGNED transaction
+        // is the source of truth. A compromised client cannot forge it.
+        // If the household already has a token and Apple's signed token differs,
+        // reject — the purchase belongs to a different household.
+        $appleToken = $tx['appAccountToken'] ?? null;
+        if ($household && !empty($household->app_account_token) && $appleToken && $appleToken !== $household->app_account_token) {
+            Log::warning('AppleIapService: Apple signed appAccountToken mismatch with household', [
+                'household_id' => $household->id,
+                'household_token' => $household->app_account_token,
+                'apple_signed_token' => $appleToken,
+            ]);
+            return [
+                'success' => false,
+                'message' => 'This purchase is linked to a different household. Contact support.',
+                'code' => 'APPLE_TOKEN_MISMATCH',
+            ];
+        }
+
         if ($household) {
             $linkedElsewhere = Subscription::where(function ($q) use ($originalTransactionId) {
                 $q->where('original_transaction_id', $originalTransactionId)

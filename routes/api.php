@@ -117,7 +117,9 @@ Route::middleware(['auth:api', 'throttle:120,1'])->group(function () {
         });
 
         // Activity Log
-        Route::get('activities', [ActivityController::class, 'index']);
+        Route::middleware('household.role')->group(function () {
+            Route::get('activities', [ActivityController::class, 'index']);
+        });
 
         // Tasks
         Route::middleware('household.role')->group(function () {
@@ -157,17 +159,21 @@ Route::middleware(['auth:api', 'throttle:120,1'])->group(function () {
         });
 
         // Vehicles
-        Route::get('vehicles', [VehiclesController::class, 'index']);
-        Route::post('vehicles', [VehiclesController::class, 'store']);
-        Route::get('vehicles/{vehicle_id}', [VehiclesController::class, 'show']);
-        Route::patch('vehicles/{vehicle_id}', [VehiclesController::class, 'update']);
-        Route::delete('vehicles/{vehicle_id}', [VehiclesController::class, 'destroy']);
+        Route::middleware('household.role')->group(function () {
+            Route::get('vehicles', [VehiclesController::class, 'index']);
+            Route::post('vehicles', [VehiclesController::class, 'store']);
+            Route::get('vehicles/{vehicle_id}', [VehiclesController::class, 'show']);
+            Route::patch('vehicles/{vehicle_id}', [VehiclesController::class, 'update']);
+            Route::delete('vehicles/{vehicle_id}', [VehiclesController::class, 'destroy']);
+        });
 
         // Categories
-        Route::get('categories', [CategoriesController::class, 'index']);
-        Route::post('categories', [CategoriesController::class, 'store']);
-        Route::delete('categories/{category_id}', [CategoriesController::class, 'destroy']);
-        Route::post('categories/seed', [CategoriesController::class, 'seed']);
+        Route::middleware('household.role')->group(function () {
+            Route::get('categories', [CategoriesController::class, 'index']);
+            Route::post('categories', [CategoriesController::class, 'store']);
+            Route::delete('categories/{category_id}', [CategoriesController::class, 'destroy']);
+            Route::post('categories/seed', [CategoriesController::class, 'seed']);
+        });
     });
 
     // Notifications
