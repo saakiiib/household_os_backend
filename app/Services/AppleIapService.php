@@ -82,10 +82,36 @@ class AppleIapService
         Log::info('AppleIapService::verifyAndActivate ENTER', [
             'user_id' => $user->id,
             'transaction_id' => $transactionId,
-            'has_app_account_token' => !empty($appAccountToken),
+            'flutter_token_prefix' => !empty($appAccountToken) ? substr($appAccountToken, 0, 8) : 'null',
             'bundle_id' => $this->bundleId,
             'configured' => $this->isConfigured(),
         ]);
+
+        // ─── RE-DELIVERY DETECTION ──────────────────────────────────────────
+        // Check if this transaction was already processed by a webhook or exists
+        // in another household. This tells us whether the Flutter callback is
+        // for a FRESH purchase or an OLD StoreKit transaction being re-delivered.
+        $alreadyLoggedNotification = AppleNotificationLog::where('original_transaction_id', $transactionId)->first();
+        $existingSubscription = \App\Models\Subscription::where('original_transaction_id', $transactionId)->first()
+            ?? \App\Models\Subscription::where('apple_original_transaction_id', $transactionId)->first();
+        $existingTransaction = \App\Models\SubscriptionTransaction::where('transaction_id', $transactionId)->first();
+
+        Log::info('AppleIapService: re-delivery detection', [
+            'transaction_id' => $transactionId,
+            'already_in_notification_log' => $alreadyLoggedNotification !== null,
+            'notification_log_id' => $alreadyLoggedNotification?->id,
+            'notification_log_created' => $alreadyLoggedNotification?->created_at?->toIso8601String(),
+            'existing_subscription_found' => $existingSubscription !== null,
+            'existing_subscription_id' => $existingSubscription?->id,
+            'existing_subscription_household' => $existingSubscription?->household_id,
+            'existing_transaction_found' => $existingTransaction !== null,
+            'current_household_id' => $user->activeHousehold()?->id,
+            'belongs_to_different_household' => $existingSubscription && $user->activeHousehold()
+                ? $existingSubscription->household_id !== $user->activeHousehold()->id
+                : false,
+            'is_re_delivery' => $alreadyLoggedNotification !== null || $existingSubscription !== null || $existingTransaction !== null,
+        ]);
+        // ─────────────────────────────────────────────────────────────────────
 
         if (!$this->isConfigured()) {
             Log::error('AppleIapService: App Store Server API not configured');
@@ -100,7 +126,8 @@ class AppleIapService
         Log::info('AppleIapService: resolved household', [
             'user_id' => $user->id,
             'household_id' => $household?->id,
-            'has_token' => !empty($appAccountToken),
+            'household_token_prefix' => !empty($household->app_account_token) ? substr($household->app_account_token, 0, 8) : 'null',
+            'flutter_token_prefix' => !empty($appAccountToken) ? substr($appAccountToken, 0, 8) : 'null',
         ]);
         if ($household) {
             // Security: the app must send this household's own Apple account
@@ -112,8 +139,15 @@ class AppleIapService
             if (!empty($household->app_account_token)
                 && $appAccountToken
                 && $appAccountToken !== $household->app_account_token) {
-                Log::warning('AppleIapService: app_account_token mismatch', [
+                Log::warning('AppleIapService: app_account_token MISMATCH', [
                     'household_id' => $household->id,
+                    'household_token_prefix' => substr($household->app_account_token, 0, 8),
+                    'flutter_token_prefix' => substr($appAccountToken, 0, 8),
+                    'tokens_match' => false,
+                    'is_re_delivery' => $alreadyLoggedNotification !== null || $existingSubscription !== null,
+                    'belongs_to_different_household' => $existingSubscription
+                        ? $existingSubscription->household_id !== $household->id
+                        : false,
                 ]);
                 return [
                     'success' => false,
@@ -184,9 +218,23 @@ class AppleIapService
         // If the household already has a token and Apple's signed token differs,
         // reject — the purchase belongs to a different household.
         $appleToken = $tx['appAccountToken'] ?? null;
+
+        // Log all three token prefixes for diagnostic comparison
+        Log::info('AppleIapService: token comparison', [
+            'household_id' => $household?->id,
+            'household_token_prefix' => !empty($household->app_account_token) ? substr($household->app_account_token, 0, 8) : 'null',
+            'flutter_token_prefix' => !empty($appAccountToken) ? substr($appAccountToken, 0, 8) : 'null',
+            'apple_signed_token_prefix' => !empty($appleToken) ? substr($appleToken, 0, 8) : 'null',
+            'flutter_matches_household' => $appAccountToken && $household ? ($appAccountToken === $household->app_account_token) : null,
+            'apple_matches_household' => $appleToken && $household ? ($appleToken === $household->app_account_token) : null,
+            'flutter_matches_apple' => $appAccountToken && $appleToken ? ($appAccountToken === $appleToken) : null,
+        ]);
+
         if ($household && !empty($household->app_account_token) && $appleToken && $appleToken !== $household->app_account_token) {
-            Log::warning('AppleIapService: Apple signed appAccountToken mismatch with household', [
+            Log::warning('AppleIapService: Apple signed appAccountToken MISMATCH with household', [
                 'household_id' => $household->id,
+                'household_token_prefix' => substr($household->app_account_token, 0, 8),
+                'apple_signed_token_prefix' => substr($appleToken, 0, 8),
             ]);
             return [
                 'success' => false,
