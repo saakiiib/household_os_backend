@@ -82,7 +82,7 @@ class AppleIapService
         Log::info('AppleIapService::verifyAndActivate ENTER', [
             'user_id' => $user->id,
             'transaction_id' => $transactionId,
-            'app_account_token' => $appAccountToken,
+            'has_app_account_token' => !empty($appAccountToken),
             'bundle_id' => $this->bundleId,
             'configured' => $this->isConfigured(),
         ]);
@@ -147,7 +147,7 @@ class AppleIapService
             'productId' => $tx['productId'] ?? null,
             'transactionId' => $tx['transactionId'] ?? null,
             'originalTransactionId' => $tx['originalTransactionId'] ?? null,
-            'appAccountToken' => $tx['appAccountToken'] ?? null,
+            'hasAppAccountToken' => !empty($tx['appAccountToken']),
             'environment' => $tx['environment'] ?? null,
             'purchaseDate' => $tx['purchaseDate'] ?? null,
             'expiresDate' => $tx['expiresDate'] ?? null,
@@ -187,8 +187,6 @@ class AppleIapService
         if ($household && !empty($household->app_account_token) && $appleToken && $appleToken !== $household->app_account_token) {
             Log::warning('AppleIapService: Apple signed appAccountToken mismatch with household', [
                 'household_id' => $household->id,
-                'household_token' => $household->app_account_token,
-                'apple_signed_token' => $appleToken,
             ]);
             return [
                 'success' => false,
