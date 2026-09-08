@@ -657,7 +657,7 @@ class AppleIapService
         $existingSubscription = Subscription::where('original_transaction_id', $originalTransactionId)->first()
             ?? Subscription::where('household_id', $household->id)->first();
 
-        $subscription = DB::transaction(function () use ($user, $household, $plan, $productId, $billingPeriod, $originalTransactionId, $latestTransactionId, $environment, $purchaseDateMs, $expiresDateMs, $appAccountToken, $deviceId, $status, $existingSubscription) {
+        $subscription = DB::transaction(function () use ($user, $household, $plan, $productId, $billingPeriod, $originalTransactionId, $latestTransactionId, $environment, $purchaseDateMs, $expiresDateMs, $appAccountToken, $deviceId, $status, $existingSubscription, $autoRenew, $periodStart, $periodEnd) {
             $data = [
                 'user_id' => $user->id,
                 'subscriber_user_id' => $user->id,
