@@ -168,6 +168,19 @@ class SubscriptionController extends Controller
             default => 'free',
         };
 
+        \Log::info('SUBSCRIPTION CURRENT RESPONSE DEBUG', [
+            'subscription_id' => $subscription->id,
+            'status' => $subscription->status,
+            'is_active' => $subscription->isActive(),
+            'access_state' => $accessState,
+            'effective_plan' => $effectivePlan,
+            'current_period_end' => $subscription->current_period_end?->toIso8601String(),
+            'expires_at' => $subscription->expires_at?->toIso8601String(),
+            'last_verified_at' => $subscription->last_verified_at?->toIso8601String(),
+            'environment' => $subscription->environment,
+            'auto_renew' => $subscription->auto_renew,
+        ]);
+
         return response()->json([
             'success' => true,
             'data' => [
