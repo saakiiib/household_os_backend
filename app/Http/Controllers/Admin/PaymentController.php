@@ -27,7 +27,7 @@ class PaymentController extends Controller
                     $cls = match($p->status) { 'succeeded' => 'success', 'failed' => 'danger', 'refunded' => 'info', default => 'warning' };
                     return '<span class="badge badge-soft-' . $cls . '">' . ucfirst($p->status) . '</span>';
                 })
-                ->addColumn('date_fmt', fn($p) => $p->created_at->format('d M Y'))
+                ->addColumn('date_fmt', fn($p) => $p->created_at->format('d M Y H:i'))
                 ->addColumn('action', function ($p) {
                     return '<a href="' . route('admin.payments.show', $p) . '" class="btn btn-sm btn-light"><i class="ri-eye-line"></i></a>';
                 })
