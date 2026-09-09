@@ -29,6 +29,7 @@ class DashboardController extends Controller
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->sum('amount');
+        $monthlyRevenueCurrency = 'gbp';
         $totalRevenue = (float) Payment::whereIn('status', ['succeeded', 'completed'])->sum('amount');
         $totalDocuments = Document::count();
         $totalTasks = Task::count();
@@ -105,7 +106,7 @@ class DashboardController extends Controller
 
         return view('admin.pages.dashboard', compact(
             'totalHouseholds', 'totalUsers', 'activeSubscriptions', 'trialSubscriptions', 'expiredSubscriptions',
-            'monthlyRevenue', 'totalRevenue', 'totalDocuments', 'totalTasks', 'tasksToday', 'pendingTasks',
+            'monthlyRevenue', 'monthlyRevenueCurrency', 'totalRevenue', 'totalDocuments', 'totalTasks', 'tasksToday', 'pendingTasks',
             'inProgressTasks', 'completedTasks', 'totalRenewals', 'renewalsDue', 'pendingRenewals', 'completedRenewals',
             'storageUsedMB', 'freeStorageMB', 'paidStorageGB',
             'trend', 'growthLabels', 'growthUsers', 'growthHouseholds',

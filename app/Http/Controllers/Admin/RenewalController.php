@@ -13,9 +13,10 @@ class RenewalController extends Controller
         $pendingRenewals = \App\Models\Renewal::where('status', 'pending')->count();
         $completedRenewals = \App\Models\Renewal::where('status', 'completed')->count();
         $renewalsValue = (float) \App\Models\Renewal::sum('amount');
+        $renewalsCurrency = 'gbp';
 
         return view('admin.pages.renewals', compact(
-            'totalRenewals', 'pendingRenewals', 'completedRenewals', 'renewalsValue'
+            'totalRenewals', 'pendingRenewals', 'completedRenewals', 'renewalsValue', 'renewalsCurrency'
         ));
     }
 
