@@ -646,10 +646,10 @@ class AppleIapService
         }
 
         $periodStart = $purchaseDateMs
-            ? \Carbon\Carbon::createFromTimestampMs($purchaseDateMs)
+            ? $this->appleMillisToAppTime($purchaseDateMs)
             : now();
         $periodEnd = $expiresDateMs
-            ? \Carbon\Carbon::createFromTimestampMs($expiresDateMs)
+            ? $this->appleMillisToAppTime($expiresDateMs)
             : now()->addMonth();
 
         $status = $this->mapAppleStatus($appleStatus);
@@ -896,7 +896,7 @@ class AppleIapService
         $newStatus = $this->mapAppleStatus($appleStatusCode);
 
         $periodEnd = isset($tx['expiresDate'])
-            ? \Carbon\Carbon::createFromTimestampMs((int) $tx['expiresDate'])
+            ? $this->appleMillisToAppTime((int) $tx['expiresDate'])
             : $subscription->current_period_end;
 
         // CRITICAL: Never downgrade a currently-active subscription based on
@@ -909,7 +909,7 @@ class AppleIapService
         $finalStatus = $newStatus;
         if ($currentStatus === 'active' && in_array($newStatus, ['expired', 'revoked'], true)) {
             $appleExpires = isset($tx['expiresDate'])
-                ? \Carbon\Carbon::createFromTimestampMs((int) $tx['expiresDate'])
+                ? $this->appleMillisToAppTime((int) $tx['expiresDate'])
                 : null;
             if ($appleExpires && now()->isAfter($appleExpires)) {
                 // Apple's expiresDate is genuinely in the past — accept the downgrade.
@@ -1040,8 +1040,8 @@ class AppleIapService
             'original_transaction_id' => $originalTransactionId,
             'product_id' => $productId,
             'environment' => $environment,
-            'purchase_date' => $purchaseDateMs ? \Carbon\Carbon::createFromTimestampMs($purchaseDateMs) : null,
-            'expires_date' => $expiresDateMs ? \Carbon\Carbon::createFromTimestampMs($expiresDateMs) : null,
+            'purchase_date' => $purchaseDateMs ? $this->appleMillisToAppTime($purchaseDateMs) : null,
+            'expires_date' => $expiresDateMs ? $this->appleMillisToAppTime($expiresDateMs) : null,
             'transaction_reason' => 'renewal',
         ]);
 
@@ -1096,6 +1096,22 @@ class AppleIapService
     /* ------------------------------------------------------------------ */
     /* JWT + JWS (OpenSSL, no external dependencies)                      */
     /* ------------------------------------------------------------------ */
+
+    /**
+     * Convert Apple's epoch-millisecond timestamps to the application's
+     * configured timezone before persisting them to Laravel DATETIME columns.
+     *
+     * Apple timestamps represent an absolute UTC instant. Passing them through
+     * Carbon without an explicit source timezone can preserve the UTC wall-clock
+     * value while later presenting it as Europe/London, which shifts the real
+     * expiry by one hour during BST. That made a valid Sandbox subscription look
+     * expired immediately.
+     */
+    private function appleMillisToAppTime(int $milliseconds): \Carbon\Carbon
+    {
+        return \Carbon\Carbon::createFromTimestampMs($milliseconds, 'UTC')
+            ->setTimezone((string) config('app.timezone', 'UTC'));
+    }
 
     private function isConfigured(): bool
     {

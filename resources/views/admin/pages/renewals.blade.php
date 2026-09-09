@@ -64,7 +64,7 @@
                     <div class="d-flex">
                         <div class="flex-grow-1">
                             <p class="text-muted mb-2 text-truncate">Total Value</p>
-                            <h4 class="mb-0">£{{ number_format($renewalsValue, 2) }}</h4>
+                            <h4 class="mb-0">{{ format_currency($renewalsValue, $renewalsCurrency) }}</h4>
                         </div>
                         <div class="avatar-sm">
                             <span class="avatar-title bg-soft-info text-info rounded fs-3"><i class="ri-money-pound-circle-line"></i></span>

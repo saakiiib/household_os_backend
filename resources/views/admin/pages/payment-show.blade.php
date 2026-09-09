@@ -19,7 +19,7 @@
                 <div class="card-body">
                     <h5 class="card-title">Payment Details</h5>
                     <div class="mt-3">
-                        <p class="mb-2"><strong>Amount:</strong> <span class="fs-18 fw-bold">${{ number_format($payment->amount, 2) }}</span></p>
+                        <p class="mb-2"><strong>Amount:</strong> <span class="fs-18 fw-bold">{{ format_currency($payment->amount, $payment->currency) }}</span></p>
                         <p class="mb-2"><strong>Status:</strong>
                             @php $cls = match($payment->status) { 'completed' => 'success', 'failed' => 'danger', default => 'warning' }; @endphp
                             <span class="badge badge-soft-{{ $cls }}">{{ ucfirst($payment->status) }}</span>

@@ -24,7 +24,7 @@
                     ['label' => 'Total Households', 'value' => number_format($totalHouseholds), 'icon' => 'ri-home-line', 'key' => 'households'],
                     ['label' => 'Total Users', 'value' => number_format($totalUsers), 'icon' => 'ri-user-line', 'key' => 'users'],
                     ['label' => 'Active Subscriptions', 'value' => number_format($activeSubscriptions), 'icon' => 'ri-vip-crown-line', 'key' => 'subscriptions'],
-                    ['label' => 'Monthly Revenue', 'value' => '£' . number_format($monthlyRevenue, 2), 'icon' => 'ri-money-pound-circle-line', 'key' => 'revenue'],
+                    ['label' => 'Monthly Revenue', 'value' => format_currency($monthlyRevenue, $monthlyRevenueCurrency), 'icon' => 'ri-money-pound-circle-line', 'key' => 'revenue'],
                     ['label' => 'Documents Stored', 'value' => number_format($totalDocuments), 'icon' => 'ri-folder-line', 'key' => 'documents'],
                     ['label' => 'Tasks (Pending/In Progress)', 'value' => number_format($pendingTasks + $inProgressTasks), 'icon' => 'ri-task-line', 'key' => 'tasks'],
                     ['label' => 'Renewals Due (7 days)', 'value' => number_format($renewalsDue), 'icon' => 'ri-refresh-line', 'key' => 'renewals'],
@@ -253,6 +253,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     growth.render();
 
+    var revenueCurrency = @json(currency_symbol($monthlyRevenueCurrency));
     var revenue = new ApexCharts(document.querySelector("#revenue-chart"), {
         chart: { type: 'bar', height: 320, toolbar: { show: false } },
         series: [{ name: 'Revenue', data: @json($revenueSeries) }],
@@ -261,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function () {
         plotOptions: { bar: { borderRadius: 4, columnWidth: '55%', distributed: false } },
         dataLabels: { enabled: false },
         grid: { borderColor: '#f1f1f1' },
-        yaxis: { labels: { formatter: function (val) { return '£' + Math.round(val); } } }
+        yaxis: { labels: { formatter: function (val) { return revenueCurrency + Math.round(val); } } }
     });
     revenue.render();
 });
