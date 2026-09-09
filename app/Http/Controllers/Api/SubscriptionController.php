@@ -84,9 +84,22 @@ class SubscriptionController extends Controller
         // delay from temporarily removing paid access.
         $lastVerified = $subscription->last_verified_at;
         $localExpiry = $subscription->expires_at ?? $subscription->current_period_end;
+        // Only bypass the normal refresh throttle when the local Apple period
+        // has expired AND a renewal may still be expected. Once Apple has
+        // confirmed expired + auto_renew=false, do not query Apple on every
+        // /subscription/current request.
         $localApplePeriodExpired = $subscription->provider === 'apple'
             && $localExpiry
             && now()->greaterThanOrEqualTo($localExpiry);
+
+        $appleRenewalMayStillBeExpected = $subscription->provider === 'apple'
+            && !(
+                strtolower((string) $subscription->status) === 'expired'
+                && $subscription->auto_renew === false
+            );
+
+        $forceAppleExpiryRefresh = $localApplePeriodExpired
+            && $appleRenewalMayStillBeExpected;
 
         $refreshAfterMinutes = strtolower((string) $subscription->environment) === 'sandbox'
             ? 1
@@ -95,7 +108,7 @@ class SubscriptionController extends Controller
         $stale = !$lastVerified
             || $lastVerified->lt(now()->subMinutes($refreshAfterMinutes));
 
-        $shouldRefresh = $stale || $localApplePeriodExpired;
+        $shouldRefresh = $stale || $forceAppleExpiryRefresh;
 
         if ($shouldRefresh) {
             // Prevent multiple app requests from re-querying Apple/Google at the
@@ -112,6 +125,9 @@ class SubscriptionController extends Controller
                             'environment' => $subscription->environment,
                             'local_expiry' => $localExpiry?->toIso8601String(),
                             'local_period_expired' => $localApplePeriodExpired,
+                            'force_expiry_refresh' => $forceAppleExpiryRefresh,
+                            'auto_renew' => $subscription->auto_renew,
+                            'status' => $subscription->status,
                             'refresh_after_minutes' => $refreshAfterMinutes,
                         ]);
 
