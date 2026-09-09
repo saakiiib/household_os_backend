@@ -46,7 +46,7 @@ class SubscriptionController extends Controller
 
     public function show(Subscription $subscription)
     {
-        $subscription->load('user', 'household', 'plan', 'payments');
+        $subscription->load('user', 'household', 'plan', 'payments', 'transactions');
 
         return view('admin.pages.subscription-show', compact('subscription'));
     }

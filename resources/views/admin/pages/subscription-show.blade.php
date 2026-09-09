@@ -39,7 +39,16 @@
                             <span class="badge badge-soft-{{ $cls }}">{{ ucfirst($subscription->status) }}</span>
                         </p>
                         <p class="mb-2"><strong>Period Start:</strong> {{ $subscription->current_period_start ? $subscription->current_period_start->format('d M Y') : '-' }}</p>
-                        <p class="mb-2"><strong>Period End:</strong> {{ $subscription->current_period_end ? $subscription->current_period_end->format('d M Y') : '-' }}</p>
+                        <p class="mb-2"><strong>Period End:</strong> {{ $subscription->current_period_end ? $subscription->current_period_end->format('d M Y H:i:s') : '-' }}</p>
+                        @if($subscription->environment)
+                            <p class="mb-2"><strong>Environment:</strong> {{ $subscription->environment }}</p>
+                        @endif
+                        @if($subscription->latest_transaction_id)
+                            <p class="mb-2"><strong>Latest Transaction ID:</strong> <code>{{ $subscription->latest_transaction_id }}</code></p>
+                        @endif
+                        @if($subscription->auto_renew !== null)
+                            <p class="mb-2"><strong>Auto Renew:</strong> {{ $subscription->auto_renew ? 'Yes' : 'No' }}</p>
+                        @endif
                         @if($subscription->trial_started_at)
                             <p class="mb-2"><strong>Trial Started:</strong> {{ $subscription->trial_started_at->format('d M Y') }}</p>
                         @endif
