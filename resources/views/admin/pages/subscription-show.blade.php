@@ -90,7 +90,7 @@
                                         @php $cls = match($payment->status) { 'completed' => 'success', 'failed' => 'danger', default => 'warning' }; @endphp
                                         <span class="badge badge-soft-{{ $cls }}">{{ ucfirst($payment->status) }}</span>
                                     </td>
-                                    <td>{{ $payment->created_at->format('d M Y') }}</td>
+                                    <td>{{ $payment->created_at->format('d M Y H:i') }}</td>
                                     <td class="text-center">
                                         <a href="{{ route('admin.payments.show', $payment) }}" class="btn btn-sm btn-light"><i class="ri-eye-line"></i></a>
                                     </td>
