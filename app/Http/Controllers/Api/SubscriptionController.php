@@ -70,14 +70,44 @@ class SubscriptionController extends Controller
             ]);
         }
 
-        // On-demand provider refresh — re-query the store for the authoritative
-        // current state. This is throttled to once every 5 minutes per
-        // household to avoid hitting rate limits.
+        // On-demand provider refresh — re-query the store for authoritative
+        // current state. Apple Sandbox can compress a one-month subscription
+        // to only a few minutes, so a fixed five-minute throttle can create a
+        // false Free window between Sandbox renewals. Production stays on the
+        // normal five-minute throttle, while Sandbox is allowed to refresh
+        // once per minute.
+        //
+        // Most importantly: if the locally stored Apple expiry has already
+        // passed, ALWAYS re-query Apple before returning the household as Free.
+        // This rule is useful in Production too because it prevents a webhook
+        // delay from temporarily removing paid access.
         $lastVerified = $subscription->last_verified_at;
-        $stale = !$lastVerified || $lastVerified->lt(now()->subMinutes(5));
-        if ($stale) {
+        $localExpiry = $subscription->expires_at ?? $subscription->current_period_end;
+        $localApplePeriodExpired = $subscription->provider === 'apple'
+            && $localExpiry
+            && now()->greaterThanOrEqualTo($localExpiry);
+
+        $refreshAfterMinutes = ($subscription->provider === 'apple' && strtolower((string) $subscription->environment) === 'sandbox')
+            ? 1
+            : 5;
+
+        $stale = !$lastVerified
+            || $lastVerified->lt(now()->subMinutes($refreshAfterMinutes));
+
+        $shouldRefresh = $stale || $localApplePeriodExpired;
+
+        if ($shouldRefresh) {
             try {
                 if ($subscription->provider === 'apple') {
+                    \Log::info('SubscriptionController@current: refreshing Apple subscription', [
+                        'subscription_id' => $subscription->id,
+                        'household_id' => $subscription->household_id,
+                        'environment' => $subscription->environment,
+                        'local_expiry' => $localExpiry?->toIso8601String(),
+                        'local_period_expired' => $localApplePeriodExpired,
+                        'refresh_after_minutes' => $refreshAfterMinutes,
+                    ]);
+
                     app(\App\Services\AppleIapService::class)->refreshFromApple($subscription);
                     $subscription->refresh();
                 } elseif ($subscription->provider === 'google_play') {

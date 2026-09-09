@@ -26,7 +26,7 @@ class SubscriptionController extends Controller
                     $cls = match($s->status) { 'active' => 'success', 'trial' => 'info', 'expired' => 'danger', default => 'warning' };
                     return '<span class="badge badge-soft-' . $cls . '">' . ucfirst($s->status) . '</span>';
                 })
-                ->addColumn('period_end_fmt', fn($s) => $s->current_period_end ? $s->current_period_end->format('d M Y') : '-')
+                ->addColumn('period_end_fmt', fn($s) => $s->current_period_end ? $s->current_period_end->format('d M Y H:i:s') : '-')
                 ->addColumn('action', function ($s) {
                     return '<a href="' . route('admin.subscriptions.show', $s) . '" class="btn btn-sm btn-light"><i class="ri-eye-line"></i></a>';
                 })
