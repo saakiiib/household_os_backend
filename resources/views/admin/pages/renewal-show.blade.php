@@ -35,7 +35,7 @@
                                 N/A
                             @endif
                         </p>
-                        <p class="mb-2"><strong>Amount:</strong> {{ $renewal->amount ? '$' . number_format($renewal->amount, 2) : '-' }}</p>
+                        <p class="mb-2"><strong>Amount:</strong> {{ $renewal->amount ? '£' . number_format($renewal->amount, 2) : '-' }}</p>
                         <p class="mb-2"><strong>Due Date:</strong> {{ $renewal->due_date ? $renewal->due_date->format('d M Y') : '-' }}</p>
                         <p class="mb-2"><strong>Status:</strong>
                             @php $cls = match($renewal->status) { 'completed' => 'success', default => 'warning' }; @endphp
@@ -79,7 +79,7 @@
                                 @foreach($renewal->children as $child)
                                 <tr>
                                     <td><a href="{{ route('admin.renewals.show', $child) }}" class="fw-semibold text-body">{{ $child->title }}</a></td>
-                                    <td>{{ $child->amount ? '$' . number_format($child->amount, 2) : '-' }}</td>
+                                    <td>{{ $child->amount ? '£' . number_format($child->amount, 2) : '-' }}</td>
                                     <td>
                                         @php $cls = match($child->status) { 'completed' => 'success', default => 'warning' }; @endphp
                                         <span class="badge badge-soft-{{ $cls }}">{{ ucfirst($child->status) }}</span>
@@ -116,7 +116,7 @@
                                 <tr>
                                     <td><a href="{{ route('admin.renewals.show', $sibling) }}" class="fw-semibold text-body">{{ $sibling->title }}</a></td>
                                     <td>{{ ucfirst(str_replace('_', ' ', $sibling->category)) }}</td>
-                                    <td>{{ $sibling->amount ? '$' . number_format($sibling->amount, 2) : '-' }}</td>
+                                    <td>{{ $sibling->amount ? '£' . number_format($sibling->amount, 2) : '-' }}</td>
                                     <td>
                                         @php $cls = match($sibling->status) { 'completed' => 'success', default => 'warning' }; @endphp
                                         <span class="badge badge-soft-{{ $cls }}">{{ ucfirst($sibling->status) }}</span>

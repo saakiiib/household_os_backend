@@ -50,7 +50,7 @@
             <div class="card card-animate">
                 <div class="card-body">
                     <p class="text-uppercase fw-medium text-muted text-truncate mb-0">Revenue</p>
-                    <h4 class="fs-22 fw-semibold mt-3 mb-0">${{ number_format($stats['payments_total'], 2) }}</h4>
+                    <h4 class="fs-22 fw-semibold mt-3 mb-0">£{{ number_format($stats['payments_total'], 2) }}</h4>
                     <span class="text-muted">{{ $stats['documents_total'] }} documents</span>
                 </div>
             </div>
@@ -229,7 +229,7 @@
                                     <td><a href="{{ route('admin.renewals.show', $renewal) }}" class="fw-semibold text-body">{{ $renewal->title }}</a></td>
                                     <td>{{ ucfirst(str_replace('_', ' ', $renewal->category)) }}</td>
                                     <td>{{ $renewal->due_date ? $renewal->due_date->format('d M Y') : '-' }}</td>
-                                    <td>{{ $renewal->amount ? '$' . number_format($renewal->amount, 2) : '-' }}</td>
+                                    <td>{{ $renewal->amount ? '£' . number_format($renewal->amount, 2) : '-' }}</td>
                                     <td>
                                         @php $cls = match($renewal->status) { 'completed' => 'success', default => 'warning' }; @endphp
                                         <span class="badge badge-soft-{{ $cls }}">{{ ucfirst($renewal->status) }}</span>
@@ -320,7 +320,7 @@
                                             N/A
                                         @endif
                                     </td>
-                                    <td>${{ number_format($payment->amount, 2) }}</td>
+                                    <td>£{{ number_format($payment->amount, 2) }}</td>
                                     <td>{{ ucfirst($payment->gateway) }}</td>
                                     <td>
                                         @php $cls = match($payment->status) { 'completed' => 'success', 'failed' => 'danger', default => 'warning' }; @endphp

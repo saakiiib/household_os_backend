@@ -84,7 +84,7 @@
                             <tbody>
                                 @foreach($subscription->payments as $payment)
                                 <tr>
-                                    <td>${{ number_format($payment->amount, 2) }}</td>
+                                    <td>£{{ number_format($payment->amount, 2) }}</td>
                                     <td>{{ ucfirst($payment->gateway) }}</td>
                                     <td>
                                         @php $cls = match($payment->status) { 'completed' => 'success', 'failed' => 'danger', default => 'warning' }; @endphp

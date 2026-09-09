@@ -43,7 +43,7 @@
             <div class="card card-animate">
                 <div class="card-body">
                     <p class="text-uppercase fw-medium text-muted text-truncate mb-0">Total Payments</p>
-                    <h4 class="fs-22 fw-semibold mt-3 mb-0">${{ number_format($stats['payments_total'], 2) }}</h4>
+                    <h4 class="fs-22 fw-semibold mt-3 mb-0">£{{ number_format($stats['payments_total'], 2) }}</h4>
                     <span class="text-muted">{{ $stats['payments_count'] }} transactions</span>
                 </div>
             </div>
@@ -248,7 +248,7 @@
                                             N/A
                                         @endif
                                     </td>
-                                    <td>${{ number_format($payment->amount, 2) }}</td>
+                                    <td>£{{ number_format($payment->amount, 2) }}</td>
                                     <td>{{ ucfirst($payment->gateway) }}</td>
                                     <td>
                                         @php $cls = match($payment->status) { 'completed' => 'success', 'failed' => 'danger', default => 'warning' }; @endphp

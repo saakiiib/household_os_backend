@@ -22,7 +22,7 @@
                             <h4 class="mb-0">{{ number_format($totalPayments) }}</h4>
                         </div>
                         <div class="avatar-sm">
-                            <span class="avatar-title bg-soft-primary text-primary rounded fs-3"><i class="ri-money-dollar-circle-line"></i></span>
+                            <span class="avatar-title bg-soft-primary text-primary rounded fs-3"><i class="ri-money-pound-circle-line"></i></span>
                         </div>
                     </div>
                 </div>

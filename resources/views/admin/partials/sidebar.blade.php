@@ -50,7 +50,7 @@
 
                 <li class="menu-title" style="text-align: center;">Billing</li>
                 <li class="nav-item"><a href="{{ route('admin.subscriptions.index') }}" class="nav-link {{ $cur === 'subscriptions' ? 'active' : '' }}"><i class="ri-star-line"></i><span>Subscriptions</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.payments.index') }}" class="nav-link {{ $cur === 'payments' ? 'active' : '' }}"><i class="ri-money-dollar-circle-line"></i><span>Payments</span></a></li>
+                <li class="nav-item"><a href="{{ route('admin.payments.index') }}" class="nav-link {{ $cur === 'payments' ? 'active' : '' }}"><i class="ri-money-pound-circle-line"></i><span>Payments</span></a></li>
                 <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'revenue']) }}" class="nav-link {{ $cur === 'revenue' ? 'active' : '' }}"><i class="ri-line-chart-line"></i><span>Revenue Analytics</span></a></li>
 
                 <li class="menu-title" style="text-align: center;">Support &amp; Comms</li>

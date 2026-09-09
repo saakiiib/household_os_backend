@@ -25,7 +25,7 @@
                             <span class="badge badge-soft-{{ $cls }}">{{ ucfirst($payment->status) }}</span>
                         </p>
                         <p class="mb-2"><strong>Gateway:</strong> {{ ucfirst($payment->gateway) }}</p>
-                        <p class="mb-2"><strong>Currency:</strong> {{ strtoupper($payment->currency ?? 'usd') }}</p>
+                        <p class="mb-2"><strong>Currency:</strong> {{ strtoupper($payment->currency ?? 'gbp') }}</p>
                         @if($payment->payment_method)
                             <p class="mb-2"><strong>Payment Method:</strong> {{ $payment->payment_method }}</p>
                         @endif
