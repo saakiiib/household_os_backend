@@ -933,6 +933,25 @@ class AppleIapService
             }
         }
 
+        // Opposite guard: Apple returned ACTIVE but the expiresDate is
+        // already in the past and auto-renew is off.  This subscription has
+        // genuinely ended — mark it expired so the user sees "Free".
+        if ($finalStatus === 'active' && isset($tx['expiresDate'])) {
+            $appleExpires = $this->appleMillisToAppTime((int) $tx['expiresDate']);
+            $autoRenewNow = isset($statusResult['renewalInfo']['autoRenewStatus'])
+                ? ((int) $statusResult['renewalInfo']['autoRenewStatus'] === 1)
+                : $subscription->auto_renew;
+            if (now()->isAfter($appleExpires) && !$autoRenewNow) {
+                $finalStatus = 'expired';
+                Log::info('AppleIapService: marking expired (Apple=active, expiresDate past, auto_renew off)', [
+                    'subscription_id' => $subscription->id,
+                    'apple_expires'   => $appleExpires->toIso8601String(),
+                    'now'             => now()->toIso8601String(),
+                    'auto_renew'      => $autoRenewNow,
+                ]);
+            }
+        }
+
         $subscription->update([
             'status' => $finalStatus,
             'latest_transaction_id' => $tx['transactionId'] ?? $subscription->latest_transaction_id,
@@ -1098,19 +1117,20 @@ class AppleIapService
     /* ------------------------------------------------------------------ */
 
     /**
-     * Convert Apple's epoch-millisecond timestamps to the application's
-     * configured timezone before persisting them to Laravel DATETIME columns.
-     *
-     * Apple timestamps represent an absolute UTC instant. Passing them through
-     * Carbon without an explicit source timezone can preserve the UTC wall-clock
-     * value while later presenting it as Europe/London, which shifts the real
-     * expiry by one hour during BST. That made a valid Sandbox subscription look
-     * expired immediately.
+     * Use PHP's native DateTime to convert Apple epoch-millis to a Carbon
+     * in the app timezone.  We deliberately avoid
+     * Carbon::createFromTimestampMs() because Carbon 2.x/3.x can mangle
+     * the UTC→local conversion during BST (British Summer Time),
+     * shifting the real expiry by one hour and making a valid Sandbox
+     * subscription look expired immediately.
      */
     private function appleMillisToAppTime(int $milliseconds): \Carbon\Carbon
     {
-        return \Carbon\Carbon::createFromTimestampMs($milliseconds, 'UTC')
-            ->setTimezone((string) config('app.timezone', 'UTC'));
+        $seconds   = (int) ($milliseconds / 1000);
+        $dt        = new \DateTimeImmutable("@{$seconds}", new \DateTimeZone('UTC'));
+        $appTz     = new \DateTimeZone((string) config('app.timezone', 'UTC'));
+
+        return \Carbon\Carbon::instance($dt->setTimezone($appTz));
     }
 
     private function isConfigured(): bool
