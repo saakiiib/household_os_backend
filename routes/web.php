@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\LoginController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Database\Seeders\UserSeeder;
 
 Route::get('/', function () {
@@ -22,57 +23,70 @@ Route::match(['get', 'post'], '/logout', function () {
     return redirect()->route('login');
 })->name('logout');
 
-Route::get('/clean-db', function () {
-    DB::statement('SET FOREIGN_KEY_CHECKS = 0');
+// Destructive reset is available only to authenticated test administrators.
+// APP_ENV=local is deliberately insufficient: deployed logs currently use local.
+Route::post('/clean-db', function () {
+    abort_unless(app()->environment('testing'), 403, 'Database reset is disabled outside testing.');
 
-    DB::table('households')->update(['created_by_user_id' => 0]);
-    DB::table('invitations')->update(['invited_by_user_id' => 0, 'accepted_by_user_id' => 0]);
-    DB::table('tasks')->update(['created_by_user_id' => 0, 'assigned_user_id' => 0, 'parent_task_id' => 0]);
-    DB::table('documents')->update(['created_by_user_id' => 0]);
-    DB::table('vehicles')->update(['created_by_user_id' => 0]);
-    DB::table('renewals')->update(['created_by_user_id' => 0, 'vehicle_id' => 0]);
-
-    $tables = [
-        'activity_logs',
-        'jobs',
-        'failed_jobs',
-        'job_batches',
-        'documents',
-        'document_files',
-        'households',
-        'household_members',
-        'invitations',
-        'notifications',
-        'payments',
-        'renewals',
-        'renewal_vehicle_services',
-        'sessions',
-        'subscriptions',
-        'subscription_transactions',
-        'tasks',
-        'users',
-        'vehicles',
-        'device_tokens',
-        'oauth_access_tokens',
-        'oauth_refresh_tokens',
-        'oauth_auth_codes',
-        'oauth_device_codes',
-    ];
-
-    foreach ($tables as $table) {
-        if (DB::getSchemaBuilder()->hasTable($table)) {
-            DB::table($table)->truncate();
+    // Clear only this app's known per-user throttle keys, including legacy
+    // unprefixed keys. Never flush a possibly shared Redis/cache store.
+    DB::table('users')->orderBy('id')->chunkById(500, function ($users) {
+        foreach ($users as $user) {
+            foreach (['', 'auth:', 'api:'] as $prefix) {
+                RateLimiter::clear($prefix.sha1((string) $user->id));
+            }
         }
-    }
+    });
+    // Public auth is keyed by domain + IP rather than user ID.
+    $publicKey = sha1(request()->route()->getDomain().'|'.request()->ip());
+    RateLimiter::clear('auth:'.$publicKey);
+    RateLimiter::clear($publicKey);
 
-    DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+    DB::statement('SET FOREIGN_KEY_CHECKS = 0');
+    try {
+        $tables = [
+            'activity_logs',
+            'jobs',
+            'failed_jobs',
+            'job_batches',
+            'documents',
+            'document_files',
+            'households',
+            'household_members',
+            'invitations',
+            'notifications',
+            'payments',
+            'renewals',
+            'renewal_vehicle_services',
+            'sessions',
+            'subscriptions',
+            'subscription_transactions',
+            'apple_notification_logs',
+            'tasks',
+            'users',
+            'vehicles',
+            'device_tokens',
+            'oauth_access_tokens',
+            'oauth_refresh_tokens',
+            'oauth_auth_codes',
+            'oauth_device_codes',
+        ];
+
+        foreach ($tables as $table) {
+            if (DB::getSchemaBuilder()->hasTable($table)) {
+                DB::table($table)->truncate();
+            }
+        }
+    } finally {
+        DB::statement('SET FOREIGN_KEY_CHECKS = 1');
+    }
 
     (new UserSeeder())->run();
 
     return response()->json([
         'success' => true,
-        'message' => 'Database cleaned and seeded successfully.',
+        'message' => 'Test tables and Apple notification records reset; known user rate-limit counters cleared. Sign in again on devices. Apple sandbox purchase history must be reset separately in Apple settings.',
     ]);
-});
+})->middleware(['auth', 'admin']);
 
 require __DIR__.'/admin.php';
