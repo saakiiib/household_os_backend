@@ -146,6 +146,14 @@ class Subscription extends Model
         // apply on-demand (Apple re-queries live). For Google/Stripe/PayPal,
         // the expires_at is set by webhooks or verify flows and is authoritative.
         if ($this->expires_at && now()->isAfter($this->expires_at)) {
+            // Auto-renewing grace period: if auto_renew is on and the
+            // subscription only recently expired (within 5 minutes), keep it
+            // active. This prevents a false "expired/free" flash during sandbox
+            // renewals (Google sandbox compresses months to minutes) and
+            // production renewal processing delays.
+            if ($this->auto_renew && now()->diffInSeconds($this->expires_at) <= 300) {
+                return false;
+            }
             return true;
         }
         return false;
