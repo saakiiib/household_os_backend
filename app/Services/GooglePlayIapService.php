@@ -140,6 +140,7 @@ class GooglePlayIapService
         ?\Carbon\Carbon $purchaseDate = null,
         bool $autoRenewing = true,
         bool $isRestored = false,
+        ?string $purchaseToken = null,
     ): Subscription {
         $household = $user->activeHousehold();
 
@@ -172,7 +173,7 @@ class GooglePlayIapService
 
         $existingSubscription = Subscription::where('household_id', $household->id)->first();
 
-        $subscription = DB::transaction(function () use ($user, $household, $plan, $billingType, $googleProductId, $orderId, $autoRenewing, $isRestored, $existingSubscription, $periodStart, $periodEnd) {
+        $subscription = DB::transaction(function () use ($user, $household, $plan, $billingType, $googleProductId, $orderId, $autoRenewing, $isRestored, $existingSubscription, $periodStart, $periodEnd, $purchaseToken) {
             $data = [
                 'user_id' => $user->id,
                 'household_id' => $household->id,
@@ -189,6 +190,7 @@ class GooglePlayIapService
                 'payment_method' => 'google_play',
                 'google_product_id' => $googleProductId,
                 'google_order_id' => $orderId,
+                'google_purchase_token' => $purchaseToken,
                 'original_transaction_id' => $orderId,
                 'latest_transaction_id' => $orderId,
                 'last_verified_at' => now(),
@@ -319,6 +321,12 @@ class GooglePlayIapService
             return;
         }
 
+        // Store the purchase token if we don't have it yet (needed for
+        // refreshFromGoogle which calls Google's v2 API with the token).
+        if ($purchaseToken && empty($subscription->google_purchase_token)) {
+            $subscription->update(['google_purchase_token' => $purchaseToken]);
+        }
+
         // Notification types:
         // 1 = SUBSCRIPTION_RECOVERED
         // 2 = SUBSCRIPTION_RENEWED
@@ -420,19 +428,15 @@ class GooglePlayIapService
      */
     public function refreshFromGoogle(Subscription $subscription): bool
     {
-        if (!$subscription->google_order_id || empty($this->serviceAccountJson)) {
+        $token = $subscription->google_purchase_token;
+        $subId = $subscription->google_product_id;
+
+        if (empty($token) || empty($this->serviceAccountJson)) {
             return false;
         }
 
         try {
             $accessToken = $this->_getAccessToken();
-
-            // For v2 API, we need the purchaseToken, not the orderId. The
-            // orderId alone cannot be re-verified. We can attempt via the
-            // v1 endpoint using orderId as a token, but it's deprecated.
-            // Use the latest_transaction_id field if it contains the token.
-            $token = $subscription->google_order_id;
-            $subId = $subscription->google_product_id;
 
             $url = sprintf(
                 '%s/%s/purchases/subscriptionsv2/tokens/%s',

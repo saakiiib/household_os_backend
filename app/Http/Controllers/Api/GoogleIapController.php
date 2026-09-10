@@ -75,6 +75,7 @@ class GoogleIapController extends Controller
                 purchaseDate: $result['purchase_date'],
                 autoRenewing: $result['auto_renewing'] ?? true,
                 isRestored: $request->boolean('is_restored', false),
+                purchaseToken: $request->receipt_data,
             );
 
             \Log::info('GoogleIapController@verify: subscription activated', [

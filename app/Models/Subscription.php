@@ -45,6 +45,7 @@ class Subscription extends Model
         'apple_receipt_data',
         'google_product_id',
         'google_order_id',
+        'google_purchase_token',
         'metadata',
     ];
 
