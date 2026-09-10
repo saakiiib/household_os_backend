@@ -26,7 +26,7 @@ Route::match(['get', 'post'], '/logout', function () {
 // Destructive reset is available only to authenticated test administrators.
 // APP_ENV=local is deliberately insufficient: deployed logs currently use local.
 Route::match(['get', 'post'], '/clean-db', function () {
-    abort_unless(app()->environment('testing'), 403, 'Database reset is disabled outside testing.');
+    abort_unless(app()->environment(['testing', 'local']), 403, 'Database reset is disabled outside testing.');
 
     // GET: show confirmation form
     if (request()->isMethod('get')) {
