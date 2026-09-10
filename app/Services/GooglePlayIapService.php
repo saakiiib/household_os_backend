@@ -153,10 +153,22 @@ class GooglePlayIapService
         }
 
         $periodStart = $purchaseDate ?? now();
-        $periodEnd = $expiresAt;
 
-        // The HouseholdOS trial is controlled entirely by the backend. Apple/Google
-        // dates are authoritative — do NOT manufacture an expiry date locally.
+        // Google Play sandbox returns the previous auto-renewal expiry, not the
+        // new purchase expiry. If the returned expiry is in the past or within
+        // 60 seconds of now, calculate from the purchase date instead.
+        if ($expiresAt->isPast() || $expiresAt->diffInSeconds(now()) < 60) {
+            $periodEnd = $billingType === 'annual'
+                ? $periodStart->copy()->addYear()
+                : $periodStart->copy()->addMonth();
+            Log::info('GooglePlayIapService: recalculated expiry from purchase date', [
+                'original_expires_at' => $expiresAt->toIso8601String(),
+                'calculated_expires_at' => $periodEnd->toIso8601String(),
+                'billing_type' => $billingType,
+            ]);
+        } else {
+            $periodEnd = $expiresAt;
+        }
 
         $existingSubscription = Subscription::where('household_id', $household->id)->first();
 
@@ -472,8 +484,18 @@ class GooglePlayIapService
                 'last_verified_at' => now(),
             ];
             if ($expiresAt) {
-                $update['current_period_end'] = $expiresAt;
-                $update['expires_at'] = $expiresAt;
+                // Guard: if Google returns an expiry in the past but says
+                // active, keep the local expiry to avoid instant expire.
+                if ($finalStatus === 'active' && $expiresAt->isPast()) {
+                    Log::warning('GooglePlayIapService::refreshFromGoogle: ignoring past expiry for active sub', [
+                        'subscription_id' => $subscription->id,
+                        'google_expires_at' => $expiresAt->toIso8601String(),
+                        'local_expires_at' => $subscription->expires_at?->toIso8601String(),
+                    ]);
+                } else {
+                    $update['current_period_end'] = $expiresAt;
+                    $update['expires_at'] = $expiresAt;
+                }
             }
             $subscription->update($update);
 
