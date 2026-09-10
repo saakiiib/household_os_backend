@@ -117,45 +117,47 @@ class SubscriptionController extends Controller
             $lock = Cache::lock('subscription-refresh:' . $subscription->id, 15);
 
             if ($lock->get()) {
-                try {
-                    if ($subscription->provider === 'apple') {
-                        \Log::info('SubscriptionController@current: refreshing Apple subscription', [
-                            'subscription_id' => $subscription->id,
-                            'household_id' => $subscription->household_id,
-                            'environment' => $subscription->environment,
-                            'local_expiry' => $localExpiry?->toIso8601String(),
-                            'local_period_expired' => $localApplePeriodExpired,
-                            'force_expiry_refresh' => $forceAppleExpiryRefresh,
-                            'auto_renew' => $subscription->auto_renew,
-                            'status' => $subscription->status,
-                            'refresh_after_minutes' => $refreshAfterMinutes,
-                        ]);
+                // IMPORTANT: Return the local subscription data IMMEDIATELY so
+                // the app gets a fast response. The provider refresh runs after
+                // the response is sent via app()->terminating(). This prevents
+                // slow Apple/Google API calls (15-30s on shared hosting) from
+                // blocking the entire /subscription/current response and causing
+                // frontend timeouts.
+                $subscriptionId = $subscription->id;
+                $provider = $subscription->provider;
+                $lockKey = 'subscription-refresh:' . $subscriptionId;
 
-                        app(\App\Services\AppleIapService::class)->refreshFromApple($subscription);
-                    } elseif ($subscription->provider === 'google_play') {
-                        app(\App\Services\GooglePlayIapService::class)->refreshFromGoogle($subscription);
+                app()->terminating(function () use ($subscriptionId, $provider, $lockKey) {
+                    try {
+                        $sub = \App\Models\Subscription::find($subscriptionId);
+                        if (!$sub) return;
+
+                        if ($provider === 'apple') {
+                            \Log::info('SubscriptionController@current: background refresh Apple subscription', [
+                                'subscription_id' => $subscriptionId,
+                            ]);
+                            app(\App\Services\AppleIapService::class)->refreshFromApple($sub);
+                        } elseif ($provider === 'google_play') {
+                            \Log::info('SubscriptionController@current: background refresh Google subscription', [
+                                'subscription_id' => $subscriptionId,
+                            ]);
+                            app(\App\Services\GooglePlayIapService::class)->refreshFromGoogle($sub);
+                        }
+                    } catch (\Throwable $e) {
+                        \Log::warning('SubscriptionController@current: background provider refresh failed', [
+                            'subscription_id' => $subscriptionId,
+                            'error' => $e->getMessage(),
+                        ]);
+                    } finally {
+                        Cache::lock($lockKey)->forceRelease();
                     }
-                } catch (\Throwable $e) {
-                    \Log::warning('SubscriptionController@current: provider refresh failed', [
-                        'household_id' => $subscription->household_id,
-                        'provider' => $subscription->provider,
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Continue with local data — do not break the request.
-                } finally {
-                    optional($lock)->release();
-                }
+                });
             } else {
                 \Log::debug('SubscriptionController@current: provider refresh skipped because another request is already refreshing', [
                     'subscription_id' => $subscription->id,
                     'household_id' => $subscription->household_id,
                 ]);
             }
-
-            // Always reload after a refresh attempt because another concurrent
-            // request may have completed the provider update while this request
-            // was waiting/skipped.
-            $subscription->refresh();
         }
 
         $subscription->load(['plan', 'subscriber', 'user']);
