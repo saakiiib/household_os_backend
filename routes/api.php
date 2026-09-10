@@ -50,7 +50,9 @@ Route::post('subscription/google/webhook', [GoogleIapController::class, 'webhook
 | Authentication Routes (Public)
 |--------------------------------------------------------------------------
 */
-Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
+// Explicit prefixes keep the auth and general API counters independent.
+// Without them, Laravel uses the same authenticated-user key for both limits.
+Route::prefix('auth')->middleware('throttle:10,1,auth:')->group(function () {
     Route::post('register', [AuthController::class, 'register']);
     Route::post('login', [AuthController::class, 'login']);
     Route::post('social/google', [SocialAuthController::class, 'google']);
@@ -75,7 +77,7 @@ Route::prefix('auth')->middleware('throttle:10,1')->group(function () {
 | Protected Routes (Authenticated)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:api', 'throttle:120,1'])->group(function () {
+Route::middleware(['auth:api', 'throttle:120,1,api:'])->group(function () {
     Route::get('invitations/pending', [AuthController::class, 'pendingInvitations']);
 
     // Profile
