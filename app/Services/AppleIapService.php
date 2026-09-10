@@ -259,7 +259,7 @@ class AppleIapService
                 ]);
                 return [
                     'success' => false,
-                    'message' => 'This Apple subscription is already active on another household. Contact support to transfer it.',
+                    'message' => 'This Apple subscription is already linked to another HouseholdOS household. To subscribe this household separately, use a different Apple account for the purchase.',
                     'code' => 'SUBSCRIPTION_LINKED_ELSEWHERE',
                 ];
             }
@@ -350,7 +350,7 @@ class AppleIapService
                 ]);
                 return [
                     'success' => false,
-                    'message' => 'This subscription is linked to another household. Please contact support.',
+                    'message' => 'This Apple subscription is already linked to another HouseholdOS household. To subscribe this household separately, use a different Apple account for the purchase.',
                 ];
             }
         }
