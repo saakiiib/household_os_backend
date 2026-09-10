@@ -17,6 +17,7 @@ class CheckSubscriptionExpiry extends Command
     public function handle(): int
     {
         if (!Cache::add('subscription-check-running', true, 60)) {
+            \Log::info('[SubscriptionCheck] Run skipped — already running.');
             $this->info('Subscription check already running — skipping.');
             return Command::SUCCESS;
         }
@@ -28,6 +29,7 @@ class CheckSubscriptionExpiry extends Command
             Cache::forget('subscription-check-running');
         }
 
+        \Log::info('[SubscriptionCheck] Run complete.');
         $this->info('Subscription expiry check complete.');
         return Command::SUCCESS;
     }

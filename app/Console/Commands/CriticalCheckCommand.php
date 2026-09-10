@@ -36,6 +36,7 @@ class CriticalCheckCommand extends Command
         // Overlap lock: prevent concurrent runs from multiplying DB queries.
         // If a previous run is still executing, skip this one.
         if (!Cache::add('critical-check-running', true, 60)) {
+            \Log::info('[CriticalCheck] Run skipped — already running.');
             $this->info('Critical check already running — skipping.');
             return Command::SUCCESS;
         }
@@ -50,6 +51,7 @@ class CriticalCheckCommand extends Command
             Cache::forget('critical-check-running');
         }
 
+        \Log::info("[CriticalCheck] Run complete. {$this->sent} notification(s) sent.");
         $this->info("Critical check complete. {$this->sent} notifications sent.");
         return Command::SUCCESS;
     }
