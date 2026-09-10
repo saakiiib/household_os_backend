@@ -11,3 +11,6 @@ Schedule::command('notifications:critical-check')->everyMinute();
 // Auto-create next occurrence for recurring tasks and renewals
 // (skips missed days so an overdue series never backfills a backlog).
 Schedule::command('recurring:generate')->everyFiveMinutes();
+
+// Check for expired trials and send subscription expiry warnings (7d, 3d, 1d)
+Schedule::command('subscription:check-expiry')->everyFiveMinutes();
