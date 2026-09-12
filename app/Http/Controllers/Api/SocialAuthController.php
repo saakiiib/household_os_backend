@@ -4,115 +4,187 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Firebase\JWT\JWK;
+use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 
 class SocialAuthController extends Controller
 {
     /**
-     * Login/register with Google ID token.
-     * Flutter's google_sign_in sends us the ID token after the user picks their Google account.
+     * Login/register with a Google ID token issued to HouseholdOS.
      */
     public function google(Request $request)
     {
         $request->validate([
-            'id_token' => 'required|string',
+            'id_token' => 'required|string|max:10000',
         ]);
 
         try {
-            $googleUser = $this->verifyGoogleToken($request->id_token);
-        } catch (\Exception $e) {
+            $googleUser = $this->verifyGoogleToken($request->string('id_token')->toString());
+        } catch (\Throwable $e) {
+            Log::warning('Google social login rejected', [
+                'reason' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid Google token.',
+                'message' => 'Invalid Google sign-in. Please try again.',
             ], 401);
         }
 
         return $this->findOrCreateSocialUser(
-            'google',
-            $googleUser['sub'],
-            $googleUser['email'],
-            $googleUser['name'] ?? '',
-            $googleUser['picture'] ?? null,
-            $request->input('first_name'),
-            $request->input('last_name'),
-            $googleUser['email_verified'] ?? false,
+            provider: 'google',
+            providerId: $googleUser['sub'],
+            email: $googleUser['email'],
+            firstName: $googleUser['given_name'] ?? '',
+            lastName: $googleUser['family_name'] ?? '',
+            fallbackName: $googleUser['name'] ?? '',
+            avatar: $googleUser['picture'] ?? null,
+            emailVerified: true,
         );
     }
 
     /**
-     * Login/register with Apple identity token.
-     * Flutter's sign_in_with_apple sends us the identityToken.
+     * Login/register with an Apple identity token issued to HouseholdOS.
+     * Apple only supplies fullName to the native client on the first consent,
+     * so first/last name are accepted as optional, tightly validated fields.
      */
     public function apple(Request $request)
     {
-        $request->validate([
-            'identity_token' => 'required|string',
+        $validated = $request->validate([
+            'identity_token' => 'required|string|max:12000',
+            'first_name' => 'nullable|string|max:100',
+            'last_name' => 'nullable|string|max:100',
         ]);
 
         try {
-            $appleUser = $this->verifyAppleToken($request->identity_token);
-        } catch (\Exception $e) {
+            $appleUser = $this->verifyAppleToken($validated['identity_token']);
+        } catch (\Throwable $e) {
+            Log::warning('Apple social login rejected', [
+                'reason' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid Apple token.',
+                'message' => 'Invalid Apple sign-in. Please try again.',
             ], 401);
         }
 
         return $this->findOrCreateSocialUser(
-            'apple',
-            $appleUser['sub'],
-            $appleUser['email'],
-            $appleUser['name'] ?? '',
-            null,
-            $request->input('first_name'),
-            $request->input('last_name'),
-            true,
+            provider: 'apple',
+            providerId: $appleUser['sub'],
+            email: $appleUser['email'],
+            firstName: $this->cleanDisplayName($validated['first_name'] ?? ''),
+            lastName: $this->cleanDisplayName($validated['last_name'] ?? ''),
+            fallbackName: '',
+            avatar: null,
+            emailVerified: true,
         );
     }
 
     /**
-     * Find existing user by provider/provider_id, or create a new one.
-     * Returns the same response format as the regular login endpoint.
+     * Resolve a social identity safely.
+     *
+     * IMPORTANT: the current schema stores one social provider per user. We do
+     * not silently overwrite an existing different provider merely because an
+     * email address matches; that can create ambiguous identity linking. A
+     * verified social identity may be attached to an old password-only account,
+     * but switching Google <-> Apple on an already-linked account requires an
+     * explicit account-linking feature in the future.
      */
-    private function findOrCreateSocialUser(string $provider, string $providerId, string $email, string $name, ?string $avatar = null, ?string $firstName = null, ?string $lastName = null, bool $emailVerified = false)
-    {
-        // Resolve the best display-name parts from what the provider gave us.
-        if (empty($firstName) || empty($lastName)) {
-            $nameParts = explode(' ', $name ?? '', 2);
-            $firstName = $firstName ?: ($nameParts[0] ?? '');
-            $lastName = $lastName ?: ($nameParts[1] ?? '');
+    private function findOrCreateSocialUser(
+        string $provider,
+        string $providerId,
+        string $email,
+        string $firstName = '',
+        string $lastName = '',
+        string $fallbackName = '',
+        ?string $avatar = null,
+        bool $emailVerified = false,
+    ) {
+        $email = strtolower(trim($email));
+        $providerId = trim($providerId);
+        $firstName = $this->cleanDisplayName($firstName);
+        $lastName = $this->cleanDisplayName($lastName);
+        $fallbackName = $this->cleanDisplayName($fallbackName);
+
+        if ($providerId === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The identity provider did not return a usable account.',
+            ], 401);
         }
 
-        // 1) Existing social account (same provider + provider id)
+        if (!$emailVerified) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The identity provider has not verified this email address.',
+            ], 401);
+        }
+
+        if ($firstName === '' && $fallbackName !== '') {
+            $parts = preg_split('/\s+/', $fallbackName, 2) ?: [];
+            $firstName = $parts[0] ?? '';
+            $lastName = $lastName !== '' ? $lastName : ($parts[1] ?? '');
+        }
+
+        // 1) Stable provider subject is the primary social identity key.
         $user = User::where('provider', $provider)
             ->where('provider_id', $providerId)
             ->first();
 
-        // 2) Existing account with the same email — link the provider.
+        // 2) A verified email may attach this provider to a legacy password-only
+        // account, but never overwrite a different existing social provider.
         if (!$user) {
-            $user = User::where('email', $email)->first();
-            if ($user) {
-                $user->update([
+            $emailUser = User::whereRaw('LOWER(email) = ?', [$email])->first();
+
+            if ($emailUser) {
+                $existingProvider = strtolower(trim((string) $emailUser->provider));
+                $existingProviderId = trim((string) $emailUser->provider_id);
+
+                if ($existingProvider !== '' && $existingProvider !== $provider) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'An account with this email already uses a different sign-in method. Please use your original sign-in method.',
+                    ], 409);
+                }
+
+                if ($existingProvider === $provider && $existingProviderId !== '' && $existingProviderId !== $providerId) {
+                    Log::warning('Social login subject mismatch for existing email', [
+                        'provider' => $provider,
+                        'user_id' => $emailUser->id,
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This sign-in could not be linked to the existing account. Please use your original sign-in method.',
+                    ], 409);
+                }
+
+                $emailUser->update([
                     'provider' => $provider,
                     'provider_id' => $providerId,
+                    'email_verified_at' => $emailUser->email_verified_at ?: now(),
                 ]);
+                $user = $emailUser->fresh();
             }
         }
 
         // 3) Otherwise create a brand-new user.
         if (!$user) {
             $user = User::create([
-                'email'         => $email,
-                'first_name'    => $firstName,
-                'last_name'     => $lastName,
-                'password'      => \Illuminate\Support\Str::random(32),
-                'provider'      => $provider,
-                'provider_id'   => $providerId,
-                'avatar'        => $avatar,
+                'email' => $email,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'password' => \Illuminate\Support\Str::random(64),
+                'provider' => $provider,
+                'provider_id' => $providerId,
+                'avatar' => $avatar,
                 'email_verified_at' => now(),
-                'status'        => 'active',
+                'status' => 'active',
             ]);
         }
 
@@ -123,13 +195,7 @@ class SocialAuthController extends Controller
             ], 403);
         }
 
-        // Always refresh profile fields from the provider on every login so
-        // details like name/email are captured. This fixes "empty profile
-        // after Google login" (issue #34): an account that was originally
-        // created with a blank name keeps the Google display name on the next
-        // login. We only FILL fields that are still empty, so we never clobber
-        // a name the user set intentionally, and we never change an email that
-        // was already captured (preserving the existing email-linking behaviour).
+        // Fill only missing profile fields; never overwrite a name the user set.
         $profileUpdates = [];
         if (empty($user->first_name) && $firstName !== '') {
             $profileUpdates['first_name'] = $firstName;
@@ -137,17 +203,13 @@ class SocialAuthController extends Controller
         if (empty($user->last_name) && $lastName !== '') {
             $profileUpdates['last_name'] = $lastName;
         }
-        if (empty($user->email) && $email !== '') {
-            $profileUpdates['email'] = $email;
-        }
-        if ($emailVerified && empty($user->email_verified_at)) {
+        if (empty($user->email_verified_at)) {
             $profileUpdates['email_verified_at'] = now();
         }
         if (!empty($profileUpdates)) {
             $user->update($profileUpdates);
         }
 
-        // Update avatar if provided and different
         if ($avatar && $user->avatar !== $avatar) {
             $user->update(['avatar' => $avatar]);
         }
@@ -169,162 +231,156 @@ class SocialAuthController extends Controller
                 ],
                 'token' => $token,
                 'token_type' => 'Bearer',
-            ]
+            ],
         ], 200);
     }
 
     /**
-     * Verify Google ID token by calling Google's tokeninfo endpoint.
+     * Verify Google ID token using Google's tokeninfo validation service and
+     * then fail closed on HouseholdOS audience + verified email.
      */
     private function verifyGoogleToken(string $idToken): array
     {
-        $response = Http::get('https://oauth2.googleapis.com/tokeninfo', [
-            'id_token' => $idToken,
-        ]);
-
-        if ($response->failed()) {
-            \Log::error('Google token verification failed: ' . $response->body());
-            throw new \Exception('Invalid Google token');
-        }
-
-        $data = $response->json();
-
-        // Verify the audience matches one of your Google client IDs
-        $audience = $data['aud'] ?? '';
-        $validIds = array_filter([
+        $validIds = array_values(array_unique(array_filter([
             config('services.google.client_id'),
             config('services.google.android_client_id'),
             config('services.google.ios_client_id'),
-        ]);
+        ], fn ($value) => is_string($value) && trim($value) !== '')));
 
-        \Log::info('Google token audience check', [
-            'audience' => $audience,
-            'valid_ids' => $validIds,
-            'email' => $data['email'] ?? null,
-        ]);
+        if (empty($validIds)) {
+            throw new \RuntimeException('Google OAuth client IDs are not configured');
+        }
 
-        if (!empty($validIds) && !in_array($audience, $validIds)) {
-            \Log::error('Google audience mismatch', [
-                'received' => $audience,
-                'expected' => $validIds,
+        $response = Http::timeout(6)
+            ->retry(1, 150)
+            ->get('https://oauth2.googleapis.com/tokeninfo', [
+                'id_token' => $idToken,
             ]);
-            throw new \Exception('Invalid Google audience');
+
+        if ($response->failed()) {
+            throw new \RuntimeException('Google rejected the ID token');
+        }
+
+        $data = $response->json();
+        if (!is_array($data)) {
+            throw new \RuntimeException('Invalid Google token response');
+        }
+
+        $audience = (string) ($data['aud'] ?? '');
+        $issuer = (string) ($data['iss'] ?? '');
+        $subject = trim((string) ($data['sub'] ?? ''));
+        $email = strtolower(trim((string) ($data['email'] ?? '')));
+        $emailVerified = filter_var($data['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        if (!in_array($audience, $validIds, true)) {
+            throw new \RuntimeException('Google token audience mismatch');
+        }
+        if (!in_array($issuer, ['accounts.google.com', 'https://accounts.google.com'], true)) {
+            throw new \RuntimeException('Google token issuer mismatch');
+        }
+        if ($subject === '' || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new \RuntimeException('Google token missing required identity claims');
+        }
+        if (!$emailVerified) {
+            throw new \RuntimeException('Google email is not verified');
         }
 
         return [
-            'sub'            => $data['sub'],
-            'email'          => $data['email'],
-            'email_verified' => filter_var($data['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN),
-            'name'           => $data['name'] ?? '',
-            'picture'        => $data['picture'] ?? null,
+            'sub' => $subject,
+            'email' => $email,
+            'email_verified' => true,
+            'name' => (string) ($data['name'] ?? ''),
+            'given_name' => (string) ($data['given_name'] ?? ''),
+            'family_name' => (string) ($data['family_name'] ?? ''),
+            'picture' => isset($data['picture']) ? (string) $data['picture'] : null,
         ];
     }
 
     /**
-     * Verify Apple identity token by decoding the JWT.
-     * Apple's public keys are used to verify the signature.
+     * Cryptographically verify Apple's identity JWT using Apple's current JWKS.
+     * firebase/php-jwt is already present in this application's composer.lock.
      */
     private function verifyAppleToken(string $identityToken): array
     {
-        $parts = explode('.', $identityToken);
-        if (count($parts) !== 3) {
-            throw new \Exception('Invalid Apple token format');
+        $allowedAudiences = array_values(array_unique(array_filter([
+            config('services.apple.client_id'),
+            config('services.apple.bundle_id'),
+        ], fn ($value) => is_string($value) && trim($value) !== '')));
+
+        if (empty($allowedAudiences)) {
+            throw new \RuntimeException('Apple client ID/bundle ID is not configured');
         }
 
-        // Decode payload (second part)
-        $payload = json_decode(base64_decode(strtr($parts[1], '-_', '+/')), true);
-        if (!$payload) {
-            throw new \Exception('Invalid Apple token payload');
+        $jwks = $this->appleJwks();
+
+        try {
+            $claims = (array) JWT::decode($identityToken, JWK::parseKeySet($jwks, 'RS256'));
+        } catch (\Throwable $first) {
+            // Apple's signing keys rotate. If a cached keyset misses the new kid,
+            // refresh once and retry before rejecting the login.
+            Cache::forget('signin_apple_jwks');
+            $jwks = $this->appleJwks();
+            $claims = (array) JWT::decode($identityToken, JWK::parseKeySet($jwks, 'RS256'));
         }
 
-        // Verify token hasn't expired
-        if (isset($payload['exp']) && $payload['exp'] < time()) {
-            throw new \Exception('Apple token expired');
+        $issuer = (string) ($claims['iss'] ?? '');
+        $aud = $claims['aud'] ?? '';
+        $audiences = is_array($aud) ? array_map('strval', $aud) : [(string) $aud];
+        $subject = trim((string) ($claims['sub'] ?? ''));
+        $email = strtolower(trim((string) ($claims['email'] ?? '')));
+        $emailVerified = filter_var($claims['email_verified'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        $issuedAt = isset($claims['iat']) ? (int) $claims['iat'] : 0;
+
+        if ($issuer !== 'https://appleid.apple.com') {
+            throw new \RuntimeException('Apple token issuer mismatch');
         }
-
-        // Fetch Apple's public keys and verify signature
-        $appleKeys = Http::get('https://appleid.apple.com/auth/keys')->json();
-        $header = json_decode(base64_decode(strtr($parts[0], '-_', '+/')), true);
-
-        $keyId = $header['kid'] ?? '';
-        $validKey = null;
-
-        foreach ($appleKeys['keys'] ?? [] as $key) {
-            if ($key['kid'] === $keyId) {
-                $validKey = $key;
-                break;
-            }
+        if (empty(array_intersect($audiences, $allowedAudiences))) {
+            throw new \RuntimeException('Apple token audience mismatch');
         }
-
-        if (!$validKey) {
-            throw new \Exception('Apple signing key not found');
+        if ($subject === '') {
+            throw new \RuntimeException('Apple token missing subject');
         }
-
-        // Verify signature using OpenSSL
-        $publicKey = openssl_pkey_get_public(
-            "-----BEGIN PUBLIC KEY-----\n" . chunk_split($validKey['n'], 64, "\n") . "-----END PUBLIC KEY-----"
-        );
-
-        if (!$publicKey) {
-            // Fallback: verify via Apple's tokeninfo endpoint
-            $response = Http::post('https://appleid.apple.com/auth/token', [
-                'client_id'     => config('services.apple.client_id'),
-                'client_secret' => $this->generateAppleClientSecret(),
-                'code'          => $identityToken,
-                'grant_type'    => 'authorization_code',
-            ]);
-
-            // For now, trust the JWT structure if we can't verify the key
-            // In production, you should properly verify the RSA signature
+        if ($issuedAt > time() + 120) {
+            throw new \RuntimeException('Apple token issued in the future');
         }
-
-        $email = $payload['email'] ?? '';
-        $sub = $payload['sub'] ?? '';
-
-        // Apple may not send email if the user chose to hide it
-        if (empty($email)) {
-            $email = $sub . '@privaterelay.appleid.com';
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            throw new \RuntimeException('Apple token missing a usable email');
+        }
+        if (!$emailVerified) {
+            throw new \RuntimeException('Apple email is not verified');
         }
 
         return [
-            'sub'   => $sub,
+            'sub' => $subject,
             'email' => $email,
-            'name'  => '', // Apple doesn't send name in the token; the app collects it separately
         ];
     }
 
-    /**
-     * Generate Apple client secret for server-side verification.
-     */
-    private function generateAppleClientSecret(): string
+    /** @return array<string,mixed> */
+    private function appleJwks(): array
     {
-        $teamId = config('services.apple.team_id');
-        $clientId = config('services.apple.client_id');
-        $keyPath = config('services.apple.key_path');
+        return Cache::remember('signin_apple_jwks', now()->addHour(), function () {
+            $response = Http::timeout(6)
+                ->retry(1, 150)
+                ->get('https://appleid.apple.com/auth/keys');
 
-        if (!$teamId || !$clientId || !$keyPath) {
-            throw new \Exception('Apple services not configured');
-        }
+            if ($response->failed()) {
+                throw new \RuntimeException('Unable to load Apple signing keys');
+            }
 
-        $key = file_get_contents($keyPath);
-        $payload = [
-            'iss' => $teamId,
-            'iat' => time(),
-            'exp' => time() + 15777000, // 6 months
-            'aud' => 'https://appleid.apple.com',
-            'sub' => $clientId,
-        ];
+            $jwks = $response->json();
+            if (!is_array($jwks) || empty($jwks['keys']) || !is_array($jwks['keys'])) {
+                throw new \RuntimeException('Invalid Apple signing key response');
+            }
 
-        $header = json_encode(['typ' => 'JWT', 'alg' => 'ES256']);
+            return $jwks;
+        });
+    }
 
-        $base64Header = rtrim(strtr(base64_encode($header), '+/', '-_'), '=');
-        $base64Payload = rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=');
-
-        $signingInput = $base64Header . '.' . $base64Payload;
-
-        openssl_sign($signingInput, $signature, $key, OPENSSL_ALGO_SHA256);
-        $base64Signature = rtrim(strtr(base64_encode($signature), '+/', '-_'), '=');
-
-        return $signingInput . '.' . $base64Signature;
+    private function cleanDisplayName(?string $value): string
+    {
+        $value = trim(strip_tags((string) $value));
+        $value = preg_replace('/[\x00-\x1F\x7F]/u', '', $value) ?? '';
+        return mb_substr($value, 0, 100);
     }
 }
