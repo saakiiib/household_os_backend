@@ -108,9 +108,22 @@ class Subscription extends Model
             $cutoff = $this->expires_at ?? $this->current_period_end;
             return $cutoff !== null && now()->isBefore($cutoff);
         }
-        // billing_retry = Apple is re-trying payment while expiresDate keeps
-        // extending — the customer retains access (command.txt §31).
-        if (!in_array($this->status, ['active', 'grace_period', 'billing_retry'])) {
+        // Store-managed paid access. For Apple, Billing Grace Period is
+        // authoritative: keep full access only until Apple's
+        // grace_period_expires_at. Billing retry without a grace-period date
+        // must not invent extra paid time locally.
+        if ($this->status === 'grace_period') {
+            $cutoff = $this->grace_period_expires_at ?? $this->expires_at;
+            return $cutoff !== null && now()->isBefore($cutoff);
+        }
+        if ($this->status === 'billing_retry') {
+            if ($this->grace_period_expires_at) {
+                return now()->isBefore($this->grace_period_expires_at);
+            }
+            $cutoff = $this->current_period_end ?? $this->expires_at;
+            return $cutoff !== null && now()->isBefore($cutoff);
+        }
+        if ($this->status !== 'active') {
             return false;
         }
         return !$this->isFullyExpired();
@@ -123,11 +136,9 @@ class Subscription extends Model
 
     public function isInGracePeriod(): bool
     {
-        if ($this->status === 'grace_period') {
-            return true;
-        }
-        if ($this->status === 'active' && $this->current_period_end && $this->expires_at) {
-            return now()->isAfter($this->current_period_end) && now()->isBefore($this->expires_at);
+        if ($this->status === 'grace_period' || $this->status === 'billing_retry') {
+            return $this->grace_period_expires_at !== null
+                && now()->isBefore($this->grace_period_expires_at);
         }
         return false;
     }
@@ -142,18 +153,12 @@ class Subscription extends Model
         if ($this->status === 'expired') {
             return true;
         }
-        // Use the authoritative expires_at for expiry check. For Apple, only
-        // apply on-demand (Apple re-queries live). For Google/Stripe/PayPal,
-        // the expires_at is set by webhooks or verify flows and is authoritative.
+        // Grace access is governed by the provider's authoritative grace
+        // expiry when present. Do not manufacture a local grace window.
+        if ($this->isInGracePeriod()) {
+            return false;
+        }
         if ($this->expires_at && now()->isAfter($this->expires_at)) {
-            // Auto-renewing grace period: if auto_renew is on and the
-            // subscription only recently expired (within 5 minutes), keep it
-            // active. This prevents a false "expired/free" flash during sandbox
-            // renewals (Google sandbox compresses months to minutes) and
-            // production renewal processing delays.
-            if ($this->auto_renew && now()->diffInSeconds($this->expires_at) <= 300) {
-                return false;
-            }
             return true;
         }
         return false;
@@ -206,14 +211,11 @@ class Subscription extends Model
 
     public function graceDaysRemaining(): int
     {
-        if (!$this->isInGracePeriod() || !$this->expires_at) {
+        $cutoff = $this->grace_period_expires_at ?? ($this->isInGracePeriod() ? $this->expires_at : null);
+        if (!$cutoff || now()->isAfter($cutoff)) {
             return 0;
         }
-        $now = now();
-        if ($now->isAfter($this->expires_at)) {
-            return 0;
-        }
-        return (int) $now->diffInDays($this->expires_at);
+        return (int) now()->diffInDays($cutoff);
     }
 
     /**

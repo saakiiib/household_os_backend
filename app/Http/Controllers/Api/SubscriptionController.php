@@ -170,7 +170,10 @@ class SubscriptionController extends Controller
         $payerName = $payer ? ($payer->first_name ? $payer->first_name . ' ' . $payer->last_name : ($payer->name ?? $payer->email)) : null;
 
         $hasActivePaidSubscription = $subscription->isActive() && !$subscription->isTrial();
-        $canPurchase = !$hasActivePaidSubscription;
+        // A paid household must not create a second subscription. The current
+        // payer, however, must be allowed to change the existing App Store /
+        // Play subscription (upgrade, downgrade or billing duration).
+        $canPurchase = !$hasActivePaidSubscription || $isSubscriber;
         $canManage = $isSubscriber;
 
         // Normalised entitlement state — single source of truth that the
@@ -230,6 +233,15 @@ class SubscriptionController extends Controller
                 'cancelled_at' => $subscription->cancelled_at?->toIso8601String(),
                 'payment_method' => $subscription->payment_method,
                 'billing_type' => $subscription->billing_period ?? $this->guessBillingType($subscription),
+                'provider' => $subscription->provider,
+                'product_id' => $subscription->product_id,
+                'environment' => $subscription->environment,
+                'auto_renew' => $subscription->auto_renew,
+                'grace_period_expires_at' => $subscription->grace_period_expires_at?->toIso8601String(),
+                'pending_product_id' => $subscription->metadata['pending_product_id'] ?? null,
+                'pending_plan' => $subscription->metadata['pending_plan'] ?? null,
+                'pending_billing_period' => $subscription->metadata['pending_billing_period'] ?? null,
+                'pending_change_effective_at' => $subscription->metadata['pending_change_effective_at'] ?? null,
                 'days_remaining' => $subscription->daysRemaining(),
                 'days_until_renewal' => $subscription->daysUntilRenewal(),
                 'grace_days_remaining' => $subscription->graceDaysRemaining(),

@@ -401,14 +401,21 @@ class AppleIapService
             return;
         }
 
-        // Verify and decode the embedded transaction info.
+        // Verify and decode the embedded transaction + renewal info.
         $tx = null;
+        $renewalInfo = [];
         $originalTransactionId = null;
         if (!empty($data['signedTransactionInfo'])) {
             $txInfo = $this->verifyAndDecodeJws($data['signedTransactionInfo']);
             if ($txInfo) {
                 $tx = $txInfo;
                 $originalTransactionId = $tx['originalTransactionId'] ?? null;
+            }
+        }
+        if (!empty($data['signedRenewalInfo'])) {
+            $decodedRenewal = $this->verifyAndDecodeJws($data['signedRenewalInfo']);
+            if ($decodedRenewal) {
+                $renewalInfo = $decodedRenewal;
             }
         }
 
@@ -447,7 +454,7 @@ class AppleIapService
                     'environment' => $environment,
                     'status' => (int) ($tx['status'] ?? self::STATUS_ACTIVE),
                     'transaction' => $tx,
-                    'renewalInfo' => [],
+                    'renewalInfo' => $renewalInfo,
                 ];
             }
 
@@ -654,6 +661,8 @@ class AppleIapService
 
         $status = $this->mapAppleStatus($appleStatus);
 
+        $renewalGraceMs = null; // populated by applyRawStatus on status refresh/webhook
+
         $existingSubscription = Subscription::where('original_transaction_id', $originalTransactionId)->first()
             ?? Subscription::where('household_id', $household->id)->first();
 
@@ -678,6 +687,7 @@ class AppleIapService
                 'current_period_start' => $periodStart,
                 'current_period_end' => $periodEnd,
                 'expires_at' => $periodEnd,
+                'grace_period_expires_at' => null,
                 'cancelled_at' => null,
                 'last_verified_at' => now(),
                 'trial_started_at' => null,
@@ -952,25 +962,72 @@ class AppleIapService
             }
         }
 
-        $subscription->update([
+        $renewalInfo = $statusResult['renewalInfo'] ?? [];
+        $gracePeriodExpiresAt = !empty($renewalInfo['gracePeriodExpiresDate'])
+            ? $this->appleMillisToAppTime((int) $renewalInfo['gracePeriodExpiresDate'])
+            : null;
+
+        // Apple keeps the current transaction/product during a scheduled
+        // downgrade. The next product is exposed via autoRenewProductId and
+        // only becomes the entitlement after the next renewal transaction.
+        $currentProductId = $tx['productId'] ?? $subscription->product_id;
+        $nextProductId = $renewalInfo['autoRenewProductId'] ?? null;
+        $metadata = is_array($subscription->metadata) ? $subscription->metadata : [];
+        if ($nextProductId && $nextProductId !== $currentProductId) {
+            $nextCfg = $this->productConfig($nextProductId);
+            $metadata['pending_product_id'] = $nextProductId;
+            $metadata['pending_plan'] = $nextCfg['plan'] ?? null;
+            $metadata['pending_billing_period'] = $nextCfg['billing_period'] ?? null;
+            $metadata['pending_change_effective_at'] = $periodEnd?->toIso8601String();
+        } else {
+            unset($metadata['pending_product_id'], $metadata['pending_plan'], $metadata['pending_billing_period'], $metadata['pending_change_effective_at']);
+        }
+
+        $update = [
             'status' => $finalStatus,
             'latest_transaction_id' => $tx['transactionId'] ?? $subscription->latest_transaction_id,
             'current_period_end' => $periodEnd,
-            'expires_at' => $periodEnd,
+            'expires_at' => ($finalStatus === 'grace_period' && $gracePeriodExpiresAt)
+                ? $gracePeriodExpiresAt
+                : $periodEnd,
+            'grace_period_expires_at' => $gracePeriodExpiresAt,
             'environment' => $statusResult['environment'] ?? $subscription->environment,
-            // §30: turning auto-renew off keeps access until the period ends —
-            // status stays active, only the renewal flag changes.
-            'auto_renew' => isset($statusResult['renewalInfo']['autoRenewStatus'])
-                ? ((int) $statusResult['renewalInfo']['autoRenewStatus'] === 1)
+            // Turning auto-renew off keeps access until the current paid period ends.
+            'auto_renew' => isset($renewalInfo['autoRenewStatus'])
+                ? ((int) $renewalInfo['autoRenewStatus'] === 1)
                 : $subscription->auto_renew,
             'last_verified_at' => now(),
-        ]);
+            'metadata' => $metadata,
+        ];
+
+        // When Apple issues a NEW transaction for a changed product (upgrade
+        // immediately, downgrade/crossgrade at renewal), move the household's
+        // entitlement to that product at that exact point — never earlier.
+        if ($currentProductId && $currentProductId !== $subscription->product_id) {
+            $cfg = $this->productConfig($currentProductId);
+            if (!empty($cfg)) {
+                $plan = SubscriptionPlan::where('code', $cfg['plan'])->first();
+                if ($plan) {
+                    $update['product_id'] = $currentProductId;
+                    $update['subscription_plan_id'] = $plan->id;
+                    $update['paid_plan'] = $plan->code;
+                    $update['plan_status'] = 'paid';
+                    $update['billing_period'] = $cfg['billing_period'];
+                    unset($metadata['pending_product_id'], $metadata['pending_plan'], $metadata['pending_billing_period'], $metadata['pending_change_effective_at']);
+                    $update['metadata'] = $metadata;
+                }
+            }
+        }
+
+        $subscription->update($update);
 
         Log::info('AppleIapService: applyRawStatus updated subscription', [
             'subscription_id' => $subscription->id,
             'status' => $finalStatus,
             'auto_renew' => $subscription->auto_renew,
             'expires_at' => $subscription->expires_at?->toIso8601String(),
+            'grace_period_expires_at' => $subscription->grace_period_expires_at?->toIso8601String(),
+            'pending_product_id' => $subscription->metadata['pending_product_id'] ?? null,
         ]);
 
         if (!empty($tx['transactionId'])) {
