@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\VehiclesController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\CategoriesController;
 use App\Http\Controllers\Api\ConfigController;
+use App\Http\Controllers\Api\AppVersionController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\AppleIapController;
@@ -25,6 +26,7 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 */
 Route::get('config', [ConfigController::class, 'index']);
+Route::get('app/version', [AppVersionController::class, 'check'])->middleware('throttle:30,1,app-version:');
 Route::get('subscription/plans', [SubscriptionController::class, 'index']);
 Route::get('subscription/products', [SubscriptionController::class, 'products']);
 
