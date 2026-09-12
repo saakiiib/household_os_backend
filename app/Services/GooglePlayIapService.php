@@ -217,37 +217,49 @@ class GooglePlayIapService
                 ->where('id', '!=', $subscription->id)
                 ->update(['status' => 'replaced']);
 
-            // Record the payment
-            $amount = $billingType === 'annual' ? $plan->annual_price : $plan->monthly_price;
-            Payment::create([
-                'user_id' => $user->id,
-                'household_id' => $household->id,
-                'subscription_id' => $subscription->id,
-                'subscription_plan_id' => $plan->id,
-                'amount' => $amount,
-                'currency' => 'gbp',
-                'payment_method' => 'google_play',
-                'gateway' => 'google_play',
-                'gateway_payment_id' => $orderId,
-                'status' => 'completed',
-                'metadata' => [
-                    'google_product_id' => $googleProductId,
-                    'order_id' => $orderId,
-                    'auto_renewing' => $autoRenewing,
-                ],
-            ]);
+            // Record the payment (idempotent: skip if this order already created a payment)
+            $existingPayment = Payment::where('gateway', 'google_play')
+                ->where('gateway_payment_id', $orderId)
+                ->exists();
 
-            // Record the transaction for a full audit trail.
-            SubscriptionTransaction::create([
-                'subscription_id' => $subscription->id,
-                'transaction_id' => $orderId,
-                'original_transaction_id' => $orderId,
-                'product_id' => $googleProductId,
-                'environment' => 'google_play',
-                'purchase_date' => $periodStart,
-                'expires_date' => $periodEnd,
-                'transaction_reason' => $isRestored ? 'restore' : 'purchase',
-            ]);
+            if (!$existingPayment) {
+                $amount = $billingType === 'annual' ? $plan->annual_price : $plan->monthly_price;
+                Payment::create([
+                    'user_id' => $user->id,
+                    'household_id' => $household->id,
+                    'subscription_id' => $subscription->id,
+                    'subscription_plan_id' => $plan->id,
+                    'amount' => $amount,
+                    'currency' => 'gbp',
+                    'payment_method' => 'google_play',
+                    'gateway' => 'google_play',
+                    'gateway_payment_id' => $orderId,
+                    'status' => 'completed',
+                    'metadata' => [
+                        'google_product_id' => $googleProductId,
+                        'order_id' => $orderId,
+                        'auto_renewing' => $autoRenewing,
+                    ],
+                ]);
+            }
+
+            // Record the transaction for a full audit trail (idempotent: skip if exists)
+            $existingTransaction = SubscriptionTransaction::where('transaction_id', $orderId)
+                ->where('subscription_id', $subscription->id)
+                ->exists();
+
+            if (!$existingTransaction) {
+                SubscriptionTransaction::create([
+                    'subscription_id' => $subscription->id,
+                    'transaction_id' => $orderId,
+                    'original_transaction_id' => $orderId,
+                    'product_id' => $googleProductId,
+                    'environment' => 'google_play',
+                    'purchase_date' => $periodStart,
+                    'expires_date' => $periodEnd,
+                    'transaction_reason' => $isRestored ? 'restore' : 'purchase',
+                ]);
+            }
 
             Log::info('GooglePlayIapService: subscription activated', [
                 'user_id' => $user->id,
