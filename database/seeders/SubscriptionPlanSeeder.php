@@ -29,7 +29,7 @@ class SubscriptionPlanSeeder extends Seeder
                 'features' => [
                     '10 active Tasks',
                     '3 active Renewals',
-                    '10 MB Document Locker',
+                    '100 MB Document Locker',
                 ],
             ],
             [
