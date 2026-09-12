@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\RecurringGenerator;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Auto-create the next occurrence for recurring tasks and renewals.
@@ -20,11 +21,21 @@ class GenerateRecurringCommand extends Command
 
     public function handle(): int
     {
-        $result = RecurringGenerator::runAll();
+        if (!Cache::add('recurring-generate-running', true, 120)) {
+            \Log::info('[GenerateRecurring] Run skipped — already running.');
+            $this->info('Recurring generate already running — skipping.');
+            return Command::SUCCESS;
+        }
 
-        $message = "Generated {$result['tasks']} task(s) and {$result['renewals']} renewal(s).";
-        $this->info($message);
-        \Log::info('[GenerateRecurring] ' . $message);
+        try {
+            $result = RecurringGenerator::runAll();
+
+            $message = "Generated {$result['tasks']} task(s) and {$result['renewals']} renewal(s).";
+            $this->info($message);
+            \Log::info('[GenerateRecurring] ' . $message);
+        } finally {
+            Cache::forget('recurring-generate-running');
+        }
 
         return Command::SUCCESS;
     }
