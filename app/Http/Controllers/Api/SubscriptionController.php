@@ -124,7 +124,44 @@ class SubscriptionController extends Controller
         $stale = !$lastVerified
             || $lastVerified->lt(now()->subMinutes($refreshAfterMinutes));
 
-        $shouldRefresh = $isStoreManaged && ($stale || $forceAppleExpiryRefresh);
+        // Purchase/plan-change reconciliation can explicitly request one
+        // synchronous provider refresh. Normal screen loads remain fast and use
+        // the background refresh below. This is intentionally restricted to the
+        // household payer and store-managed subscriptions so it cannot become a
+        // general-purpose Apple/Google polling endpoint.
+        $explicitRefreshPerformed = false;
+        $explicitProviderRefresh = $request->boolean('refresh_provider');
+        $payerIdForRefresh = $subscription->subscriber_user_id ?? $subscription->user_id;
+        $mayExplicitlyRefresh = $explicitProviderRefresh
+            && $isStoreManaged
+            && (int) $payerIdForRefresh === (int) $user->id;
+
+        if ($mayExplicitlyRefresh) {
+            $lock = Cache::lock('subscription-refresh:' . $subscription->id, 15);
+            if ($lock->get()) {
+                try {
+                    if ($provider === 'apple') {
+                        app(\App\Services\AppleIapService::class)->refreshFromApple($subscription);
+                    } elseif ($provider === 'google_play') {
+                        app(\App\Services\GooglePlayIapService::class)->refreshFromGoogle($subscription);
+                    }
+                    $subscription->refresh();
+                    $explicitRefreshPerformed = true;
+                } catch (\Throwable $e) {
+                    \Log::warning('SubscriptionController@current: explicit provider refresh failed', [
+                        'subscription_id' => $subscription->id,
+                        'provider' => $provider,
+                        'error' => $e->getMessage(),
+                    ]);
+                } finally {
+                    optional($lock)->release();
+                }
+            }
+        }
+
+        $shouldRefresh = !$explicitRefreshPerformed
+            && $isStoreManaged
+            && ($stale || $forceAppleExpiryRefresh);
 
         if ($shouldRefresh) {
             // Prevent multiple app requests from re-querying Apple/Google at the
