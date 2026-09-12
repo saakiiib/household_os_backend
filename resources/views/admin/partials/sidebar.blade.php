@@ -1,3 +1,37 @@
+<style>
+    .menu-section-header .nav-link {
+        padding: 10px 16px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        color: #74788c !important;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .menu-section-header .nav-link:hover {
+        color: #74788c !important;
+        background: transparent;
+    }
+    .menu-section-header .section-arrow {
+        font-size: 14px;
+        width: 20px;
+        text-align: center;
+        transition: transform 0.2s;
+    }
+    .menu-section-header.section-closed .section-arrow {
+        transform: rotate(-90deg);
+    }
+    .menu-section-header.section-open .section-arrow {
+        transform: rotate(0deg);
+    }
+    .menu-section-item .nav-link i {
+        width: 20px;
+        text-align: center;
+    }
+</style>
+
 <div class="app-menu navbar-menu">
     <div class="navbar-brand-box">
         <a href="{{ route('admin.dashboard') }}" class="logo logo-dark">
@@ -18,6 +52,7 @@
                 @php
                     $routeName = Route::currentRouteName();
                     $cur = match (true) {
+                        $routeName === 'admin.dashboard' => 'dashboard',
                         str_starts_with($routeName, 'admin.users') => 'users',
                         str_starts_with($routeName, 'admin.households') => 'households',
                         str_starts_with($routeName, 'admin.tasks') => 'tasks',
@@ -28,62 +63,140 @@
                         str_starts_with($routeName, 'admin.payments') => 'payments',
                         default => ($active ?? request()->route('page') ?? ''),
                     };
+
+                    $sections = [
+                        'overview' => [
+                            'label' => 'Overview',
+                            'items' => [
+                                ['route' => 'admin.dashboard', 'param' => null, 'key' => 'dashboard', 'icon' => 'ri-dashboard-line', 'label' => 'Dashboard'],
+                                ['route' => 'admin.page', 'param' => 'ai-insights', 'key' => 'ai-insights', 'icon' => 'ri-robot-line', 'label' => 'AI Insights'],
+                                ['route' => 'admin.page', 'param' => 'system-status', 'key' => 'system-status', 'icon' => 'ri-server-line', 'label' => 'System Status'],
+                            ],
+                        ],
+                        'people' => [
+                            'label' => 'People',
+                            'items' => [
+                                ['route' => 'admin.users.index', 'param' => null, 'key' => 'users', 'icon' => 'ri-user-line', 'label' => 'Users'],
+                                ['route' => 'admin.households.index', 'param' => null, 'key' => 'households', 'icon' => 'ri-home-line', 'label' => 'Households'],
+                                ['route' => 'admin.page', 'param' => 'invitations', 'key' => 'invitations', 'icon' => 'ri-mail-send-line', 'label' => 'Invitations'],
+                                ['route' => 'admin.admins.index', 'param' => null, 'key' => 'admins', 'icon' => 'ri-shield-user-line', 'label' => 'Admins'],
+                            ],
+                        ],
+                        'operations' => [
+                            'label' => 'Operations',
+                            'items' => [
+                                ['route' => 'admin.tasks.index', 'param' => null, 'key' => 'tasks', 'icon' => 'ri-task-line', 'label' => 'Tasks'],
+                                ['route' => 'admin.renewals.index', 'param' => null, 'key' => 'renewals', 'icon' => 'ri-refresh-line', 'label' => 'Renewals'],
+                                ['route' => 'admin.documents.index', 'param' => null, 'key' => 'documents', 'icon' => 'ri-file-text-line', 'label' => 'Documents'],
+                                ['route' => 'admin.page', 'param' => 'ocr-queue', 'key' => 'ocr-queue', 'icon' => 'ri-scan-line', 'label' => 'OCR Queue'],
+                                ['route' => 'admin.page', 'param' => 'storage', 'key' => 'storage', 'icon' => 'ri-hard-drive-2-line', 'label' => 'Storage Explorer'],
+                                ['route' => 'admin.page', 'param' => 'automations', 'key' => 'automations', 'icon' => 'ri-flashlight-line', 'label' => 'Automations'],
+                            ],
+                        ],
+                        'billing' => [
+                            'label' => 'Billing',
+                            'items' => [
+                                ['route' => 'admin.subscriptions.index', 'param' => null, 'key' => 'subscriptions', 'icon' => 'ri-star-line', 'label' => 'Subscriptions'],
+                                ['route' => 'admin.payments.index', 'param' => null, 'key' => 'payments', 'icon' => 'ri-money-pound-circle-line', 'label' => 'Payments'],
+                                ['route' => 'admin.page', 'param' => 'revenue', 'key' => 'revenue', 'icon' => 'ri-line-chart-line', 'label' => 'Revenue Analytics'],
+                            ],
+                        ],
+                        'support' => [
+                            'label' => 'Support & Comms',
+                            'items' => [
+                                ['route' => 'admin.page', 'param' => 'tickets', 'key' => 'tickets', 'icon' => 'ri-customer-service-2-line', 'label' => 'Support Tickets'],
+                                ['route' => 'admin.page', 'param' => 'escalations', 'key' => 'escalations', 'icon' => 'ri-alarm-warning-line', 'label' => 'Escalations'],
+                                ['route' => 'admin.page', 'param' => 'communications', 'key' => 'communications', 'icon' => 'ri-chat-3-line', 'label' => 'Communication Centre'],
+                                ['route' => 'admin.page', 'param' => 'notifications', 'key' => 'notifications', 'icon' => 'ri-notification-3-line', 'label' => 'Push Notifications'],
+                                ['route' => 'admin.page', 'param' => 'templates', 'key' => 'templates', 'icon' => 'ri-file-text-line', 'label' => 'Message Templates'],
+                            ],
+                        ],
+                        'content' => [
+                            'label' => 'Content',
+                            'items' => [
+                                ['route' => 'admin.page', 'param' => 'website-cms', 'key' => 'website-cms', 'icon' => 'ri-global-line', 'label' => 'Website CMS'],
+                                ['route' => 'admin.page', 'param' => 'app-cms', 'key' => 'app-cms', 'icon' => 'ri-smartphone-line', 'label' => 'Mobile App CMS'],
+                                ['route' => 'admin.page', 'param' => 'blog', 'key' => 'blog', 'icon' => 'ri-article-line', 'label' => 'Blog'],
+                                ['route' => 'admin.page', 'param' => 'media', 'key' => 'media', 'icon' => 'ri-image-line', 'label' => 'Media Library'],
+                            ],
+                        ],
+                        'security' => [
+                            'label' => 'Security',
+                            'items' => [
+                                ['route' => 'admin.page', 'param' => 'audit-logs', 'key' => 'audit-logs', 'icon' => 'ri-list-check-2', 'label' => 'Audit Logs'],
+                                ['route' => 'admin.page', 'param' => 'devices', 'key' => 'devices', 'icon' => 'ri-device-line', 'label' => 'Device Manager'],
+                                ['route' => 'admin.page', 'param' => 'fraud', 'key' => 'fraud', 'icon' => 'ri-spy-line', 'label' => 'Fraud Detection'],
+                                ['route' => 'admin.page', 'param' => 'api-logs', 'key' => 'api-logs', 'icon' => 'ri-code-line', 'label' => 'API Access'],
+                                ['route' => 'admin.page', 'param' => 'recycle-bin', 'key' => 'recycle-bin', 'icon' => 'ri-delete-bin-line', 'label' => 'Recycle Bin'],
+                            ],
+                        ],
+                        'insights' => [
+                            'label' => 'Insights',
+                            'items' => [
+                                ['route' => 'admin.page', 'param' => 'analytics', 'key' => 'analytics', 'icon' => 'ri-pie-chart-2-line', 'label' => 'Platform Analytics'],
+                                ['route' => 'admin.page', 'param' => 'reports', 'key' => 'reports', 'icon' => 'ri-file-chart-line', 'label' => 'Reports'],
+                                ['route' => 'admin.page', 'param' => 'health-scores', 'key' => 'health-scores', 'icon' => 'ri-heart-pulse-line', 'label' => 'Health Scores'],
+                                ['route' => 'admin.page', 'param' => 'activity-map', 'key' => 'activity-map', 'icon' => 'ri-map-pin-line', 'label' => 'Live Activity'],
+                            ],
+                        ],
+                        'platform' => [
+                            'label' => 'Platform',
+                            'items' => [
+                                ['route' => 'admin.page', 'param' => 'feature-flags', 'key' => 'feature-flags', 'icon' => 'ri-flag-line', 'label' => 'Feature Flags'],
+                                ['route' => 'admin.page', 'param' => 'backups', 'key' => 'backups', 'icon' => 'ri-archive-line', 'label' => 'Backup Manager'],
+                                ['route' => 'admin.page', 'param' => 'settings', 'key' => 'settings', 'icon' => 'ri-settings-3-line', 'label' => 'Settings'],
+                            ],
+                        ],
+                    ];
                 @endphp
-                <li class="menu-title" style="text-align: center;">Overview</li>
-                <li class="nav-item"><a href="{{ route('admin.dashboard') }}" class="nav-link {{ $cur === 'dashboard' ? 'active' : '' }}"><i class="ri-dashboard-line"></i><span>Dashboard</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'ai-insights']) }}" class="nav-link {{ $cur === 'ai-insights' ? 'active' : '' }}"><i class="ri-robot-line"></i><span>AI Insights</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'system-status']) }}" class="nav-link {{ $cur === 'system-status' ? 'active' : '' }}"><i class="ri-server-line"></i><span>System Status</span></a></li>
 
-                <li class="menu-title" style="text-align: center;">People</li>
-                <li class="nav-item"><a href="{{ route('admin.users.index') }}" class="nav-link {{ $cur === 'users' ? 'active' : '' }}"><i class="ri-user-line"></i><span>Users</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.households.index') }}" class="nav-link {{ $cur === 'households' ? 'active' : '' }}"><i class="ri-home-line"></i><span>Households</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'invitations']) }}" class="nav-link {{ $cur === 'invitations' ? 'active' : '' }}"><i class="ri-mail-send-line"></i><span>Invitations</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.admins.index') }}" class="nav-link {{ $cur === 'admins' ? 'active' : '' }}"><i class="ri-shield-user-line"></i><span>Admins</span></a></li>
-
-                <li class="menu-title" style="text-align: center;">Operations</li>
-                <li class="nav-item"><a href="{{ route('admin.tasks.index') }}" class="nav-link {{ $cur === 'tasks' ? 'active' : '' }}"><i class="ri-task-line"></i><span>Tasks</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.renewals.index') }}" class="nav-link {{ $cur === 'renewals' ? 'active' : '' }}"><i class="ri-refresh-line"></i><span>Renewals</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.documents.index') }}" class="nav-link {{ $cur === 'documents' ? 'active' : '' }}"><i class="ri-file-text-line"></i><span>Documents</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'ocr-queue']) }}" class="nav-link {{ $cur === 'ocr-queue' ? 'active' : '' }}"><i class="ri-scan-line"></i><span>OCR Queue</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'storage']) }}" class="nav-link {{ $cur === 'storage' ? 'active' : '' }}"><i class="ri-hard-drive-2-line"></i><span>Storage Explorer</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'automations']) }}" class="nav-link {{ $cur === 'automations' ? 'active' : '' }}"><i class="ri-flashlight-line"></i><span>Automations</span></a></li>
-
-                <li class="menu-title" style="text-align: center;">Billing</li>
-                <li class="nav-item"><a href="{{ route('admin.subscriptions.index') }}" class="nav-link {{ $cur === 'subscriptions' ? 'active' : '' }}"><i class="ri-star-line"></i><span>Subscriptions</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.payments.index') }}" class="nav-link {{ $cur === 'payments' ? 'active' : '' }}"><i class="ri-money-pound-circle-line"></i><span>Payments</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'revenue']) }}" class="nav-link {{ $cur === 'revenue' ? 'active' : '' }}"><i class="ri-line-chart-line"></i><span>Revenue Analytics</span></a></li>
-
-                <li class="menu-title" style="text-align: center;">Support &amp; Comms</li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'tickets']) }}" class="nav-link {{ $cur === 'tickets' ? 'active' : '' }}"><i class="ri-customer-service-2-line"></i><span>Support Tickets</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'escalations']) }}" class="nav-link {{ $cur === 'escalations' ? 'active' : '' }}"><i class="ri-alarm-warning-line"></i><span>Escalations</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'communications']) }}" class="nav-link {{ $cur === 'communications' ? 'active' : '' }}"><i class="ri-chat-3-line"></i><span>Communication Centre</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'notifications']) }}" class="nav-link {{ $cur === 'notifications' ? 'active' : '' }}"><i class="ri-notification-3-line"></i><span>Push Notifications</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'templates']) }}" class="nav-link {{ $cur === 'templates' ? 'active' : '' }}"><i class="ri-file-text-line"></i><span>Message Templates</span></a></li>
-
-                <li class="menu-title" style="text-align: center;">Content</li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'website-cms']) }}" class="nav-link {{ $cur === 'website-cms' ? 'active' : '' }}"><i class="ri-global-line"></i><span>Website CMS</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'app-cms']) }}" class="nav-link {{ $cur === 'app-cms' ? 'active' : '' }}"><i class="ri-smartphone-line"></i><span>Mobile App CMS</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'blog']) }}" class="nav-link {{ $cur === 'blog' ? 'active' : '' }}"><i class="ri-article-line"></i><span>Blog</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'media']) }}" class="nav-link {{ $cur === 'media' ? 'active' : '' }}"><i class="ri-image-line"></i><span>Media Library</span></a></li>
-
-                <li class="menu-title" style="text-align: center;">Security</li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'audit-logs']) }}" class="nav-link {{ $cur === 'audit-logs' ? 'active' : '' }}"><i class="ri-list-check-2"></i><span>Audit Logs</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'devices']) }}" class="nav-link {{ $cur === 'devices' ? 'active' : '' }}"><i class="ri-device-line"></i><span>Device Manager</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'fraud']) }}" class="nav-link {{ $cur === 'fraud' ? 'active' : '' }}"><i class="ri-spy-line"></i><span>Fraud Detection</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'api-logs']) }}" class="nav-link {{ $cur === 'api-logs' ? 'active' : '' }}"><i class="ri-code-line"></i><span>API Access</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'recycle-bin']) }}" class="nav-link {{ $cur === 'recycle-bin' ? 'active' : '' }}"><i class="ri-delete-bin-line"></i><span>Recycle Bin</span></a></li>
-
-                <li class="menu-title" style="text-align: center;">Insights</li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'analytics']) }}" class="nav-link {{ $cur === 'analytics' ? 'active' : '' }}"><i class="ri-pie-chart-2-line"></i><span>Platform Analytics</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'reports']) }}" class="nav-link {{ $cur === 'reports' ? 'active' : '' }}"><i class="ri-file-chart-line"></i><span>Reports</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'health-scores']) }}" class="nav-link {{ $cur === 'health-scores' ? 'active' : '' }}"><i class="ri-heart-pulse-line"></i><span>Health Scores</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'activity-map']) }}" class="nav-link {{ $cur === 'activity-map' ? 'active' : '' }}"><i class="ri-map-pin-line"></i><span>Live Activity</span></a></li>
-
-                <li class="menu-title" style="text-align: center;">Platform</li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'feature-flags']) }}" class="nav-link {{ $cur === 'feature-flags' ? 'active' : '' }}"><i class="ri-flag-line"></i><span>Feature Flags</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'backups']) }}" class="nav-link {{ $cur === 'backups' ? 'active' : '' }}"><i class="ri-archive-line"></i><span>Backup Manager</span></a></li>
-                <li class="nav-item"><a href="{{ route('admin.page', ['page' => 'settings']) }}" class="nav-link {{ $cur === 'settings' ? 'active' : '' }}"><i class="ri-settings-3-line"></i><span>Settings</span></a></li>
+                @foreach($sections as $sectionKey => $section)
+                    @php
+                        $isActive = collect($section['items'])->pluck('key')->contains($cur);
+                    @endphp
+                    <li class="nav-item menu-section-header {{ $isActive ? 'section-open' : 'section-closed' }}" data-section="{{ $sectionKey }}">
+                        <a class="nav-link" href="javascript:void(0);" onclick="toggleMenuSection(this.parentElement)">
+                            <i class="ri-arrow-down-s-line section-arrow"></i>
+                            <span>{{ $section['label'] }}</span>
+                        </a>
+                    </li>
+                    @foreach($section['items'] as $item)
+                        <li class="nav-item menu-section-item {{ $isActive ? '' : 'd-none' }}" data-parent="{{ $sectionKey }}">
+                            <a href="{{ $item['param'] ? route($item['route'], ['page' => $item['param']]) : route($item['route']) }}"
+                               class="nav-link {{ $cur === $item['key'] ? 'active' : '' }}"
+                               {{ $cur === $item['key'] ? 'id=sidebar-active-item' : '' }}>
+                                <i class="{{ $item['icon'] }}"></i>
+                                <span>{{ $item['label'] }}</span>
+                            </a>
+                        </li>
+                    @endforeach
+                @endforeach
             </ul>
         </div>
     </div>
 </div>
+
+<script>
+function toggleMenuSection(header) {
+    var section = header.dataset.section;
+    var items = document.querySelectorAll('.menu-section-item[data-parent="' + section + '"]');
+    var isOpen = header.classList.contains('section-open');
+
+    if (isOpen) {
+        header.classList.remove('section-open');
+        header.classList.add('section-closed');
+        items.forEach(function(item) { item.classList.add('d-none'); });
+    } else {
+        header.classList.remove('section-closed');
+        header.classList.add('section-open');
+        items.forEach(function(item) { item.classList.remove('d-none'); });
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    var active = document.getElementById('sidebar-active-item');
+    if (active) {
+        active.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+});
+</script>
