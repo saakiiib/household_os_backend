@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Services\NotificationService;
+use App\Services\AppleIapService;
+use App\Services\GooglePlayIapService;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Models\HouseholdMember;
@@ -23,6 +25,7 @@ class CheckSubscriptionExpiry extends Command
         }
 
         try {
+            $this->refreshProviderSubscriptions();
             $this->handleTrialExpiry();
             $this->sendPaidExpiryWarnings();
         } finally {
@@ -35,14 +38,93 @@ class CheckSubscriptionExpiry extends Command
     }
 
     /**
-     * NO automatic expiry based on local timestamps.
-     *
-     * - Apple subscriptions: expiry is determined by Apple's live data
-     *   (refreshed on-demand when user opens a screen, NOT by this cron).
-     * - Stripe/PayPal: expiry is determined by webhooks (renewal/failure).
-     *
-     * This cron only handles deterministic trial expiry and sends warnings.
+     * Periodically re-verify Apple/Google subscriptions whose local period
+     * has expired but auto-renew may still be expected. This closes the gap
+     * where the app is closed and Apple/Google renewed but nobody queried
+     * the provider — the local DB would stay stale until the user opens
+     * the app and triggers the on-demand refresh.
      */
+    private function refreshProviderSubscriptions(): void
+    {
+        $now = now();
+
+        // Find paid subscriptions where the local period has expired and
+        // auto-renew is still on (or unknown). Don't re-check a subscription
+        // that was already verified within the last 5 minutes.
+        $staleSubs = Subscription::where('plan_status', 'paid')
+            ->whereIn('provider', ['apple', 'google_play'])
+            ->whereIn('status', ['active', 'grace_period', 'billing_retry'])
+            ->where(function ($q) use ($now) {
+                $q->where(function ($q2) use ($now) {
+                    // Local period expired
+                    $q2->whereNotNull('expires_at')
+                        ->where('expires_at', '<=', $now);
+                })->orWhere(function ($q2) use ($now) {
+                    // Grace period expired
+                    $q2->whereNotNull('grace_period_expires_at')
+                        ->where('grace_period_expires_at', '<=', $now);
+                });
+            })
+            ->where(function ($q) {
+                // auto_renew is true or null (unknown — still worth checking)
+                $q->where('auto_renew', true)
+                    ->orWhereNull('auto_renew');
+            })
+            ->where(function ($q) use ($now) {
+                // Not checked in the last 5 minutes
+                $q->whereNull('last_verified_at')
+                    ->orWhere('last_verified_at', '<', $now->copy()->subMinutes(5));
+            })
+            ->limit(50)
+            ->get();
+
+        if ($staleSubs->isEmpty()) {
+            return;
+        }
+
+        $this->line("[SubscriptionCheck] Refreshing {$staleSubs->length} stale provider subscription(s)...");
+
+        $appleService = app(AppleIapService::class);
+        $googleService = app(GooglePlayIapService::class);
+
+        foreach ($staleSubs as $sub) {
+            $lock = Cache::lock('subscription-refresh:' . $sub->id, 30);
+            if (!$lock->get()) {
+                continue; // Another process is already refreshing this one.
+            }
+
+            try {
+                $oldStatus = $sub->status;
+
+                if ($sub->provider === 'apple') {
+                    $ok = $appleService->refreshFromApple($sub);
+                } else {
+                    $ok = $googleService->refreshFromGoogle($sub);
+                }
+
+                // Reload to see what changed
+                $sub->refresh();
+
+                if ($ok && $sub->status !== $oldStatus) {
+                    $this->line("  [SubscriptionCheck] #{$sub->id} status: {$oldStatus} → {$sub->status}");
+                    \Log::info('[SubscriptionCheck] Provider refresh changed status', [
+                        'subscription_id' => $sub->id,
+                        'old_status' => $oldStatus,
+                        'new_status' => $sub->status,
+                        'provider' => $sub->provider,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('[SubscriptionCheck] Provider refresh failed', [
+                    'subscription_id' => $sub->id,
+                    'provider' => $sub->provider,
+                    'error' => $e->getMessage(),
+                ]);
+            } finally {
+                $lock->forceRelease();
+            }
+        }
+    }
 
     /**
      * Handle trial expiry:
