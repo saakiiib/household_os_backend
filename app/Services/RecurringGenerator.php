@@ -219,14 +219,21 @@ class RecurringGenerator
         $today = now()->startOfDay();
 
         $date = self::addStep($date, $frequency);
+        if ($date === null) {
+            return null;
+        }
+
         while ($date->lt($today)) {
             $date = self::addStep($date, $frequency);
+            if ($date === null) {
+                return null;
+            }
         }
 
         return $date;
     }
 
-    private static function addStep(Carbon $date, string $frequency): Carbon
+    private static function addStep(Carbon $date, string $frequency): ?Carbon
     {
         switch ($frequency) {
             case 'daily':
@@ -243,8 +250,13 @@ class RecurringGenerator
             case 'annual':
                 return $date->copy()->addYear();
             default:
-                // Unknown frequency: fall back to a single day step.
-                return $date->copy()->addDay();
+                // Never silently turn an unknown recurrence into DAILY.
+                // Bad/legacy data should be skipped rather than generate an
+                // unexpected stream of household tasks or renewals.
+                \Log::warning('[GenerateRecurring] Unknown recurrence frequency — skipped', [
+                    'frequency' => $frequency,
+                ]);
+                return null;
         }
     }
 }

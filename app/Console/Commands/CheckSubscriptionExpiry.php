@@ -18,15 +18,17 @@ class CheckSubscriptionExpiry extends Command
 
     public function handle(): int
     {
-        if (!Cache::add('subscription-check-running', true, 60)) {
+        if (!Cache::add('subscription-check-running', true, 240)) {
             \Log::info('[SubscriptionCheck] Run skipped — already running.');
             $this->info('Subscription check already running — skipping.');
             return Command::SUCCESS;
         }
 
         try {
-            \Log::info('[SubscriptionCheck] Run start');
-            $this->refreshProviderSubscriptions();
+            // Webhooks are the primary source of store changes, but this
+            // reconciliation is the safety net that keeps entitlement current
+            // even when nobody opens the app and a webhook is delayed/missed.
+            $this->reconcileStoreSubscriptions();
             $this->handleTrialExpiry();
             $this->sendPaidExpiryWarnings();
         } finally {
@@ -39,119 +41,92 @@ class CheckSubscriptionExpiry extends Command
     }
 
     /**
-     * Periodically re-verify Apple/Google subscriptions whose local period
-     * has expired. This closes the gap where the app is closed and
-     * Apple/Google renewed but nobody queried the provider — the local DB
-     * would stay stale until the user opens the app and triggers the
-     * on-demand refresh.
+     * NO automatic expiry based on local timestamps.
      *
-     * Matches the on-demand refresh logic: queries Apple/Google whenever
-     * last_verified_at is older than 5 minutes, regardless of local status
-     * or auto_renew flag — because a missed webhook can leave the local
-     * DB showing expired+auto_renew=false even though Apple actually renewed.
+     * Store subscription state is NEVER invented from local timestamps.
+     * Apple/Google/webhooks remain authoritative. This command does perform a
+     * conservative server-side reconciliation for paid store subscriptions as
+     * a safety net, so expiry/renewal/grace recovery can still be reflected
+     * when the mobile app is closed.
      */
-    private function refreshProviderSubscriptions(): void
+
+    /**
+     * Reconcile paid Apple/Google subscriptions without requiring the app to be
+     * open. Webhooks are still primary; this is a safety net only.
+     *
+     * Refresh when:
+     *  - the local period is within 10 minutes of its end (or already ended),
+     *  - the subscription is in billing retry / grace, or
+     *  - we have not verified it with the store in the last 24 hours.
+     *
+     * A cap keeps one scheduler run bounded. Oldest verification rows are
+     * handled first, so a larger estate is naturally drained over later runs.
+     */
+    private function reconcileStoreSubscriptions(): void
     {
         $now = now();
+        $nearPeriodEnd = $now->copy()->addMinutes(10);
+        $staleBefore = $now->copy()->subDay();
 
-        // Any paid Apple/Google subscription not verified in the last 5 minutes.
-        // Skip confirmed-dead subs: if the provider already confirmed expired + auto_renew=false,
-        // no webhook will come — Apple won't revive it. The missed-webhook concern only
-        // applies to auto_renew=true subs. Also skip if expires_at is >24h in the past.
-        $staleSubs = Subscription::where('plan_status', 'paid')
-            ->whereIn('provider', ['apple', 'google_play'])
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '>=', $now->copy()->subDay())
-            ->where(function ($q) use ($now) {
-                $q->whereNull('last_verified_at')
-                    ->orWhere('last_verified_at', '<', $now->copy()->subMinutes(5));
+        $subscriptions = Subscription::query()
+            ->where('plan_status', 'paid')
+            ->whereIn('provider', ['apple', 'google'])
+            ->where(function ($q) use ($nearPeriodEnd, $staleBefore) {
+                $q->whereIn('status', ['grace_period', 'billing_retry'])
+                    ->orWhere(function ($q2) use ($nearPeriodEnd) {
+                        $q2->whereNotNull('current_period_end')
+                            ->where('current_period_end', '<=', $nearPeriodEnd);
+                    })
+                    ->orWhereNull('last_verified_at')
+                    ->orWhere('last_verified_at', '<=', $staleBefore);
             })
-            // Exclude confirmed-dead: provider said expired + auto_renew=false
             ->where(function ($q) {
-                $q->where('status', '!=', 'expired')
-                    ->orWhere('auto_renew', true);
+                $q->where(function ($apple) {
+                    $apple->where('provider', 'apple')
+                        ->where(function ($ids) {
+                            $ids->whereNotNull('latest_transaction_id')
+                                ->orWhereNotNull('original_transaction_id')
+                                ->orWhereNotNull('apple_original_transaction_id');
+                        });
+                })->orWhere(function ($google) {
+                    $google->where('provider', 'google')
+                        ->whereNotNull('google_purchase_token');
+                });
             })
-            ->limit(50)
+            ->orderByRaw('last_verified_at IS NULL DESC')
+            ->orderBy('last_verified_at')
+            ->limit(100)
             ->get();
 
-        if ($staleSubs->isEmpty()) {
+        if ($subscriptions->isEmpty()) {
             return;
         }
 
-        $this->line("[SubscriptionCheck] Refreshing {$staleSubs->count()} stale provider subscription(s)...");
+        $ok = 0;
+        $failed = 0;
 
-        $appleService = app(AppleIapService::class);
-        $googleService = app(GooglePlayIapService::class);
-
-        foreach ($staleSubs as $sub) {
-            $lock = Cache::lock('subscription-refresh:' . $sub->id, 30);
-            if (!$lock->get()) {
-                continue; // Another process is already refreshing this one.
-            }
-
+        foreach ($subscriptions as $subscription) {
             try {
-                $oldStatus = $sub->status;
+                $refreshed = $subscription->provider === 'apple'
+                    ? app(AppleIapService::class)->refreshFromApple($subscription)
+                    : app(GooglePlayIapService::class)->refreshFromGoogle($subscription);
 
-                if ($sub->provider === 'apple') {
-                    $ok = $appleService->refreshFromApple($sub);
-                } else {
-                    $ok = $googleService->refreshFromGoogle($sub);
-                }
-
-                // Reload to see what changed
-                $sub->refresh();
-
-                if ($ok && $sub->status !== $oldStatus) {
-                    $this->line("  [SubscriptionCheck] #{$sub->id} status: {$oldStatus} → {$sub->status}");
-                    \Log::info('[SubscriptionCheck] Provider refresh changed status', [
-                        'subscription_id' => $sub->id,
-                        'old_status' => $oldStatus,
-                        'new_status' => $sub->status,
-                        'provider' => $sub->provider,
-                    ]);
-
-                    // Notify when an active/grace-period paid subscription expires
-                    if (in_array($oldStatus, ['active', 'grace_period']) && $sub->status === 'expired' && $sub->plan_status === 'paid') {
-                        if (!$this->alreadyNotified($sub, 'expired')) {
-                            $members = HouseholdMember::where('household_id', $sub->household_id)
-                                ->where('status', 'active')
-                                ->with('user')
-                                ->get();
-
-                            foreach ($members as $member) {
-                                if (!$member->user) continue;
-
-                                app(NotificationService::class)->sendToUser(
-                                    $member->user->id,
-                                    'Subscription ended',
-                                    "Your {$sub->plan?->name} subscription has ended. Renew to restore full access.",
-                                    'subscription_expiry',
-                                    [
-                                        'subscription_id' => $sub->id,
-                                        'household_id' => $sub->household_id,
-                                        'plan_name' => $sub->plan?->name,
-                                        'type' => 'subscription_expired',
-                                        'action' => 'renew_now',
-                                    ],
-                                    'critical'
-                                );
-                            }
-
-                            $this->markNotified($sub, 'expired');
-                            $this->line("  [SubscriptionCheck] Expired notification sent: Household #{$sub->household_id}");
-                        }
-                    }
-                }
+                $refreshed ? $ok++ : $failed++;
             } catch (\Throwable $e) {
-                \Log::warning('[SubscriptionCheck] Provider refresh failed', [
-                    'subscription_id' => $sub->id,
-                    'provider' => $sub->provider,
+                $failed++;
+                \Log::warning('[SubscriptionCheck] Store reconciliation failed', [
+                    'subscription_id' => $subscription->id,
+                    'provider' => $subscription->provider,
                     'error' => $e->getMessage(),
                 ]);
-            } finally {
-                $lock->forceRelease();
             }
         }
+
+        \Log::info('[SubscriptionCheck] Store reconciliation complete', [
+            'checked' => $subscriptions->count(),
+            'refreshed' => $ok,
+            'failed' => $failed,
+        ]);
     }
 
     /**
@@ -234,14 +209,14 @@ class CheckSubscriptionExpiry extends Command
         // Grace period warnings
         $now = now();
         $graceWarning = Subscription::where('status', 'grace_period')
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '>', $now)
-            ->where('expires_at', '<=', $now->copy()->addDays(3))
+            ->whereNotNull('grace_period_expires_at')
+            ->where('grace_period_expires_at', '>', $now)
+            ->where('grace_period_expires_at', '<=', $now->copy()->addDays(3))
             ->with(['user', 'plan'])
             ->get();
 
         foreach ($graceWarning as $sub) {
-            $daysLeft = (int) $now->diffInDays($sub->expires_at);
+            $daysLeft = (int) $now->diffInDays($sub->grace_period_expires_at);
             if ($daysLeft <= 0) continue;
 
             $key = "grace_{$daysLeft}d";
@@ -249,8 +224,8 @@ class CheckSubscriptionExpiry extends Command
                 if ($sub->user) {
                     app(NotificationService::class)->sendToUser(
                         $sub->user->id,
-                        'Subscription expiring',
-                        "Your subscription expires in {$daysLeft} day" . ($daysLeft > 1 ? 's' : ''),
+                        'Billing grace period ending',
+                        "Your billing grace period ends in {$daysLeft} day" . ($daysLeft > 1 ? 's' : ''),
                         'subscription_expiry',
                         [
                             'subscription_id' => $sub->id,
@@ -336,10 +311,14 @@ class CheckSubscriptionExpiry extends Command
             if ($this->alreadyNotified($sub, $key)) continue;
 
             if ($sub->user) {
+                $willRenew = $sub->auto_renew !== false;
+                $title = $willRenew ? 'Subscription renewal reminder' : 'Subscription ending soon';
+                $verb = $willRenew ? 'renews' : 'ends';
+
                 app(NotificationService::class)->sendToUser(
                     $sub->user->id,
-                    'Subscription renewal reminder',
-                    "Your {$sub->plan?->name} subscription renews in {$days} day" . ($days > 1 ? 's' : ''),
+                    $title,
+                    "Your {$sub->plan?->name} subscription {$verb} in {$days} day" . ($days > 1 ? 's' : ''),
                     'subscription_expiry',
                     [
                         'subscription_id' => $sub->id,

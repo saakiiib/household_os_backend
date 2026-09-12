@@ -84,6 +84,22 @@ class SubscriptionController extends Controller
         // delay from temporarily removing paid access.
         $lastVerified = $subscription->last_verified_at;
         $localExpiry = $subscription->expires_at ?? $subscription->current_period_end;
+
+        // A HouseholdOS 30-day trial is local entitlement. Some older rows
+        // may still contain provider=apple because the historical DB column
+        // defaulted to Apple. Never contact Apple/Google for a trial. Also
+        // require a real store identity before scheduling a provider refresh.
+        $provider = strtolower((string) $subscription->provider);
+        $hasStoreIdentity = match ($provider) {
+            'apple' => !empty($subscription->original_transaction_id)
+                || !empty($subscription->latest_transaction_id)
+                || !empty($subscription->product_id),
+            'google_play' => !empty($subscription->google_purchase_token)
+                || !empty($subscription->google_order_id)
+                || !empty($subscription->product_id),
+            default => false,
+        };
+        $isStoreManaged = !$subscription->isTrial() && $hasStoreIdentity;
         // Only bypass the normal refresh throttle when the local Apple period
         // has expired AND a renewal may still be expected. Once Apple has
         // confirmed expired + auto_renew=false, do not query Apple on every
@@ -108,7 +124,7 @@ class SubscriptionController extends Controller
         $stale = !$lastVerified
             || $lastVerified->lt(now()->subMinutes($refreshAfterMinutes));
 
-        $shouldRefresh = $stale || $forceAppleExpiryRefresh;
+        $shouldRefresh = $isStoreManaged && ($stale || $forceAppleExpiryRefresh);
 
         if ($shouldRefresh) {
             // Prevent multiple app requests from re-querying Apple/Google at the
@@ -278,8 +294,22 @@ class SubscriptionController extends Controller
         if (!$membership) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only the household admin can cancel the subscription.',
+                'message' => 'Only the Household Coordinator can manage this subscription.',
             ], 403);
+        }
+
+        // Store-managed subscriptions must be cancelled in the store. Marking
+        // them cancelled locally while Apple/Google still considers them active
+        // can incorrectly remove access and will be overwritten by the next
+        // webhook/reconciliation anyway.
+        if (in_array(strtolower((string) $subscription->provider), ['apple', 'google'], true)) {
+            return response()->json([
+                'success' => false,
+                'code' => 'STORE_MANAGED_SUBSCRIPTION',
+                'message' => $subscription->provider === 'apple'
+                    ? 'Manage or cancel this subscription in your Apple App Store subscription settings.'
+                    : 'Manage or cancel this subscription in your Google Play subscription settings.',
+            ], 409);
         }
 
         $subscription->update([
@@ -287,12 +317,16 @@ class SubscriptionController extends Controller
             'cancelled_at' => now(),
         ]);
 
+        $accessUntil = $subscription->current_period_end ?? $subscription->expires_at;
+
         return response()->json([
             'success' => true,
-            'message' => 'Subscription cancelled. Access continues until ' . $subscription->current_period_end->format('d M Y') . '.',
+            'message' => $accessUntil
+                ? 'Subscription cancelled. Access continues until ' . $accessUntil->format('d M Y') . '.'
+                : 'Subscription cancelled.',
             'data' => [
-                'cancelled_at' => $subscription->cancelled_at->toIso8601String(),
-                'access_until' => $subscription->current_period_end->toIso8601String(),
+                'cancelled_at' => $subscription->cancelled_at?->toIso8601String(),
+                'access_until' => $accessUntil?->toIso8601String(),
             ],
         ]);
     }

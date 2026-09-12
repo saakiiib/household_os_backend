@@ -21,21 +21,24 @@ class GenerateRecurringCommand extends Command
 
     public function handle(): int
     {
-        if (!Cache::add('recurring-generate-running', true, 120)) {
+        // The server scheduler may occasionally overlap (slow DB, two cron
+        // invocations, deploy, etc.). Recurring generation must be single-run
+        // because two generators racing can create duplicate child items.
+        if (!Cache::add('recurring-generate-running', true, 240)) {
             \Log::info('[GenerateRecurring] Run skipped — already running.');
-            $this->info('Recurring generate already running — skipping.');
+            $this->info('Recurring generation already running — skipping.');
             return Command::SUCCESS;
         }
 
         try {
             $result = RecurringGenerator::runAll();
-
-            $message = "Generated {$result['tasks']} task(s) and {$result['renewals']} renewal(s).";
-            $this->info($message);
-            \Log::info('[GenerateRecurring] ' . $message);
         } finally {
             Cache::forget('recurring-generate-running');
         }
+
+        $message = "Generated {$result['tasks']} task(s) and {$result['renewals']} renewal(s).";
+        $this->info($message);
+        \Log::info('[GenerateRecurring] ' . $message);
 
         return Command::SUCCESS;
     }

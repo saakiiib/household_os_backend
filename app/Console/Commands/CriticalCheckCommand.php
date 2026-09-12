@@ -313,7 +313,10 @@ class CriticalCheckCommand extends Command
             return;
         }
 
-        $services = \App\Models\RenewalVehicleService::with('renewal:id,household_id,title')
+        // Include creator/assignee IDs: recipient routing below depends on
+        // them. Loading only id/household/title made every vehicle-service
+        // notification have an empty recipient list and therefore never send.
+        $services = \App\Models\RenewalVehicleService::with('renewal:id,household_id,title,created_by_user_id,assigned_user_id')
             ->whereHas('renewal', fn($q) => $q->where('status', 'pending'))
             ->whereDate('service_date', '=', $today)
             ->select('id', 'renewal_id', 'service_type', 'service_date')

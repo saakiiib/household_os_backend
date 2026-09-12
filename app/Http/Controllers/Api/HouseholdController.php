@@ -130,6 +130,13 @@ class HouseholdController extends Controller
                 'status' => 'trial',
                 'plan_status' => 'trial_complete',
                 'paid_plan' => null,
+                // A HouseholdOS trial is local, not an App Store / Play
+                // subscription. Explicit values are important because older
+                // schemas default provider=apple and auto_renew=true.
+                'provider' => null,
+                'product_id' => null,
+                'billing_period' => null,
+                'auto_renew' => false,
                 'trial_started_at' => $now,
                 'trial_ends_at' => $trialEnd,
                 'current_period_start' => $now,
