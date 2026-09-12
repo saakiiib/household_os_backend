@@ -55,10 +55,9 @@ class CheckSubscriptionExpiry extends Command
         $now = now();
 
         // Any paid Apple/Google subscription not verified in the last 5 minutes.
-        // No status or auto_renew filter — we must re-check even "expired"
-        // subscriptions because a missed webhook can leave stale local data.
-        // Only cap by expires_at within the last 24h to avoid re-checking
-        // ancient expired subscriptions.
+        // Skip confirmed-dead subs: if the provider already confirmed expired + auto_renew=false,
+        // no webhook will come — Apple won't revive it. The missed-webhook concern only
+        // applies to auto_renew=true subs. Also skip if expires_at is >24h in the past.
         $staleSubs = Subscription::where('plan_status', 'paid')
             ->whereIn('provider', ['apple', 'google_play'])
             ->whereNotNull('expires_at')
@@ -66,6 +65,11 @@ class CheckSubscriptionExpiry extends Command
             ->where(function ($q) use ($now) {
                 $q->whereNull('last_verified_at')
                     ->orWhere('last_verified_at', '<', $now->copy()->subMinutes(5));
+            })
+            // Exclude confirmed-dead: provider said expired + auto_renew=false
+            ->where(function ($q) {
+                $q->where('status', '!=', 'expired')
+                    ->orWhere('auto_renew', true);
             })
             ->limit(50)
             ->get();
@@ -105,6 +109,38 @@ class CheckSubscriptionExpiry extends Command
                         'new_status' => $sub->status,
                         'provider' => $sub->provider,
                     ]);
+
+                    // Notify when an active/grace-period paid subscription expires
+                    if (in_array($oldStatus, ['active', 'grace_period']) && $sub->status === 'expired' && $sub->plan_status === 'paid') {
+                        if (!$this->alreadyNotified($sub, 'expired')) {
+                            $members = HouseholdMember::where('household_id', $sub->household_id)
+                                ->where('status', 'active')
+                                ->with('user')
+                                ->get();
+
+                            foreach ($members as $member) {
+                                if (!$member->user) continue;
+
+                                app(NotificationService::class)->sendToUser(
+                                    $member->user->id,
+                                    'Subscription ended',
+                                    "Your {$sub->plan?->name} subscription has ended. Renew to restore full access.",
+                                    'subscription_expiry',
+                                    [
+                                        'subscription_id' => $sub->id,
+                                        'household_id' => $sub->household_id,
+                                        'plan_name' => $sub->plan?->name,
+                                        'type' => 'subscription_expired',
+                                        'action' => 'renew_now',
+                                    ],
+                                    'critical'
+                                );
+                            }
+
+                            $this->markNotified($sub, 'expired');
+                            $this->line("  [SubscriptionCheck] Expired notification sent: Household #{$sub->household_id}");
+                        }
+                    }
                 }
             } catch (\Throwable $e) {
                 \Log::warning('[SubscriptionCheck] Provider refresh failed', [
