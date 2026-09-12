@@ -25,6 +25,7 @@ class CheckSubscriptionExpiry extends Command
         }
 
         try {
+            \Log::info('[SubscriptionCheck] Run start');
             $this->refreshProviderSubscriptions();
             $this->handleTrialExpiry();
             $this->sendPaidExpiryWarnings();
@@ -39,39 +40,30 @@ class CheckSubscriptionExpiry extends Command
 
     /**
      * Periodically re-verify Apple/Google subscriptions whose local period
-     * has expired but auto-renew may still be expected. This closes the gap
-     * where the app is closed and Apple/Google renewed but nobody queried
-     * the provider — the local DB would stay stale until the user opens
-     * the app and triggers the on-demand refresh.
+     * has expired. This closes the gap where the app is closed and
+     * Apple/Google renewed but nobody queried the provider — the local DB
+     * would stay stale until the user opens the app and triggers the
+     * on-demand refresh.
+     *
+     * Matches the on-demand refresh logic: queries Apple/Google whenever
+     * last_verified_at is older than 5 minutes, regardless of local status
+     * or auto_renew flag — because a missed webhook can leave the local
+     * DB showing expired+auto_renew=false even though Apple actually renewed.
      */
     private function refreshProviderSubscriptions(): void
     {
         $now = now();
 
-        // Find paid subscriptions where the local period has expired and
-        // auto-renew is still on (or unknown). Don't re-check a subscription
-        // that was already verified within the last 5 minutes.
+        // Any paid Apple/Google subscription not verified in the last 5 minutes.
+        // No status or auto_renew filter — we must re-check even "expired"
+        // subscriptions because a missed webhook can leave stale local data.
+        // Only cap by expires_at within the last 24h to avoid re-checking
+        // ancient expired subscriptions.
         $staleSubs = Subscription::where('plan_status', 'paid')
             ->whereIn('provider', ['apple', 'google_play'])
-            ->whereIn('status', ['active', 'grace_period', 'billing_retry'])
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '>=', $now->copy()->subDay())
             ->where(function ($q) use ($now) {
-                $q->where(function ($q2) use ($now) {
-                    // Local period expired
-                    $q2->whereNotNull('expires_at')
-                        ->where('expires_at', '<=', $now);
-                })->orWhere(function ($q2) use ($now) {
-                    // Grace period expired
-                    $q2->whereNotNull('grace_period_expires_at')
-                        ->where('grace_period_expires_at', '<=', $now);
-                });
-            })
-            ->where(function ($q) {
-                // auto_renew is true or null (unknown — still worth checking)
-                $q->where('auto_renew', true)
-                    ->orWhereNull('auto_renew');
-            })
-            ->where(function ($q) use ($now) {
-                // Not checked in the last 5 minutes
                 $q->whereNull('last_verified_at')
                     ->orWhere('last_verified_at', '<', $now->copy()->subMinutes(5));
             })
