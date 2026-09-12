@@ -74,7 +74,7 @@ class CheckSubscriptionExpiry extends Command
             return;
         }
 
-        $this->line("[SubscriptionCheck] Refreshing {$staleSubs->length} stale provider subscription(s)...");
+        $this->line("[SubscriptionCheck] Refreshing {$staleSubs->count()} stale provider subscription(s)...");
 
         $appleService = app(AppleIapService::class);
         $googleService = app(GooglePlayIapService::class);
