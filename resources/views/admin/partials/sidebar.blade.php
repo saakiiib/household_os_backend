@@ -29,6 +29,10 @@
     .section-items {
         transition: none;
     }
+    .section-items .nav-link {
+        padding-left: 3rem !important;
+        margin-left: 8px;
+    }
 </style>
 
 <div class="app-menu navbar-menu">
@@ -197,22 +201,21 @@
 </div>
 
 <script>
-document.querySelectorAll('.menu-section-header .nav-link').forEach(function(header) {
-    header.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var li = this.closest('.menu-section-header');
-        var section = li.getAttribute('data-section');
-        var items = document.querySelectorAll('[data-section-items="' + section + '"]');
-        if (li.classList.contains('section-open')) {
-            li.classList.remove('section-open');
-            li.classList.add('section-closed');
-            items.forEach(function(item) { item.classList.add('d-none'); });
-        } else {
-            li.classList.remove('section-closed');
-            li.classList.add('section-open');
-            items.forEach(function(item) { item.classList.remove('d-none'); });
-        }
-    });
-});
+document.addEventListener('click', function(e) {
+    var header = e.target.closest('.menu-section-header');
+    if (!header) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var section = header.getAttribute('data-section');
+    var items = document.querySelectorAll('[data-section-items="' + section + '"]');
+    if (header.classList.contains('section-open')) {
+        header.classList.remove('section-open');
+        header.classList.add('section-closed');
+        items.forEach(function(item) { item.classList.add('d-none'); });
+    } else {
+        header.classList.remove('section-closed');
+        header.classList.add('section-open');
+        items.forEach(function(item) { item.classList.remove('d-none'); });
+    }
+}, true);
 </script>

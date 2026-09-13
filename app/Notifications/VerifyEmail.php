@@ -22,11 +22,10 @@ class VerifyEmail extends Notification
     public function toMail($notifiable)
     {
         return (new MailMessage)
-            ->subject('Your Verification Code - Household OS')
-            ->line("Hi {$notifiable->first_name},")
-            ->line('Thanks for signing up!')
-            ->line("Your verification code is: **{$this->code}**")
-            ->line('This code expires in 15 minutes.')
-            ->line('If you did not create an account, no action is needed.');
+            ->subject('Verify your email - Household OS')
+            ->view('emails.verify-email', [
+                'code' => $this->code,
+                'notifiable' => $notifiable,
+            ]);
     }
 }

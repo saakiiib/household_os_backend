@@ -22,11 +22,10 @@ class PasswordResetMail extends Notification
     public function toMail($notifiable)
     {
         return (new MailMessage)
-            ->subject('Reset Your Password - Household OS')
-            ->line("Hi {$notifiable->first_name},")
-            ->line('We received a request to reset your password.')
-            ->line("Your password reset code is: **{$this->code}**")
-            ->line('This code expires in 60 minutes.')
-            ->line('If you did not request a password reset, you can safely ignore this email.');
+            ->subject('Reset your Household OS password')
+            ->view('emails.password-reset', [
+                'code' => $this->code,
+                'notifiable' => $notifiable,
+            ]);
     }
 }

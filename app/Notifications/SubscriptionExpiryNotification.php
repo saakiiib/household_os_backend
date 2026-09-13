@@ -40,8 +40,10 @@ class SubscriptionExpiryNotification extends Notification implements ShouldQueue
     public function toMail(object $notifier): MailMessage
     {
         return (new MailMessage)
-            ->subject('Subscription ' . ($this->type === 'grace_period' ? 'Expiring' : 'Renewal Reminder'))
-            ->line($this->message)
-            ->action('View Subscription', '/subscription');
+            ->subject('Subscription reminder - Household OS')
+            ->view('emails.subscription-reminder', [
+                'message' => $this->message,
+                'notifiable' => $notifier,
+            ]);
     }
 }

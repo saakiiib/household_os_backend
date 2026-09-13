@@ -26,17 +26,11 @@ class InvitationMail extends Notification
     public function toMail($notifiable)
     {
         return (new MailMessage)
-            ->subject("You're Invited to {$this->householdName} - Household OS")
-            ->line("{$this->inviterName} has invited you to join **{$this->householdName}**.")
-            ->line('To accept this invitation:')
-            ->line('1. Download Household OS from the App Store or Google Play Store')
-            ->line('2. Sign up or log in with this email address')
-            ->line('3. You will see a prompt to accept the invitation')
-            ->line('')
-            ->line('**Download the app:**')
-            ->line('[App Store (iOS)](https://apps.apple.com/app/household-os/id000000000)')
-            ->line('[Google Play (Android)](https://play.google.com/store/apps/details?id=com.householdos.app)')
-            ->line('')
-            ->line('If you did not expect this invitation, you can safely ignore this email.');
+            ->subject("You're invited to join {$this->householdName} - Household OS")
+            ->view('emails.invitation', [
+                'householdName' => $this->householdName,
+                'inviterName' => $this->inviterName,
+                'notifiable' => $notifiable,
+            ]);
     }
 }
