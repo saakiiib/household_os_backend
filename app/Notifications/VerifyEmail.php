@@ -21,8 +21,10 @@ class VerifyEmail extends Notification
 
     public function toMail($notifiable)
     {
+        $companyName = \App\Models\Setting::get('company_name', 'Household OS');
+
         return (new MailMessage)
-            ->subject('Verify your email - Household OS')
+            ->subject("Verify your email - {$companyName}")
             ->view('emails.verify-email', [
                 'code' => $this->code,
                 'notifiable' => $notifiable,

@@ -39,8 +39,10 @@ class SubscriptionExpiryNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifier): MailMessage
     {
+        $companyName = \App\Models\Setting::get('company_name', 'Household OS');
+
         return (new MailMessage)
-            ->subject('Subscription reminder - Household OS')
+            ->subject("Subscription reminder - {$companyName}")
             ->view('emails.subscription-reminder', [
                 'message' => $this->message,
                 'notifiable' => $notifier,

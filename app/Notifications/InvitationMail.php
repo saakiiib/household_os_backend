@@ -25,8 +25,10 @@ class InvitationMail extends Notification
 
     public function toMail($notifiable)
     {
+        $companyName = \App\Models\Setting::get('company_name', 'Household OS');
+
         return (new MailMessage)
-            ->subject("You're invited to join {$this->householdName} - Household OS")
+            ->subject("You're invited to join {$this->householdName} - {$companyName}")
             ->view('emails.invitation', [
                 'householdName' => $this->householdName,
                 'inviterName' => $this->inviterName,

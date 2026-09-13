@@ -33,15 +33,33 @@
         padding-left: 3rem !important;
         margin-left: 8px;
     }
+    /* Hide section headers and their items when sidebar is collapsed */
+    html[data-sidebar-size="sm"] .menu-section-header,
+    html[data-sidebar-size="sm"] .section-items {
+        display: none !important;
+    }
 </style>
+
+@php
+    $settingLogo = \App\Models\Setting::get('logo');
+    $companyName = \App\Models\Setting::get('company_name', 'Household OS');
+@endphp
 
 <div class="app-menu navbar-menu">
     <div class="navbar-brand-box">
         <a href="{{ route('admin.dashboard') }}" class="logo logo-dark">
-            <span class="logo-lg"><b>Household OS</b></span>
+            @if($settingLogo)
+                <span class="logo-lg"><img src="{{ Storage::disk('public')->url($settingLogo) }}" alt="{{ $companyName }}" height="32"></span>
+            @else
+                <span class="logo-lg"><b>{{ $companyName }}</b></span>
+            @endif
         </a>
         <a href="{{ route('admin.dashboard') }}" class="logo logo-light">
-            <span class="logo-lg"><b>Household OS</b></span>
+            @if($settingLogo)
+                <span class="logo-lg"><img src="{{ Storage::disk('public')->url($settingLogo) }}" alt="{{ $companyName }}" height="32"></span>
+            @else
+                <span class="logo-lg"><b>{{ $companyName }}</b></span>
+            @endif
         </a>
         <button type="button" class="btn btn-sm p-0 fs-20 header-item float-end btn-vertical-sm-hover" id="vertical-hover">
             <i class="ri-record-circle-line"></i>
@@ -194,7 +212,7 @@
                 </li>
                 <li class="nav-item section-items {{ $activeSection !== 'platform' ? 'd-none' : '' }}" data-section-items="platform"><a href="{{ route('admin.page', ['page' => 'feature-flags']) }}" class="nav-link {{ $cur === 'feature-flags' ? 'active' : '' }}"><i class="ri-flag-line"></i><span>Feature Flags</span></a></li>
                 <li class="nav-item section-items {{ $activeSection !== 'platform' ? 'd-none' : '' }}" data-section-items="platform"><a href="{{ route('admin.page', ['page' => 'backups']) }}" class="nav-link {{ $cur === 'backups' ? 'active' : '' }}"><i class="ri-archive-line"></i><span>Backup Manager</span></a></li>
-                <li class="nav-item section-items {{ $activeSection !== 'platform' ? 'd-none' : '' }}" data-section-items="platform"><a href="{{ route('admin.page', ['page' => 'settings']) }}" class="nav-link {{ $cur === 'settings' ? 'active' : '' }}"><i class="ri-settings-3-line"></i><span>Settings</span></a></li>
+                <li class="nav-item section-items {{ $activeSection !== 'platform' ? 'd-none' : '' }}" data-section-items="platform"><a href="{{ route('admin.settings.index') }}" class="nav-link {{ $cur === 'settings' ? 'active' : '' }}"><i class="ri-settings-3-line"></i><span>Settings</span></a></li>
             </ul>
         </div>
     </div>

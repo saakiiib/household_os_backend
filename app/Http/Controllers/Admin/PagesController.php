@@ -33,7 +33,7 @@ class PagesController extends Controller
         'website-cms', 'app-cms', 'blog', 'media',
         'audit-logs', 'devices', 'fraud', 'api-logs', 'recycle-bin',
         'analytics', 'reports', 'health-scores', 'activity-map',
-        'feature-flags', 'backups', 'settings',
+        'feature-flags', 'backups',
     ];
 
     public function show(Request $request, $page)

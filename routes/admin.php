@@ -11,6 +11,7 @@ use App\Http\Controllers\Admin\RenewalController;
 use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\IapController;
+use App\Http\Controllers\Admin\SettingController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
@@ -19,6 +20,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
 
     Route::get('/p/{page}', [PagesController::class, 'show'])->name('admin.page');
     Route::get('/p/{page}/{id}', [PagesController::class, 'detail'])->name('admin.page.detail');
+
+    // Settings
+    Route::get('/settings', [SettingController::class, 'index'])->name('admin.settings.index');
+    Route::post('/settings', [SettingController::class, 'update'])->name('admin.settings.update');
+    Route::post('/settings/upload', [SettingController::class, 'upload'])->name('admin.settings.upload');
 
     // Household Management
     Route::get('/households', [HouseholdController::class, 'index'])->name('admin.households.index');

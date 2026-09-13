@@ -1,10 +1,17 @@
+@php
+  $companyName = \App\Models\Setting::get('company_name', 'Household OS');
+  $logo = \App\Models\Setting::get('logo');
+  $logoUrl = $logo ? \Illuminate\Support\Facades\Storage::disk('public')->url($logo) : asset('logo.png');
+  $tagline = \App\Models\Setting::get('footer_tagline', 'The operating system for modern family life.');
+  $disclaimer = \App\Models\Setting::get('footer_disclaimer', 'This is an automated service email. Please do not share verification or reset codes with anyone.');
+@endphp
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="x-apple-disable-message-reformatting">
-  <title>Verify your email - Household OS</title>
+  <title>Verify your email - {{ $companyName }}</title>
   <style>
     html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
     * { box-sizing: border-box; }
@@ -101,8 +108,8 @@
             <td class="header">
               <img
                 class="logo"
-                src="{{ asset('logo.png') }}"
-                alt="Household OS"
+                src="{{ $logoUrl }}"
+                alt="{{ $companyName }}"
                 width="280"
               >
             </td>
@@ -111,21 +118,21 @@
             <td class="content">
               <h1>Verify your email</h1>
               <p>Hi {{ $notifiable->first_name }},</p>
-              <p>Welcome to Household OS. Please use the verification code below to confirm your email address and finish setting up your account.</p>
+              <p>Welcome to {{ $companyName }}. Please use the verification code below to confirm your email address and finish setting up your account.</p>
               <div class="code-box">
                 <div class="code-label">Your verification code</div>
                 <div class="code">{{ $code }}</div>
               </div>
               <p class="muted">This code will expire in <strong>15 minutes</strong>.</p>
               <div class="divider"></div>
-              <p class="muted">If you did not create a Household OS account, you can safely ignore this email.</p>
+              <p class="muted">If you did not create a {{ $companyName }} account, you can safely ignore this email.</p>
             </td>
           </tr>
         </table>
 
         <div class="footer">
-          Household OS — The operating system for modern family life.<br>
-          This is an automated service email. Please do not share verification or reset codes with anyone.
+          {{ $companyName }} — {{ $tagline }}<br>
+          {{ $disclaimer }}
         </div>
       </td>
     </tr>

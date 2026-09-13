@@ -1,10 +1,17 @@
+@php
+  $companyName = \App\Models\Setting::get('company_name', 'Household OS');
+  $logo = \App\Models\Setting::get('logo');
+  $logoUrl = $logo ? \Illuminate\Support\Facades\Storage::disk('public')->url($logo) : asset('logo.png');
+  $tagline = \App\Models\Setting::get('footer_tagline', 'The operating system for modern family life.');
+  $disclaimer = \App\Models\Setting::get('footer_disclaimer', 'This is an automated service email. Please do not share verification or reset codes with anyone.');
+@endphp
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="x-apple-disable-message-reformatting">
-  <title>Subscription reminder - Household OS</title>
+  <title>Subscription reminder - {{ $companyName }}</title>
   <style>
     html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
     * { box-sizing: border-box; }
@@ -88,8 +95,8 @@
             <td class="header">
               <img
                 class="logo"
-                src="{{ asset('logo.png') }}"
-                alt="Household OS"
+                src="{{ $logoUrl }}"
+                alt="{{ $companyName }}"
                 width="280"
               >
             </td>
@@ -104,7 +111,7 @@
                 <a href="{{ url('/subscription') }}" class="button">View Subscription</a>
               </div>
 
-              <p class="muted">Your Household OS plan applies to your household. You can review your plan, renewal details and available options from the Subscription section in the app.</p>
+              <p class="muted">Your {{ $companyName }} plan applies to your household. You can review your plan, renewal details and available options from the Subscription section in the app.</p>
               
               <div class="divider"></div>
               <p class="muted">If you have already updated your subscription, no further action may be needed.</p>
@@ -113,8 +120,8 @@
         </table>
 
         <div class="footer">
-          Household OS — The operating system for modern family life.<br>
-          This is an automated service email. Please do not share verification or reset codes with anyone.
+          {{ $companyName }} — {{ $tagline }}<br>
+          {{ $disclaimer }}
         </div>
       </td>
     </tr>

@@ -1,10 +1,19 @@
+@php
+  $companyName = \App\Models\Setting::get('company_name', 'Household OS');
+  $logo = \App\Models\Setting::get('logo');
+  $logoUrl = $logo ? \Illuminate\Support\Facades\Storage::disk('public')->url($logo) : asset('logo.png');
+  $appStoreUrl = \App\Models\Setting::get('app_store_url', 'https://apps.apple.com/app/household-os/id000000000');
+  $playStoreUrl = \App\Models\Setting::get('play_store_url', 'https://play.google.com/store/apps/details?id=com.householdos.app');
+  $tagline = \App\Models\Setting::get('footer_tagline', 'The operating system for modern family life.');
+  $disclaimer = \App\Models\Setting::get('footer_disclaimer', 'This is an automated service email. Please do not share verification or reset codes with anyone.');
+@endphp
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="x-apple-disable-message-reformatting">
-  <title>You're invited to join {{ $householdName }} - Household OS</title>
+  <title>You're invited to join {{ $householdName }} - {{ $companyName }}</title>
   <style>
     html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
     * { box-sizing: border-box; }
@@ -103,8 +112,8 @@
             <td class="header">
               <img
                 class="logo"
-                src="{{ asset('logo.png') }}"
-                alt="Household OS"
+                src="{{ $logoUrl }}"
+                alt="{{ $companyName }}"
                 width="280"
               >
             </td>
@@ -113,8 +122,8 @@
             <td class="content">
               <h1>You're invited to join {{ $householdName }}</h1>
               <p>Hi,</p>
-              <p><strong>{{ $inviterName }}</strong> has invited you to join <strong>{{ $householdName }}</strong> on Household OS.</p>
-              <p>Household OS helps families keep everyday life organised in one place — including tasks, renewals and important household information.</p>
+              <p><strong>{{ $inviterName }}</strong> has invited you to join <strong>{{ $householdName }}</strong> on {{ $companyName }}.</p>
+              <p>{{ $companyName }} helps families keep everyday life organised in one place — including tasks, renewals and important household information.</p>
               
               <div class="info-box">
                 <p style="margin: 0 0 8px; font-weight: 700; color: #10233F;">To accept the invitation:</p>
@@ -126,8 +135,8 @@
               </div>
 
               <div class="app-buttons">
-                <a href="https://apps.apple.com/app/household-os/id000000000" class="app-link">Download for iPhone</a>
-                <a href="https://play.google.com/store/apps/details?id=com.householdos.app" class="app-link">Download for Android</a>
+                <a href="{{ $appStoreUrl }}" class="app-link">Download for iPhone</a>
+                <a href="{{ $playStoreUrl }}" class="app-link">Download for Android</a>
               </div>
 
               <p class="muted">After you accept, you may briefly see a confirmation step while the Household Coordinator verifies your membership.</p>
@@ -139,8 +148,8 @@
         </table>
 
         <div class="footer">
-          Household OS — The operating system for modern family life.<br>
-          This is an automated service email. Please do not share verification or reset codes with anyone.
+          {{ $companyName }} — {{ $tagline }}<br>
+          {{ $disclaimer }}
         </div>
       </td>
     </tr>

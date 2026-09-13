@@ -5,8 +5,15 @@
 <head>
     <meta charset="utf-8" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title') - Admin</title>
+    @php
+        $companyName = \App\Models\Setting::get('company_name', 'Household OS');
+        $favicon = \App\Models\Setting::get('favicon');
+    @endphp
+    <title>@yield('title') - {{ $companyName }} Admin</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    @if($favicon)
+        <link rel="icon" type="image/x-icon" href="{{ Storage::disk('public')->url($favicon) }}">
+    @endif
 
     <script src="{{ asset('resources/backend/js/layout.js') }}"></script>
     <link href="{{ asset('resources/backend/css/bootstrap.min.css') }}" rel="stylesheet" type="text/css" />
