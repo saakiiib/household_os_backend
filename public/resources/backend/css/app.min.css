@@ -41,20 +41,20 @@
   --vz-body-color-rgb: 26, 29, 35;
   --vz-vertical-menu-bg: #ffffff;
   --vz-vertical-menu-item-color: #64748b;
-  --vz-vertical-menu-item-hover-color: #111827;
-  --vz-vertical-menu-item-active-color: #111827;
+  --vz-vertical-menu-item-hover-color: #0D9488;
+  --vz-vertical-menu-item-active-color: #0D9488;
   --vz-vertical-menu-sub-item-color: #94a3b8;
-  --vz-vertical-menu-sub-item-hover-color: #111827;
-  --vz-vertical-menu-sub-item-active-color: #111827;
-  --vz-vertical-menu-title-color: #94a3b8;
+  --vz-vertical-menu-sub-item-hover-color: #0D9488;
+  --vz-vertical-menu-sub-item-active-color: #0D9488;
+  --vz-vertical-menu-title-color: #0D9488;
   --vz-vertical-menu-bg-dark: #ffffff;
   --vz-vertical-menu-item-color-dark: #475569;
-  --vz-vertical-menu-item-hover-color-dark: #111827;
-  --vz-vertical-menu-item-active-color-dark: #111827;
+  --vz-vertical-menu-item-hover-color-dark: #0D9488;
+  --vz-vertical-menu-item-active-color-dark: #0D9488;
   --vz-vertical-menu-sub-item-color-dark: #94a3b8;
-  --vz-vertical-menu-sub-item-hover-color-dark: #111827;
-  --vz-vertical-menu-sub-item-active-color-dark: #111827;
-  --vz-vertical-menu-title-color-dark: #94a3b8;
+  --vz-vertical-menu-sub-item-hover-color-dark: #0D9488;
+  --vz-vertical-menu-sub-item-active-color-dark: #0D9488;
+  --vz-vertical-menu-title-color-dark: #0D9488;
   --vz-header-bg: #ffffff;
   --vz-header-item-color: #e2e8f0;
   --vz-header-bg-dark: #ffffff;
@@ -757,13 +757,13 @@
 
 .navbar-menu .navbar-nav .nav-link.active {
   color: var(--vz-vertical-menu-item-active-color);
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(13, 148, 136, 0.08);
   font-weight: 600
 }
 
 .navbar-menu .navbar-nav .nav-link:hover {
   color: var(--vz-vertical-menu-item-hover-color);
-  background: rgba(0, 0, 0, 0.03)
+  background: rgba(13, 148, 136, 0.04)
 }
 
 .navbar-menu .navbar-nav .nav-link i {
@@ -871,18 +871,18 @@
 }
 
 .navbar-menu .navbar-nav .nav-sm .nav-link:hover:before {
-  background-color: #111827 !important;
+  background-color: #14B8A6 !important;
   opacity: 1
 }
 
 .navbar-menu .navbar-nav .nav-sm .nav-link.active {
   color: var(--vz-vertical-menu-item-active-color);
   font-weight: 500;
-  background: rgba(0, 0, 0, 0.04)
+  background: rgba(13, 148, 136, 0.06)
 }
 
 .navbar-menu .navbar-nav .nav-sm .nav-link.active:before {
-  background-color: #111827 !important
+  background-color: #0D9488 !important
 }
 
 .navbar-menu .navbar-nav .nav-sm .nav-sm {
@@ -1445,7 +1445,7 @@
 }
 
 [data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link.active {
-  color: #111827
+  color: #0D9488
 }
 
 [data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link[data-bs-toggle=collapse]:after {
@@ -1453,7 +1453,7 @@
 }
 
 [data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link[data-bs-toggle=collapse][aria-expanded=true] {
-  color: #111827
+  color: #0D9488
 }
 
 [data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link[data-bs-toggle=collapse][aria-expanded=true]:after {
@@ -1462,34 +1462,34 @@
 
 [data-layout=vertical][data-sidebar=dark] .navbar-menu .nav-link[data-bs-toggle=collapse][aria-expanded=true] .icon-dual {
   color: var(--vz-vertical-menu-item-active-color-dark);
-  fill: rgba(17, 24, 39, 0.12)
+  fill: rgba(13, 148, 136, 0.12)
 }
 
 [data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link svg {
   color: var(--vz-vertical-menu-item-color-dark);
-  fill: rgba(17, 24, 39, 0.08)
+  fill: rgba(13, 148, 136, 0.08)
 }
 
 [data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link:hover {
   color: var(--vz-vertical-menu-item-hover-color-dark);
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(13, 148, 136, 0.04);
   border-radius: 10px
 }
 
 [data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link:hover .icon-dual {
   color: var(--vz-vertical-menu-item-hover-color-dark);
-  fill: rgba(0, 0, 0, 0.06)
+  fill: rgba(13, 148, 136, 0.06)
 }
 
 [data-layout=vertical][data-sidebar=dark] .navbar-nav>.nav-item .nav-link.active {
   color: var(--vz-vertical-menu-item-active-color-dark);
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(13, 148, 136, 0.08);
   border-radius: 10px
 }
 
 [data-layout=vertical][data-sidebar=dark] .navbar-nav>.nav-item .nav-link.active .icon-dual {
   color: var(--vz-vertical-menu-item-hover-color-dark);
-  fill: rgba(0, 0, 0, 0.06)
+  fill: rgba(13, 148, 136, 0.08)
 }
 
 [data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-sm .nav-link {

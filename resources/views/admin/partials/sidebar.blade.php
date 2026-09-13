@@ -1,18 +1,41 @@
 <style>
+    :root {
+        --section-overview: #42A5F5;
+        --section-people: #66BB6A;
+        --section-operations: #FFA726;
+        --section-billing: #AB47BC;
+        --section-support-comms: #26C6DA;
+        --section-content: #EC407A;
+        --section-security: #EF5350;
+        --section-insights: #26A69A;
+        --section-platform: #FFCA28;
+    }
     .menu-section-header .nav-link {
         padding: 10px 16px;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.5px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 1.2px;
         text-transform: uppercase;
-        color: #74788c !important;
+        color: #E0E0E0 !important;
         display: flex;
         align-items: center;
         gap: 8px;
+        margin-top: 12px;
+        border-left: 3px solid transparent;
+        transition: all 0.2s;
     }
+    .menu-section-header[data-section="overview"] .nav-link { border-left-color: var(--section-overview); }
+    .menu-section-header[data-section="people"] .nav-link { border-left-color: var(--section-people); }
+    .menu-section-header[data-section="operations"] .nav-link { border-left-color: var(--section-operations); }
+    .menu-section-header[data-section="billing"] .nav-link { border-left-color: var(--section-billing); }
+    .menu-section-header[data-section="support-comms"] .nav-link { border-left-color: var(--section-support-comms); }
+    .menu-section-header[data-section="content"] .nav-link { border-left-color: var(--section-content); }
+    .menu-section-header[data-section="security"] .nav-link { border-left-color: var(--section-security); }
+    .menu-section-header[data-section="insights"] .nav-link { border-left-color: var(--section-insights); }
+    .menu-section-header[data-section="platform"] .nav-link { border-left-color: var(--section-platform); }
+
     .menu-section-header .nav-link:hover {
-        color: #74788c !important;
-        background: transparent;
+        background: rgba(255,255,255,0.06) !important;
     }
     .menu-section-header .section-arrow {
         font-size: 14px;
@@ -26,14 +49,41 @@
     .menu-section-header.section-open .section-arrow {
         transform: rotate(0deg);
     }
-    .section-items {
-        transition: none;
-    }
     .section-items .nav-link {
         padding-left: 3rem !important;
         margin-left: 8px;
+        color: #B0B0B0 !important;
+        border-left: 2px solid transparent;
+        transition: all 0.2s;
     }
-    /* Hide section headers and their items when sidebar is collapsed */
+    .section-items .nav-link:hover {
+        color: #FFFFFF !important;
+        background: rgba(255,255,255,0.05) !important;
+    }
+    .section-items .nav-link.active {
+        color: #FFFFFF !important;
+        font-weight: 600;
+    }
+    .section-items[data-section-items="overview"] .nav-link.active { background: rgba(66,165,245,0.15); border-left-color: var(--section-overview); color: var(--section-overview) !important; }
+    .section-items[data-section-items="people"] .nav-link.active { background: rgba(102,187,106,0.15); border-left-color: var(--section-people); color: var(--section-people) !important; }
+    .section-items[data-section-items="operations"] .nav-link.active { background: rgba(255,167,38,0.15); border-left-color: var(--section-operations); color: var(--section-operations) !important; }
+    .section-items[data-section-items="billing"] .nav-link.active { background: rgba(171,71,188,0.15); border-left-color: var(--section-billing); color: var(--section-billing) !important; }
+    .section-items[data-section-items="support-comms"] .nav-link.active { background: rgba(38,198,218,0.15); border-left-color: var(--section-support-comms); color: var(--section-support-comms) !important; }
+    .section-items[data-section-items="content"] .nav-link.active { background: rgba(236,64,122,0.15); border-left-color: var(--section-content); color: var(--section-content) !important; }
+    .section-items[data-section-items="security"] .nav-link.active { background: rgba(239,83,80,0.15); border-left-color: var(--section-security); color: var(--section-security) !important; }
+    .section-items[data-section-items="insights"] .nav-link.active { background: rgba(38,166,154,0.15); border-left-color: var(--section-insights); color: var(--section-insights) !important; }
+    .section-items[data-section-items="platform"] .nav-link.active { background: rgba(255,202,40,0.15); border-left-color: var(--section-platform); color: var(--section-platform) !important; }
+
+    .section-items[data-section-items="overview"] .nav-link:hover { border-left-color: var(--section-overview); }
+    .section-items[data-section-items="people"] .nav-link:hover { border-left-color: var(--section-people); }
+    .section-items[data-section-items="operations"] .nav-link:hover { border-left-color: var(--section-operations); }
+    .section-items[data-section-items="billing"] .nav-link:hover { border-left-color: var(--section-billing); }
+    .section-items[data-section-items="support-comms"] .nav-link:hover { border-left-color: var(--section-support-comms); }
+    .section-items[data-section-items="content"] .nav-link:hover { border-left-color: var(--section-content); }
+    .section-items[data-section-items="security"] .nav-link:hover { border-left-color: var(--section-security); }
+    .section-items[data-section-items="insights"] .nav-link:hover { border-left-color: var(--section-insights); }
+    .section-items[data-section-items="platform"] .nav-link:hover { border-left-color: var(--section-platform); }
+
     html[data-sidebar-size="sm"] .menu-section-header,
     html[data-sidebar-size="sm"] .section-items {
         display: none !important;
@@ -109,6 +159,7 @@
                 {{-- OVERVIEW --}}
                 <li class="nav-item menu-section-header {{ $activeSection === 'overview' ? 'section-open' : 'section-closed' }}" data-section="overview">
                     <a href="javascript:void(0);" class="nav-link">
+                        <span class="section-dot" style="background: var(--section-overview);"></span>
                         <i class="ri-arrow-down-s-line section-arrow"></i>
                         <span>Overview</span>
                     </a>
@@ -120,6 +171,7 @@
                 {{-- PEOPLE --}}
                 <li class="nav-item menu-section-header {{ $activeSection === 'people' ? 'section-open' : 'section-closed' }}" data-section="people">
                     <a href="javascript:void(0);" class="nav-link">
+                        <span class="section-dot" style="background: var(--section-people);"></span>
                         <i class="ri-arrow-down-s-line section-arrow"></i>
                         <span>People</span>
                     </a>
@@ -132,6 +184,7 @@
                 {{-- OPERATIONS --}}
                 <li class="nav-item menu-section-header {{ $activeSection === 'operations' ? 'section-open' : 'section-closed' }}" data-section="operations">
                     <a href="javascript:void(0);" class="nav-link">
+                        <span class="section-dot" style="background: var(--section-operations);"></span>
                         <i class="ri-arrow-down-s-line section-arrow"></i>
                         <span>Operations</span>
                     </a>
