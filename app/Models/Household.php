@@ -106,6 +106,11 @@ class Household extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function supportTickets()
+    {
+        return $this->hasMany(SupportTicket::class);
+    }
+
     /**
      * Get all categories for this household.
      */

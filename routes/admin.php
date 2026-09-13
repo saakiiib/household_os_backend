@@ -12,6 +12,7 @@ use App\Http\Controllers\Admin\SubscriptionController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\IapController;
 use App\Http\Controllers\Admin\SettingController;
+use App\Http\Controllers\Admin\SupportCommunicationController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
@@ -61,6 +62,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     // Payments
     Route::get('/payments', [PaymentController::class, 'index'])->name('admin.payments.index');
     Route::get('/payments/{payment}', [PaymentController::class, 'show'])->name('admin.payments.show');
+
+    // Customer Support Communications
+    Route::get('/support-communications', [SupportCommunicationController::class, 'index'])->name('admin.support.index');
+    Route::get('/support-communications/{ticket}', [SupportCommunicationController::class, 'show'])->name('admin.support.show');
+    Route::post('/support-communications/{ticket}/reply', [SupportCommunicationController::class, 'reply'])->name('admin.support.reply');
+    Route::patch('/support-communications/{ticket}', [SupportCommunicationController::class, 'update'])->name('admin.support.update');
+    Route::get('/support-attachments/{attachment}', [SupportCommunicationController::class, 'attachment'])->name('admin.support.attachment');
 
     // IAP Management (Apple & Google in-app purchase verification and re-verification)
     Route::get('/iap', [IapController::class, 'index'])->name('admin.iap.index');

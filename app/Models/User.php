@@ -63,6 +63,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->hasMany(Payment::class);
     }
 
+    public function supportTickets()
+    {
+        return $this->hasMany(SupportTicket::class);
+    }
+
     /**
      * Get the user's active household (first active membership).
      */

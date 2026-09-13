@@ -81,6 +81,7 @@
                         str_starts_with($routeName, 'admin.subscriptions') => 'subscriptions',
                         str_starts_with($routeName, 'admin.admins') => 'admins',
                         str_starts_with($routeName, 'admin.payments') => 'payments',
+                        str_starts_with($routeName, 'admin.support') => 'support-communications',
                         default => ($active ?? request()->route('page') ?? ''),
                     };
 
@@ -89,7 +90,7 @@
                         'people' => ['users', 'households', 'invitations', 'admins'],
                         'operations' => ['tasks', 'renewals', 'documents', 'ocr-queue', 'storage', 'automations'],
                         'billing' => ['subscriptions', 'payments', 'revenue'],
-                        'support-comms' => ['tickets', 'escalations', 'communications', 'notifications', 'templates'],
+                        'support-comms' => ['support-communications', 'escalations', 'communications', 'notifications', 'templates'],
                         'content' => ['website-cms', 'app-cms', 'blog', 'media'],
                         'security' => ['audit-logs', 'devices', 'fraud', 'api-logs', 'recycle-bin'],
                         'insights' => ['analytics', 'reports', 'health-scores', 'activity-map'],
@@ -160,7 +161,7 @@
                         <span>Support &amp; Comms</span>
                     </a>
                 </li>
-                <li class="nav-item section-items {{ $activeSection !== 'support-comms' ? 'd-none' : '' }}" data-section-items="support-comms"><a href="{{ route('admin.page', ['page' => 'tickets']) }}" class="nav-link {{ $cur === 'tickets' ? 'active' : '' }}"><i class="ri-customer-service-2-line"></i><span>Support Tickets</span></a></li>
+                <li class="nav-item section-items {{ $activeSection !== 'support-comms' ? 'd-none' : '' }}" data-section-items="support-comms"><a href="{{ route('admin.support.index') }}" class="nav-link {{ $cur === 'support-communications' ? 'active' : '' }}"><i class="ri-customer-service-2-line"></i><span>Support Communications</span></a></li>
                 <li class="nav-item section-items {{ $activeSection !== 'support-comms' ? 'd-none' : '' }}" data-section-items="support-comms"><a href="{{ route('admin.page', ['page' => 'escalations']) }}" class="nav-link {{ $cur === 'escalations' ? 'active' : '' }}"><i class="ri-alarm-warning-line"></i><span>Escalations</span></a></li>
                 <li class="nav-item section-items {{ $activeSection !== 'support-comms' ? 'd-none' : '' }}" data-section-items="support-comms"><a href="{{ route('admin.page', ['page' => 'communications']) }}" class="nav-link {{ $cur === 'communications' ? 'active' : '' }}"><i class="ri-chat-3-line"></i><span>Communication Centre</span></a></li>
                 <li class="nav-item section-items {{ $activeSection !== 'support-comms' ? 'd-none' : '' }}" data-section-items="support-comms"><a href="{{ route('admin.page', ['page' => 'notifications']) }}" class="nav-link {{ $cur === 'notifications' ? 'active' : '' }}"><i class="ri-notification-3-line"></i><span>Push Notifications</span></a></li>
