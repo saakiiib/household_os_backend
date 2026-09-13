@@ -63,6 +63,12 @@ Route::get('/clean-db', function () {
 
     (new UserSeeder())->run();
 
+    // Clear the Laravel log file
+    $logPath = storage_path('logs/laravel.log');
+    if (file_exists($logPath)) {
+        file_put_contents($logPath, '');
+    }
+
     return new \Illuminate\Http\Response(
         '<h1>Database cleaned successfully.</h1><p>Sign in again on devices.</p>',
         200,

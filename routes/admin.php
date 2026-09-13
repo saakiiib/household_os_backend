@@ -66,6 +66,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     // Customer Support Communications
     Route::get('/support-communications', [SupportCommunicationController::class, 'index'])->name('admin.support.index');
     Route::get('/support-communications/{ticket}', [SupportCommunicationController::class, 'show'])->name('admin.support.show');
+    Route::get('/support-communications/{ticket}/poll', [SupportCommunicationController::class, 'poll'])->name('admin.support.poll');
     Route::post('/support-communications/{ticket}/reply', [SupportCommunicationController::class, 'reply'])->name('admin.support.reply');
     Route::patch('/support-communications/{ticket}', [SupportCommunicationController::class, 'update'])->name('admin.support.update');
     Route::get('/support-attachments/{attachment}', [SupportCommunicationController::class, 'attachment'])->name('admin.support.attachment');

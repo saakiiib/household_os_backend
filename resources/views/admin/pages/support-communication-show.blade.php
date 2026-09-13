@@ -8,28 +8,17 @@
 
     <div class="row">
         <div class="col-xl-8">
-            <div class="card"><div class="card-header"><h4 class="card-title mb-0">Conversation</h4></div><div class="card-body" style="max-height:650px;overflow:auto">
-                @foreach($ticket->messages as $message)
-                    @php $admin = $message->sender_type === 'admin'; @endphp
-                    <div class="d-flex mb-4 {{ $admin ? 'justify-content-end' : '' }}">
-                        <div style="max-width:80%">
-                            <div class="small text-muted mb-1 {{ $admin ? 'text-end' : '' }}">
-                                {{ $message->is_internal ? 'Internal note' : ($admin ? 'HouseholdOS Support' : ($ticket->user?->name ?? 'Customer')) }} · {{ $message->created_at->format('d M Y H:i') }}
-                            </div>
-                            <div class="rounded p-3 {{ $message->is_internal ? 'bg-warning-subtle border border-warning' : ($admin ? 'bg-primary text-white' : 'bg-light') }}">
-                                @if($message->body)<div style="white-space:pre-wrap">{{ $message->body }}</div>@endif
-                                @if($message->attachments->count())
-                                    <div class="d-flex flex-wrap gap-2 mt-2">
-                                    @foreach($message->attachments as $attachment)
-                                        <a href="{{ route('admin.support.attachment',$attachment) }}" target="_blank" class="btn btn-sm {{ $admin && !$message->is_internal ? 'btn-light' : 'btn-soft-primary' }}"><i class="ri-image-line"></i> {{ \Illuminate\Support\Str::limit($attachment->original_name,25) }}</a>
-                                    @endforeach
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
+            <div class="card">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h4 class="card-title mb-0">Conversation</h4>
+                    <small id="supportLiveState" class="text-muted"><i class="ri-refresh-line"></i> Live updates on</small>
+                </div>
+                <div id="supportConversationScroll" class="card-body" style="max-height:650px;overflow:auto">
+                    <div id="supportMessageList">
+                        @include('admin.pages._support-message-list', ['ticket' => $ticket])
                     </div>
-                @endforeach
-            </div></div>
+                </div>
+            </div>
 
             @if($ticket->status !== 'closed')
             <div class="card"><div class="card-header"><h4 class="card-title mb-0">Reply</h4></div><div class="card-body">
@@ -50,6 +39,7 @@
                 <p><strong>Household:</strong><br>{{ $ticket->household?->name ?? '—' }}</p>
                 <p><strong>Category:</strong><br>{{ \App\Models\SupportTicket::CATEGORIES[$ticket->category] ?? $ticket->category }}</p>
                 <p><strong>Created:</strong><br>{{ $ticket->created_at->format('d M Y H:i') }}</p>
+                <p><strong>Live status:</strong><br><span id="supportLiveStatus">{{ \App\Models\SupportTicket::STATUSES[$ticket->status] ?? $ticket->status }}</span></p>
                 <hr>
                 <form method="POST" action="{{ route('admin.support.update',$ticket) }}">@csrf @method('PATCH')
                     <label class="form-label">Status</label><select class="form-select mb-3" name="status">@foreach(\App\Models\SupportTicket::STATUSES as $v=>$l)<option value="{{ $v }}" @selected($ticket->status===$v)>{{ $l }}</option>@endforeach</select>
@@ -60,4 +50,72 @@
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    const pollUrl = @json(route('admin.support.poll', $ticket));
+    const list = document.getElementById('supportMessageList');
+    const scroller = document.getElementById('supportConversationScroll');
+    const liveState = document.getElementById('supportLiveState');
+    const liveStatus = document.getElementById('supportLiveStatus');
+    let latestMessageId = {{ (int) optional($ticket->messages->last())->id }};
+    let inFlight = false;
+
+    function nearBottom() {
+        if (!scroller) return true;
+        return (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight) < 140;
+    }
+
+    function scrollToBottom() {
+        if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    }
+
+    async function pollSupport() {
+        if (inFlight || document.hidden) return;
+        inFlight = true;
+        try {
+            const response = await fetch(pollUrl, {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const data = await response.json();
+            const nextId = Number(data.latest_message_id || 0);
+            const shouldStick = nearBottom();
+
+            if (nextId !== latestMessageId && typeof data.html === 'string') {
+                list.innerHTML = data.html;
+                latestMessageId = nextId;
+                if (shouldStick) scrollToBottom();
+            }
+
+            if (liveStatus && data.status_label) liveStatus.textContent = data.status_label;
+            if (liveState) {
+                liveState.className = 'text-success';
+                liveState.innerHTML = '<i class="ri-checkbox-circle-line"></i> Live';
+            }
+        } catch (e) {
+            if (liveState) {
+                liveState.className = 'text-muted';
+                liveState.innerHTML = '<i class="ri-wifi-off-line"></i> Reconnecting…';
+            }
+        } finally {
+            inFlight = false;
+        }
+    }
+
+    scrollToBottom();
+    const timer = setInterval(pollSupport, 4000);
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) pollSupport();
+    });
+    window.addEventListener('focus', pollSupport);
+    window.addEventListener('beforeunload', function () { clearInterval(timer); });
+})();
+</script>
 @endsection

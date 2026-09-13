@@ -52,6 +52,27 @@ class SupportCommunicationController extends Controller
         return view('admin.pages.support-communication-show', compact('ticket', 'active'));
     }
 
+    public function poll(SupportTicket $ticket)
+    {
+        // The admin is actively viewing this ticket, so newly-arrived customer
+        // messages can safely be marked as read for the admin.
+        $ticket->update(['admin_last_read_at' => now()]);
+        $ticket->load(['user', 'household', 'messages.sender', 'messages.attachments']);
+
+        $latestMessage = $ticket->messages->last();
+
+        return response()->json([
+            'ok' => true,
+            'ticket_id' => $ticket->id,
+            'message_count' => $ticket->messages->count(),
+            'latest_message_id' => $latestMessage?->id,
+            'last_message_at' => optional($ticket->last_message_at)->toIso8601String(),
+            'status' => $ticket->status,
+            'status_label' => SupportTicket::STATUSES[$ticket->status] ?? $ticket->status,
+            'html' => view('admin.pages._support-message-list', compact('ticket'))->render(),
+        ]);
+    }
+
     public function reply(Request $request, SupportTicket $ticket, NotificationService $notifications)
     {
         $validated = $request->validate([
