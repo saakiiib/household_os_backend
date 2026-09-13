@@ -967,6 +967,18 @@ class AppleIapService
             ? $this->appleMillisToAppTime((int) $renewalInfo['gracePeriodExpiresDate'])
             : null;
 
+        // Guard: don't let Apple's expiry overwrite a local expiry that is
+        // significantly further in the future (sandbox / stale API response).
+        if ($periodEnd && $subscription->expires_at && $finalStatus === 'active'
+            && $periodEnd->lessThan($subscription->expires_at)) {
+            Log::warning('AppleIapService::applyRawStatus: ignoring Apple expiry earlier than local', [
+                'subscription_id' => $subscription->id,
+                'apple_expires' => $periodEnd->toIso8601String(),
+                'local_expires' => $subscription->expires_at->toIso8601String(),
+            ]);
+            $periodEnd = $subscription->current_period_end;
+        }
+
         // Apple keeps the current transaction/product during a scheduled
         // downgrade. The next product is exposed via autoRenewProductId and
         // only becomes the entitlement after the next renewal transaction.
@@ -1337,17 +1349,26 @@ class AppleIapService
         $rootCert = openssl_x509_read($this->pemFromX5c($x5c[count($x5c) - 1]));
         if ($rootCert === false) {
             Log::warning('AppleIapService: JWS root certificate unreadable');
-        } elseif (!$this->isAppleRootCertificate($rootCert)) {
-            Log::warning('AppleIapService: JWS chain does not terminate at an Apple root CA (trusted anyway after chain verify)', [
+            return null;
+        }
+        if (!$this->isAppleRootCertificate($rootCert)) {
+            Log::warning('AppleIapService: rejecting JWS because chain does not terminate at an Apple root CA', [
                 'subject' => $this->certSubjectText($rootCert),
             ]);
+            return null;
         }
+
         if (count($x5c) >= 2) {
             $intermediate = openssl_x509_read($this->pemFromX5c($x5c[count($x5c) - 2]));
-            if ($intermediate !== false && !$this->isAppleWwdrCertificate($intermediate)) {
-                Log::warning('AppleIapService: JWS intermediate is not an Apple WWDR certificate (trusted anyway after chain verify)', [
+            if ($intermediate === false) {
+                Log::warning('AppleIapService: JWS intermediate certificate unreadable');
+                return null;
+            }
+            if (!$this->isAppleWwdrCertificate($intermediate)) {
+                Log::warning('AppleIapService: rejecting JWS because intermediate is not an Apple WWDR certificate', [
                     'subject' => $this->certSubjectText($intermediate),
                 ]);
+                return null;
             }
         }
 

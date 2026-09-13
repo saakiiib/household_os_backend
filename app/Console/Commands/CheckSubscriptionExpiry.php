@@ -70,7 +70,7 @@ class CheckSubscriptionExpiry extends Command
 
         $subscriptions = Subscription::query()
             ->where('plan_status', 'paid')
-            ->whereIn('provider', ['apple', 'google'])
+            ->whereIn('provider', ['apple', 'google', 'google_play'])
             ->where(function ($q) use ($nearPeriodEnd, $staleBefore) {
                 $q->whereIn('status', ['grace_period', 'billing_retry'])
                     ->orWhere(function ($q2) use ($nearPeriodEnd) {
@@ -89,7 +89,7 @@ class CheckSubscriptionExpiry extends Command
                                 ->orWhereNotNull('apple_original_transaction_id');
                         });
                 })->orWhere(function ($google) {
-                    $google->where('provider', 'google')
+                    $google->whereIn('provider', ['google', 'google_play'])
                         ->whereNotNull('google_purchase_token');
                 });
             })

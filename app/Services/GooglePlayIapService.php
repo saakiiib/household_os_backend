@@ -76,6 +76,13 @@ class GooglePlayIapService
             // Verify the subscription with Google Play Developer API
             $result = $this->_verifySubscription($accessToken, $receiptData, $googleProductId);
 
+            // A transient active response may still carry the previous expiry.
+            // Re-query once before asking the client to retry; never invent time.
+            if ($result && in_array($result['subscriptionState'] ?? '', [
+                'SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
+            ], true) && (empty($result['expiryTimeMillis']) || (int) $result['expiryTimeMillis'] <= (int) now()->valueOf())) {
+                $result = $this->_verifySubscription($accessToken, $receiptData, $googleProductId);
+            }
             if (!$result) {
                 Log::error('GooglePlayIapService: _verifySubscription returned null');
                 return ['success' => false, 'message' => 'Failed to verify Google Play receipt.'];
@@ -99,14 +106,20 @@ class GooglePlayIapService
 
             // Parse expiry time (startTimeMillis and expiryTimeMillis)
             $expiresAt = isset($result['expiryTimeMillis'])
-                ? \Carbon\Carbon::createFromTimestampMs((int) $result['expiryTimeMillis'])
+                ? \Carbon\Carbon::instance(GoogleSubscriptionSnapshot::milliseconds((int) $result['expiryTimeMillis'], config('app.timezone', 'UTC')))
                 : null;
 
             $purchaseDate = isset($result['startTimeMillis'])
-                ? \Carbon\Carbon::createFromTimestampMs((int) $result['startTimeMillis'])
+                ? \Carbon\Carbon::instance(GoogleSubscriptionSnapshot::milliseconds((int) $result['startTimeMillis'], config('app.timezone', 'UTC')))
                 : null;
 
-            $orderId = $result['orderId'] ?? $transactionId;
+            if (!$expiresAt || $expiresAt->lessThanOrEqualTo(now())) {
+                return ['success' => false, 'message' => 'Google has not confirmed a current expiry. Please retry verification.'];
+            }
+            $orderId = $result['orderId'] ?? null;
+            if (!$orderId) {
+                return ['success' => false, 'message' => 'Google has not confirmed the purchase order. Please retry verification.'];
+            }
             $autoRenewing = $result['autoRenewing'] ?? false;
 
             return [
@@ -116,6 +129,8 @@ class GooglePlayIapService
                 'purchase_date' => $purchaseDate,
                 'order_id' => $orderId,
                 'google_product_id' => $googleProductId,
+                'plan_slug' => $planSlug,
+                'subscription_state' => $result['subscriptionState'],
                 'billing_type' => $billingType,
                 'auto_renewing' => $autoRenewing,
             ];
@@ -123,7 +138,7 @@ class GooglePlayIapService
             Log::error('GooglePlayIapService: verification exception', [
                 'error' => $e->getMessage(),
             ]);
-            return ['success' => false, 'message' => 'Failed to verify Google Play receipt: ' . $e->getMessage()];
+            return ['success' => false, 'message' => 'Failed to verify Google Play receipt. Please try again.'];
         }
     }
 
@@ -141,6 +156,7 @@ class GooglePlayIapService
         bool $autoRenewing = true,
         bool $isRestored = false,
         ?string $purchaseToken = null,
+        string $subscriptionState = 'SUBSCRIPTION_STATE_ACTIVE',
     ): Subscription {
         $household = $user->activeHousehold();
 
@@ -148,37 +164,33 @@ class GooglePlayIapService
             throw new \RuntimeException('User has no active household.');
         }
 
+        $cfg = config('google_products.google_products', [])[$googleProductId] ?? null;
+        if (!$cfg) {
+            throw new \RuntimeException('Unknown Google product.');
+        }
+        $planSlug = $cfg['plan'];
+        $billingType = $cfg['billing_period'];
         $plan = SubscriptionPlan::where('slug', $planSlug)->first();
         if (!$plan) {
             throw new \RuntimeException("Subscription plan not found: {$planSlug}");
         }
 
-        $periodStart = $purchaseDate ?? now();
-
-        // Google Play sandbox returns the previous auto-renewal expiry, not the
-        // new purchase expiry. If the returned expiry is in the past or within
-        // 60 seconds of now, calculate from the purchase date instead.
-        if ($expiresAt->isPast() || $expiresAt->diffInSeconds(now()) < 60) {
-            $periodEnd = $billingType === 'annual'
-                ? $periodStart->copy()->addYear()
-                : $periodStart->copy()->addMonth();
-            Log::info('GooglePlayIapService: recalculated expiry from purchase date', [
-                'original_expires_at' => $expiresAt->toIso8601String(),
-                'calculated_expires_at' => $periodEnd->toIso8601String(),
-                'billing_type' => $billingType,
-            ]);
-        } else {
-            $periodEnd = $expiresAt;
+        $timezone = config('app.timezone', 'UTC');
+        $periodStart = ($purchaseDate ?? now())->copy()->setTimezone($timezone);
+        $periodEnd = $expiresAt->copy()->setTimezone($timezone);
+        if ($periodEnd->lessThanOrEqualTo(now())) {
+            throw new \RuntimeException('Google has not confirmed a current subscription expiry.');
         }
 
         $existingSubscription = Subscription::where('household_id', $household->id)->first();
 
-        $subscription = DB::transaction(function () use ($user, $household, $plan, $billingType, $googleProductId, $orderId, $autoRenewing, $isRestored, $existingSubscription, $periodStart, $periodEnd, $purchaseToken) {
+        $subscription = DB::transaction(function () use ($user, $household, $plan, $billingType, $googleProductId, $orderId, $autoRenewing, $isRestored, $existingSubscription, $periodStart, $periodEnd, $purchaseToken, $subscriptionState) {
+            $decision = GoogleSubscriptionSnapshot::resolve($subscriptionState, $periodEnd, now());
             $data = [
                 'user_id' => $user->id,
                 'household_id' => $household->id,
                 'subscription_plan_id' => $plan->id,
-                'status' => 'active',
+                'status' => $decision['status'],
                 'plan_status' => 'paid',
                 'paid_plan' => $plan->slug,
                 'billing_period' => $billingType,
@@ -187,6 +199,8 @@ class GooglePlayIapService
                 'current_period_end' => $periodEnd,
                 'expires_at' => $periodEnd,
                 'cancelled_at' => null,
+                'grace_period_expires_at' => $decision['status'] === 'grace_period' ? $periodEnd : null,
+                'auto_renew' => $autoRenewing,
                 'payment_method' => 'google_play',
                 'google_product_id' => $googleProductId,
                 'google_order_id' => $orderId,
@@ -313,206 +327,82 @@ class GooglePlayIapService
             return;
         }
 
-        // Find subscription by google_product_id or order_id
-        $subscription = Subscription::where('google_product_id', $subscriptionId)->first();
-
-        if (!$subscription) {
-            Log::warning('GooglePlayIapService: subscription not found for', ['subscription_id' => $subscriptionId]);
+        if (!$purchaseToken || ($fullPayload['packageName'] ?? null) !== $this->packageName) {
+            Log::warning('GooglePlayIapService: RTDN token or package mismatch');
             return;
         }
-
-        // Store the purchase token if we don't have it yet (needed for
-        // refreshFromGoogle which calls Google's v2 API with the token).
-        if ($purchaseToken && empty($subscription->google_purchase_token)) {
-            $subscription->update(['google_purchase_token' => $purchaseToken]);
+        // Product IDs are shared by every purchaser. Only a stored purchase
+        // token identifies the household affected by this notification.
+        $subscription = Subscription::where('google_purchase_token', $purchaseToken)
+            ->where('google_product_id', $subscriptionId)
+            ->first();
+        if (!$subscription) {
+            Log::info('GooglePlayIapService: RTDN token has no local subscription');
+            return;
         }
-
-        // Notification types:
-        // 1 = SUBSCRIPTION_RECOVERED
-        // 2 = SUBSCRIPTION_RENEWED
-        // 3 = SUBSCRIPTION_CANCELED
-        // 4 = SUBSCRIPTION_PURCHASED
-        // 5 = SUBSCRIPTION_EXPIRED
-        // 6 = SUBSCRIPTION_IN_GRACE_PERIOD
-        // 7 = SUBSCRIPTION_RESTARTED
-        // 8 = SUBSCRIPTION_PRICE_CHANGE_CONFIRMED
-        // 9 = SUBSCRIPTION_DEFERRED
-        // 10 = SUBSCRIPTION_PAUSED
-        // 11 = SUBSCRIPTION_PAUSE_SCHEDULE_CHANGED
-        // 12 = SUBSCRIPTION_REVOKED
-        // 13 = SUBSCRIPTION_EXPIRED (as per docs)
-        // 14 = SUBSCRIPTION_PENDING
-        // 15 = SUBSCRIPTION_REACTIVATED
-
-        switch ($notificationType) {
-            case 2: // RENEWED
-            case 4: // PURCHASED
-            case 7: // RESTARTED
-            case 15: // REACTIVATED
-                $this->_handleRenewalFromRtdn($subscription, $fullPayload);
-                break;
-
-            case 5: // EXPIRED
-                $subscription->update(['status' => 'expired']);
-                Log::info('GooglePlayIapService: subscription expired via RTDN', ['id' => $subscription->id]);
-                break;
-
-            case 3: // CANCELED
-                // User cancelled — access continues until expiry
-                $metadata = $subscription->metadata ?? [];
-                $metadata['auto_renewing'] = false;
-                $subscription->update(['metadata' => $metadata]);
-                Log::info('GooglePlayIapService: subscription cancelled (auto-renew off) via RTDN', ['id' => $subscription->id]);
-                break;
-
-            case 6: // IN_GRACE_PERIOD
-                $subscription->moveToGracePeriod();
-                Log::info('GooglePlayIapService: subscription in grace period via RTDN', ['id' => $subscription->id]);
-                break;
-
-            case 12: // REVOKED
-                $subscription->update(['status' => 'cancelled', 'cancelled_at' => now()]);
-                Log::info('GooglePlayIapService: subscription revoked via RTDN', ['id' => $subscription->id]);
-                break;
-
-            default:
-                Log::info('GooglePlayIapService: unhandled RTDN type', ['type' => $notificationType]);
-                break;
+        // RTDN is a hint to re-query Google, never proof of another month of
+        // access. Replays and duplicate deliveries therefore cannot extend it.
+        if (!$this->refreshFromGoogle($subscription)) {
+            throw new \RuntimeException('Google subscription refresh failed; retry RTDN.');
         }
     }
 
-    /**
-     * Handle renewal by updating subscription dates.
-     * Extends from current_period_end (not now()) so renewals add correctly.
-     */
-    private function _handleRenewalFromRtdn(Subscription $subscription, array $fullPayload): void
-    {
-        // Try to extract expiry from the RTDN payload
-        $subscriptionNotification = $fullPayload['subscriptionNotification'] ?? [];
-        // RTDN doesn't always include expiry directly — we may need to call the API
-
-        $plan = $subscription->plan;
-        if ($plan) {
-            $billingType = $subscription->billing_period ?? 'monthly';
-            // Anchor on the existing current_period_end so a renewal of a
-            // year-long sub adds a full year (not "today + 1 year" which
-            // would shorten the access window on every renewal).
-            $anchor = $subscription->current_period_end && $subscription->current_period_end->isFuture()
-                ? $subscription->current_period_end
-                : now();
-            $extendBy = $billingType === 'annual' ? $anchor->copy()->addYear() : $anchor->copy()->addMonth();
-
-            $subscription->update([
-                'status' => 'active',
-                'current_period_start' => $anchor,
-                'current_period_end' => $extendBy,
-                'expires_at' => $extendBy,
-                'cancelled_at' => null,
-            ]);
-
-            Log::info('GooglePlayIapService: subscription renewed via RTDN', [
-                'id' => $subscription->id,
-                'expires_at' => $extendBy->toIso8601String(),
-            ]);
-        }
-    }
-
-    /**
-     * Re-query Google Play for the authoritative subscription state and
-     * apply it locally. Used by the on-demand refresh path.
-     * - If Google's expiry is in the past, the sub is marked expired.
-     * - If Google says active, the expires_at is updated to Google's value.
-     * - If Google says expired but our local expires_at is still in the
-     *   future, we keep the local active status to avoid a transient
-     *   false-expiry (same guard as AppleIapService::applyRawStatus).
-     */
+    /** Refresh only the stored token, protecting newer purchases from in-flight responses. */
     public function refreshFromGoogle(Subscription $subscription): bool
     {
         $token = $subscription->google_purchase_token;
-        $subId = $subscription->google_product_id;
-
-        if (empty($token) || empty($this->serviceAccountJson)) {
+        $productId = $subscription->google_product_id;
+        $previousOrder = $subscription->google_order_id;
+        $previousEnd = $subscription->expires_at?->getTimestamp();
+        $previousStatus = $subscription->status;
+        if (empty($token) || empty($productId) || empty($this->serviceAccountJson)) {
             return false;
         }
-
         try {
-            $accessToken = $this->_getAccessToken();
-
-            $url = sprintf(
-                '%s/%s/purchases/subscriptionsv2/tokens/%s',
-                self::API_BASE,
-                $this->packageName,
-                $token
-            );
-            $response = Http::withToken($accessToken)->get($url);
-
-            if (!$response->successful()) {
-                Log::warning('GooglePlayIapService::refreshFromGoogle: API call failed', [
-                    'status' => $response->status(),
-                ]);
+            $result = $this->_verifySubscription($this->_getAccessToken(), $token, $productId);
+            if (!$result || empty($result['expiryTimeMillis'])) {
                 return false;
             }
-
-            $data = $response->json();
-            $subscriptionState = $data['subscriptionState'] ?? 'SUBSCRIPTION_STATE_PENDING';
-            $lineItem = $data['lineItems'][0] ?? [];
-            $expiryTime = $lineItem['expiryTime'] ?? null;
-            $expiresAt = $expiryTime ? \Carbon\Carbon::parse($expiryTime) : null;
-
-            $currentStatus = $subscription->status;
-            $newStatus = match ($subscriptionState) {
-                'SUBSCRIPTION_STATE_ACTIVE' => 'active',
-                'SUBSCRIPTION_STATE_IN_GRACE_PERIOD' => 'grace_period',
-                'SUBSCRIPTION_STATE_CANCELED' => 'cancelled',
-                'SUBSCRIPTION_STATE_EXPIRED' => 'expired',
-                default => $currentStatus,
-            };
-
-            // Guard: don't downgrade from active unless Google's expiresAt is
-            // genuinely in the past. (Same logic as AppleIapService::applyRawStatus.)
-            $finalStatus = $newStatus;
-            if ($currentStatus === 'active' && in_array($newStatus, ['expired', 'cancelled'], true)) {
-                if ($expiresAt && now()->isAfter($expiresAt)) {
-                    $finalStatus = $newStatus;
-                } else {
-                    $finalStatus = 'active';
-                    Log::warning('GooglePlayIapService::refreshFromGoogle: ignoring downgrade', [
-                        'subscription_id' => $subscription->id,
-                        'google_state' => $subscriptionState,
-                    ]);
+            $incomingEnd = \Carbon\Carbon::instance(GoogleSubscriptionSnapshot::milliseconds(
+                (int) $result['expiryTimeMillis'], config('app.timezone', 'UTC')
+            ));
+            return DB::transaction(function () use ($subscription, $token, $productId, $previousOrder, $previousEnd, $previousStatus, $result, $incomingEnd) {
+                $current = Subscription::whereKey($subscription->id)->lockForUpdate()->first();
+                if (!$current || $current->google_purchase_token !== $token
+                    || $current->google_product_id !== $productId
+                    || $current->google_order_id !== $previousOrder
+                    || $current->expires_at?->getTimestamp() !== $previousEnd
+                    || $current->status !== $previousStatus) {
+                    // A purchase/refresh completed while the network call was in flight.
+                    return false;
                 }
-            }
-
-            $update = [
-                'status' => $finalStatus,
-                'last_verified_at' => now(),
-            ];
-            if ($expiresAt) {
-                // Guard: if Google returns an expiry in the past but says
-                // active, keep the local expiry to avoid instant expire.
-                if ($finalStatus === 'active' && $expiresAt->isPast()) {
-                    Log::warning('GooglePlayIapService::refreshFromGoogle: ignoring past expiry for active sub', [
-                        'subscription_id' => $subscription->id,
-                        'google_expires_at' => $expiresAt->toIso8601String(),
-                        'local_expires_at' => $subscription->expires_at?->toIso8601String(),
-                    ]);
-                } else {
-                    $update['current_period_end'] = $expiresAt;
-                    $update['expires_at'] = $expiresAt;
-                }
-            }
-            $subscription->update($update);
-
-            Log::info('GooglePlayIapService::refreshFromGoogle: updated', [
-                'subscription_id' => $subscription->id,
-                'status' => $finalStatus,
-                'expires_at' => $expiresAt?->toIso8601String(),
-            ]);
-            return true;
+                $decision = GoogleSubscriptionSnapshot::resolve(
+                    $result['subscriptionState'], $incomingEnd, now(),
+                    $current->expires_at, $current->status,
+                    !empty($result['orderId']) && $result['orderId'] === $current->google_order_id,
+                );
+                $end = \Carbon\Carbon::instance($decision['expires_at'])->setTimezone(config('app.timezone', 'UTC'));
+                $current->update([
+                    'status' => $decision['status'],
+                    'current_period_end' => $end,
+                    'expires_at' => $end,
+                    'grace_period_expires_at' => $decision['status'] === 'grace_period' ? $end : null,
+                    'google_order_id' => $result['orderId'] ?? $current->google_order_id,
+                    'latest_transaction_id' => $result['orderId'] ?? $current->latest_transaction_id,
+                    'auto_renew' => (bool) $result['autoRenewing'],
+                    'metadata' => array_merge($current->metadata ?? [], ['auto_renewing' => (bool) $result['autoRenewing']]),
+                    'last_verified_at' => now(),
+                ]);
+                Log::info('GooglePlayIapService: refreshed subscription', [
+                    'subscription_id' => $current->id,
+                    'status' => $current->status,
+                    'google_expires_at' => $incomingEnd->toIso8601String(),
+                    'saved_expires_at' => $current->expires_at?->toIso8601String(),
+                ]);
+                return true;
+            });
         } catch (\Exception $e) {
-            Log::error('GooglePlayIapService::refreshFromGoogle: exception', [
-                'error' => $e->getMessage(),
-            ]);
+            Log::warning('GooglePlayIapService: refresh deferred', ['error' => $e->getMessage()]);
             return false;
         }
     }
@@ -577,7 +467,7 @@ class GooglePlayIapService
             $purchaseToken
         );
 
-        $response = Http::withToken($accessToken)->get($url);
+        $response = Http::withToken($accessToken)->timeout(10)->get($url);
 
         if ($response->successful()) {
             $data = $response->json();
@@ -588,24 +478,31 @@ class GooglePlayIapService
 
             $paymentState = match ($subscriptionState) {
                 'SUBSCRIPTION_STATE_ACTIVE',
-                'SUBSCRIPTION_STATE_IN_GRACE_PERIOD' => 1,
+                'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
+                'SUBSCRIPTION_STATE_CANCELED' => 1,
 
                 'SUBSCRIPTION_STATE_PENDING' => 0,
 
                 default => 0,
             };
 
-            $lineItem = $data['lineItems'][0] ?? [];
+            $matches = array_values(array_filter($data['lineItems'] ?? [],
+                fn ($item) => ($item['productId'] ?? null) === $subscriptionId));
+            if (count($matches) !== 1) {
+                Log::warning('GooglePlayIapService: receipt product mismatch or ambiguous line items');
+                return null;
+            }
+            $lineItem = $matches[0];
             $expiryTime = $lineItem['expiryTime'] ?? null;
             $startTime = $data['startTime'] ?? null;
-            $latestOrderId = $data['latestOrderId'] ?? null;
+            $latestOrderId = $lineItem['latestSuccessfulOrderId'] ?? $data['latestOrderId'] ?? null;
             $autoRenewing = $lineItem['autoRenewingPlan']['autoRenewEnabled'] ?? false;
 
             return [
                 'paymentState' => $paymentState,
                 'orderId' => $latestOrderId,
-                'expiryTimeMillis' => $expiryTime ? \Carbon\Carbon::parse($expiryTime)->valueOf() : null,
-                'startTimeMillis' => $startTime ? \Carbon\Carbon::parse($startTime)->valueOf() : null,
+                'expiryTimeMillis' => $expiryTime ? \Carbon\Carbon::instance(GoogleSubscriptionSnapshot::timestamp($expiryTime, config('app.timezone', 'UTC')))->valueOf() : null,
+                'startTimeMillis' => $startTime ? \Carbon\Carbon::instance(GoogleSubscriptionSnapshot::timestamp($startTime, config('app.timezone', 'UTC')))->valueOf() : null,
                 'autoRenewing' => $autoRenewing,
                 'subscriptionState' => $subscriptionState,
                 'productId' => $lineItem['productId'] ?? $subscriptionId,

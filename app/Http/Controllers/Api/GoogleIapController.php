@@ -45,8 +45,8 @@ class GoogleIapController extends Controller
             $result = $this->googlePlay->verifyReceipt(
                 receiptData: $request->receipt_data,
                 googleProductId: $request->product_id,
-                planSlug: $request->plan_slug,
-                billingType: $request->billing_type,
+                planSlug: (string) $request->input('plan_slug', ''),
+                billingType: (string) $request->input('billing_type', ''),
                 transactionId: $request->transaction_id,
                 isRestored: $request->boolean('is_restored', false),
                 user: $user,
@@ -67,8 +67,8 @@ class GoogleIapController extends Controller
             // Activate subscription
             $subscription = $this->googlePlay->activateSubscription(
                 user: $user,
-                planSlug: $request->plan_slug,
-                billingType: $request->billing_type,
+                planSlug: $result['plan_slug'],
+                billingType: $result['billing_type'],
                 googleProductId: $result['google_product_id'],
                 orderId: $result['order_id'],
                 expiresAt: $result['expires_at'],
@@ -76,13 +76,14 @@ class GoogleIapController extends Controller
                 autoRenewing: $result['auto_renewing'] ?? true,
                 isRestored: $request->boolean('is_restored', false),
                 purchaseToken: $request->receipt_data,
+                subscriptionState: $result['subscription_state'],
             );
 
             \Log::info('GoogleIapController@verify: subscription activated', [
                 'subscription_id' => $subscription->id,
                 'household_id' => $subscription->household_id,
                 'plan' => $request->plan_slug,
-                'expires_at' => $result['expires_at']?->toIso8601String(),
+                'expires_at' => $subscription->expires_at?->toIso8601String(),
             ]);
 
             return response()->json([
