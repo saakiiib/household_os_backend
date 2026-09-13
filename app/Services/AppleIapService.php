@@ -698,6 +698,31 @@ class AppleIapService
                 ),
             ];
 
+            // If Apple has now activated the product that was previously stored
+            // as a pending plan change, clear the pending metadata immediately.
+            // This is important for deferred changes (for example Complete Annual
+            // -> Essentials Monthly): once the new transaction/product is live,
+            // the admin UI and Restore Purchases flow must not keep showing the
+            // same product as both "Current" and "Next".
+            $metadata = is_array($data['metadata']) ? $data['metadata'] : [];
+            $pendingProductId = $metadata['pending_product_id'] ?? null;
+
+            if ($pendingProductId && $pendingProductId === $productId) {
+                unset(
+                    $metadata['pending_product_id'],
+                    $metadata['pending_plan'],
+                    $metadata['pending_billing_period'],
+                    $metadata['pending_change_effective_at'],
+                );
+
+                Log::info('AppleIapService: cleared pending plan because Apple activated the pending product', [
+                    'household_id' => $household->id,
+                    'product_id' => $productId,
+                ]);
+            }
+
+            $data['metadata'] = $metadata;
+
             if ($existingSubscription) {
                 Log::info('AppleIapService: updating existing subscription', [
                     'subscription_id' => $existingSubscription->id,
@@ -985,6 +1010,26 @@ class AppleIapService
         $currentProductId = $tx['productId'] ?? $subscription->product_id;
         $nextProductId = $renewalInfo['autoRenewProductId'] ?? null;
         $metadata = is_array($subscription->metadata) ? $subscription->metadata : [];
+
+        // Defensive cleanup for a completed deferred plan change. If the product
+        // Apple now reports as current is the same product that HouseholdOS had
+        // stored as pending, the change has taken effect and pending state must
+        // disappear before any UI reads this subscription.
+        $storedPendingProductId = $metadata['pending_product_id'] ?? null;
+        if ($storedPendingProductId && $storedPendingProductId === $currentProductId) {
+            unset(
+                $metadata['pending_product_id'],
+                $metadata['pending_plan'],
+                $metadata['pending_billing_period'],
+                $metadata['pending_change_effective_at'],
+            );
+
+            Log::info('AppleIapService::applyRawStatus: cleared completed pending plan change', [
+                'subscription_id' => $subscription->id,
+                'product_id' => $currentProductId,
+            ]);
+        }
+
         if ($nextProductId && $nextProductId !== $currentProductId) {
             $nextCfg = $this->productConfig($nextProductId);
             $metadata['pending_product_id'] = $nextProductId;
