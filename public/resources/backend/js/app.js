@@ -754,7 +754,8 @@
     b(),
     (t = document.getElementById("search-close-options")),
     (o = document.getElementById("search-dropdown")),
-    (n = document.getElementById("search-options")).addEventListener("focus", function () {
+    (n = document.getElementById("search-options")) &&
+    (n.addEventListener("focus", function () {
       0 < n.value.length
         ? (o.classList.add("show"), t.classList.remove("d-none"))
         : (o.classList.remove("show"), t.classList.add("d-none"));
@@ -773,7 +774,7 @@
     }),
     t.addEventListener("click", function () {
       (n.value = ""), o.classList.remove("show"), t.classList.add("d-none");
-    }),
+    })),
     document.addEventListener("fullscreenchange", T),
     document.addEventListener("webkitfullscreenchange", T),
     document.addEventListener("mozfullscreenchange", T),
