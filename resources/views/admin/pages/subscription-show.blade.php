@@ -33,15 +33,43 @@
                                 N/A
                             @endif
                         </p>
-                        <p class="mb-2"><strong>Plan:</strong> {{ $subscription->plan->name ?? 'N/A' }}</p>
+                        <p class="mb-2"><strong>Current Plan:</strong> {{ $subscription->plan->name ?? 'N/A' }}</p>
+                        <p class="mb-2"><strong>Billing:</strong> {{ $subscription->billing_period ? ucfirst($subscription->billing_period === 'annual' ? 'Annual' : $subscription->billing_period) : '-' }}</p>
+                        @if($subscription->product_id)
+                            <p class="mb-2"><strong>Current Product:</strong> <code>{{ $subscription->product_id }}</code></p>
+                        @endif
+                        @php
+                            $metadata = is_array($subscription->metadata) ? $subscription->metadata : [];
+                            $pendingPlan = $metadata['pending_plan'] ?? null;
+                            $pendingBilling = $metadata['pending_billing_period'] ?? null;
+                            $pendingProduct = $metadata['pending_product_id'] ?? null;
+                            $pendingAt = $metadata['pending_change_effective_at'] ?? null;
+                        @endphp
+                        @if($pendingPlan || $pendingProduct)
+                            <div class="alert alert-info py-2 px-3 mt-3 mb-3">
+                                <div><strong>Next Plan:</strong> {{ $pendingPlan ? ucfirst($pendingPlan) : 'Pending change' }}@if($pendingBilling) — {{ ucfirst($pendingBilling === 'annual' ? 'Annual' : $pendingBilling) }}@endif</div>
+                                @if($pendingProduct)<div class="mt-1"><strong>Next Product:</strong> <code>{{ $pendingProduct }}</code></div>@endif
+                                @if($pendingAt)<div class="mt-1"><strong>Expected From:</strong> {{ $pendingAt }}</div>@endif
+                                <small class="text-muted">The current plan remains authoritative until the store activates the next product.</small>
+                            </div>
+                        @endif
                         <p class="mb-2"><strong>Status:</strong>
                             @php $cls = match($subscription->status) { 'active' => 'success', 'trial' => 'info', 'expired' => 'danger', default => 'warning' }; @endphp
                             <span class="badge badge-soft-{{ $cls }}">{{ ucfirst($subscription->status) }}</span>
                         </p>
                         <p class="mb-2"><strong>Period Start:</strong> {{ $subscription->current_period_start ? $subscription->current_period_start->format('d M Y') : '-' }}</p>
                         <p class="mb-2"><strong>Period End:</strong> {{ $subscription->current_period_end ? $subscription->current_period_end->format('d M Y H:i:s') : '-' }}</p>
+                        @if($subscription->provider)
+                            <p class="mb-2"><strong>Provider:</strong> {{ ucfirst(str_replace('_', ' ', $subscription->provider)) }}</p>
+                        @endif
                         @if($subscription->environment)
                             <p class="mb-2"><strong>Environment:</strong> {{ $subscription->environment }}</p>
+                        @endif
+                        @if($subscription->grace_period_expires_at)
+                            <p class="mb-2"><strong>Grace Period Ends:</strong> {{ $subscription->grace_period_expires_at->format('d M Y H:i:s') }}</p>
+                        @endif
+                        @if($subscription->original_transaction_id)
+                            <p class="mb-2"><strong>Original Transaction ID:</strong> <code>{{ $subscription->original_transaction_id }}</code></p>
                         @endif
                         @if($subscription->latest_transaction_id)
                             <p class="mb-2"><strong>Latest Transaction ID:</strong> <code>{{ $subscription->latest_transaction_id }}</code></p>

@@ -89,7 +89,9 @@
                                 <tr>
                                     <th>User</th>
                                     <th>Household</th>
-                                    <th>Plan</th>
+                                    <th>Current Plan</th>
+                                    <th>Billing</th>
+                                    <th>Next Plan</th>
                                     <th>Status</th>
                                     <th>Period End</th>
                                     <th>Action</th>
@@ -116,11 +118,13 @@ $(function () {
             { data: 'user_link', name: 'user_id', orderable: false, searchable: false },
             { data: 'household_link', name: 'household_id', orderable: false, searchable: false },
             { data: 'plan_name', name: 'subscription_plan_id', orderable: false, searchable: false },
+            { data: 'billing_label', name: 'billing_period', orderable: false, searchable: false },
+            { data: 'next_plan', name: 'metadata', orderable: false, searchable: false },
             { data: 'status_badge', name: 'status', orderable: false, searchable: false },
             { data: 'period_end_fmt', name: 'current_period_end', orderable: true, searchable: false },
             { data: 'action', name: 'action', orderable: false, searchable: false }
         ],
-        order: [[4, 'desc']],
+        order: [[6, 'desc']],
         language: { emptyTable: 'No records found', zeroRecords: 'No matching subscriptions' }
     });
 });
