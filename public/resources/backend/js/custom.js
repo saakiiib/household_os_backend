@@ -144,15 +144,15 @@ $(document).on('click', '.remove-file', function() {
     });
 });
 
-let deleteUrl = '';
-let tableSelector = null;
-let deleteMethod = 'DELETE';
+var deleteUrl = '';
+var tableSelector = null;
+var deleteMethod = 'DELETE';
 
 $(document).on('click', '.deleteBtn', function() {
     deleteUrl = $(this).data('delete-url');
     tableSelector = $(this).data('table') || null;
     deleteMethod = $(this).data('method') || 'DELETE';
-    $('#confirmModal').modal('show');
+    $('#confirmDeleteModal').modal('show');
 });
 
 $('#confirmDeleteBtn').on('click', function() {
@@ -167,14 +167,14 @@ $('#confirmDeleteBtn').on('click', function() {
         success: function(response, textStatus, xhr) {
             if (xhr.status === 200) {
                 showSuccess(response.message ?? 'Deleted successfully!');
-                $('#confirmModal').modal('hide');
+                $('#confirmDeleteModal').modal('hide');
                 reloadTable(tableSelector);
             }
         },
         error: function(xhr) {
             let message = xhr.responseJSON?.message ?? "Something went wrong!";
             showError(message);
-            $('#confirmModal').modal('hide');
+            $('#confirmDeleteModal').modal('hide');
         }
     });
 });

@@ -24,7 +24,11 @@ class AdminController extends Controller
                         return '<span class="text-muted">—</span>';
                     }
 
-                    return '<button type="button" class="btn btn-sm btn-soft-danger remove-admin" data-id="' . $u->id . '">Remove</button>';
+                    return '<button type="button" class="btn btn-sm btn-soft-primary edit-btn" '
+                        . 'data-url="' . route('admin.admins.show', $u->id) . '">Edit</button> '
+                        . '<button type="button" class="btn btn-sm btn-soft-danger deleteBtn" '
+                        . 'data-delete-url="' . route('admin.admins.destroy', $u->id) . '" '
+                        . 'data-table="#admins-table">Remove</button>';
                 })
                 ->rawColumns(['status', 'action'])
                 ->make(true);
@@ -35,13 +39,26 @@ class AdminController extends Controller
         return view('admin.pages.admins', compact('totalAdmins'));
     }
 
+    public function show(User $user)
+    {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'email' => $user->email,
+            ],
+        ]);
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:8',
+            'password' => 'required|string|min:6',
         ]);
 
         User::create([
@@ -63,6 +80,38 @@ class AdminController extends Controller
 
         return redirect()->route('admin.admins.index')
             ->with('success', 'Admin created. They can now log in with the email and password.');
+    }
+
+    public function update(Request $request, User $user)
+    {
+        $data = $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $user->id,
+            'password' => 'nullable|string|min:6',
+        ]);
+
+        $updateData = [
+            'first_name' => $data['first_name'],
+            'last_name' => $data['last_name'],
+            'email' => $data['email'],
+        ];
+
+        if (!empty($data['password'])) {
+            $updateData['password'] = $data['password'];
+        }
+
+        $user->update($updateData);
+
+        if ($request->ajax() || $request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Admin updated successfully.',
+            ]);
+        }
+
+        return redirect()->route('admin.admins.index')
+            ->with('success', 'Admin updated successfully.');
     }
 
     public function destroy(User $user)

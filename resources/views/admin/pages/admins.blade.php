@@ -2,32 +2,77 @@
 @section('title', 'Admins')
 
 @section('content')
-<div class="container-fluid">
 
-    <div class="row">
-        <div class="col-12">
-            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                <h4 class="mb-sm-0 font-size-18">Admins</h4>
-                <div class="page-title-right d-flex gap-2 align-items-center">
-                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAdminModal">
-                        <i class="ri-user-add-line"></i> Add new admin
-                    </button>
-                </div>
-            </div>
+    <div class="container-fluid mb-3">
+        <div class="d-flex justify-content-end">
+            <button class="btn btn-primary" id="newBtn">
+                <i class="ri-add-line me-1"></i> Add New Admin
+            </button>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-xl-3 col-md-6">
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-flex">
-                        <div class="flex-grow-1">
-                            <p class="text-muted mb-2 text-truncate">Total Admins</p>
-                            <h4 class="mb-0">{{ number_format($totalAdmins) }}</h4>
+    <div class="container-fluid" id="addThisFormContainer" style="display:none;">
+        <div class="row justify-content-center">
+            <div class="col-xl-10">
+                <div class="card">
+                    <div class="card-header align-items-center d-flex">
+                        <h4 class="card-title mb-0 flex-grow-1" id="cardTitle">Add New Admin</h4>
+                    </div>
+                    <div class="card-body">
+                        <input type="hidden" id="adminId">
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">First Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="first_name" placeholder="First name" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="last_name" placeholder="Last name" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Email <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="email" placeholder="Email address" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Password <span class="text-danger" id="passwordRequired">*</span></label>
+                                <input type="password" class="form-control" id="password" placeholder="Min 6 characters" minlength="6">
+                                <small class="text-muted" id="passwordHint">Minimum 6 characters.</small>
+                            </div>
                         </div>
-                        <div class="avatar-sm">
-                            <span class="avatar-title bg-soft-primary text-primary rounded fs-3"><i class="ri-shield-user-line"></i></span>
+
+                    </div>
+                    <div class="card-footer text-end">
+                        <button class="btn btn-primary" id="saveBtn">
+                            <i class="ri-save-line me-1"></i> Save
+                        </button>
+                        <button class="btn btn-light ms-1" id="cancelBtn">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid" id="contentContainer">
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-header align-items-center d-flex">
+                        <h4 class="card-title mb-0 flex-grow-1">All Admins</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table id="admins-table" class="table table-bordered table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Email</th>
+                                        <th>Added</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -35,81 +80,18 @@
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-lg-12">
-            <div class="card">
-                <div class="card-header align-items-center d-flex">
-                    <h4 class="card-title mb-0 flex-grow-1">All Admins</h4>
-                    <span class="badge bg-soft-primary fs-12">{{ number_format($totalAdmins) }} total</span>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table id="admins-table" class="table table-hover table-centered align-middle mb-0" style="width:100%">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Added</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<div class="modal fade" id="addAdminModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form method="POST" action="{{ route('admin.admins.store') }}" id="addAdminForm">
-                @csrf
-                <div class="modal-header">
-                    <h5 class="modal-title">Add new admin</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">First name</label>
-                        <input type="text" name="first_name" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Last name</label>
-                        <input type="text" name="last_name" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input type="email" name="email" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Password</label>
-                        <input type="password" name="password" class="form-control" required minlength="8">
-                        <small class="text-muted">Minimum 8 characters. They can log in with this email and password.</small>
-                    </div>
-                    @if($errors->any())
-                        <div class="alert alert-danger py-2 mb-0">{{ $errors->first() }}</div>
-                    @endif
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-link text-decoration-none" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Create admin</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 @endsection
 
 @section('script')
 <script>
-$(function () {
-    const table = $('#admins-table').DataTable({
+$(document).ready(function () {
+
+    $.ajaxSetup({ headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') } });
+
+    var table = $('#admins-table').DataTable({
         processing: true,
         serverSide: true,
+        pageLength: 25,
         ajax: "{{ route('admin.admins.index') }}",
         columns: [
             { data: 'name', name: 'first_name', orderable: true, searchable: true },
@@ -122,64 +104,85 @@ $(function () {
         language: { emptyTable: 'No admins found', zeroRecords: 'No matching admins' }
     });
 
-    // Remove admin (AJAX, no full reload)
-    $(document).on('click', '.remove-admin', function () {
-        const btn = $(this);
-        const id = btn.data('id');
-        if (!confirm('Remove admin access for this person?')) return;
+    function clearForm() {
+        $('#adminId').val('');
+        $('#first_name, #last_name, #email, #password').val('');
+        $('#passwordRequired').show();
+        $('#passwordHint').text('Minimum 6 characters.');
+        $('#cardTitle').text('Add New Admin');
+    }
 
-        btn.prop('disabled', true);
-        fetch("{{ route('admin.admins.destroy', '__ID__') }}".replace('__ID__', id), {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            },
-            body: new URLSearchParams({ _method: 'DELETE' })
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                Swal.fire({ icon: 'success', title: data.message, timer: 2500, showConfirmButton: false });
-                table.ajax.reload(null, false);
-            } else {
-                Swal.fire({ icon: 'error', title: data.message || 'Action failed', timer: 3000, showConfirmButton: false });
-            }
-        })
-        .catch(() => Swal.fire({ icon: 'error', title: 'Action failed', timer: 3000, showConfirmButton: false }))
-        .finally(() => btn.prop('disabled', false));
+    $('#newBtn').on('click', function () {
+        clearForm();
+        $('#addThisFormContainer').slideDown(300);
+        $('#newBtn').hide();
     });
 
-    // Add new admin (AJAX, no full reload)
-    $('#addAdminForm').on('submit', function (e) {
-        e.preventDefault();
-        const form = this;
+    $('#cancelBtn').on('click', function () {
+        $('#addThisFormContainer').slideUp(200);
+        $('#newBtn').show();
+        clearForm();
+    });
 
-        fetch("{{ route('admin.admins.store') }}", {
-            method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
+    $('#saveBtn').on('click', function () {
+        var id = $('#adminId').val();
+        var url = id ? '/admin/admins/' + id : '{{ route("admin.admins.store") }}';
+
+        var fd = new FormData();
+        fd.append('first_name', $('#first_name').val());
+        fd.append('last_name', $('#last_name').val());
+        fd.append('email', $('#email').val());
+
+        var password = $('#password').val();
+        if (password) {
+            fd.append('password', password);
+        }
+
+        if (id) {
+            fd.append('_method', 'PUT');
+        }
+
+        $.ajax({
+            url: url, method: 'POST', data: fd, contentType: false, processData: false,
+            success: function (res) {
+                if (res.success) {
+                    showSuccess(res.message);
+                    $('#addThisFormContainer').slideUp(200);
+                    $('#newBtn').show();
+                    clearForm();
+                    reloadTable('#admins-table');
+                }
             },
-            body: new FormData(form)
-        })
-        .then(async r => {
-            if (!r.ok) throw await r.json();
-            return r.json();
-        })
-        .then(data => {
-            Swal.fire({ icon: 'success', title: data.message, timer: 2500, showConfirmButton: false });
-            form.reset();
-            bootstrap.Modal.getInstance(document.getElementById('addAdminModal')).hide();
-            table.ajax.reload(null, false);
-        })
-        .catch(err => {
-            const msg = err && err.errors ? Object.values(err.errors).flat().join(' ') : 'Please check the form.';
-            Swal.fire({ icon: 'error', title: msg, timer: 4000, showConfirmButton: false });
+            error: function (xhr) {
+                let msg = xhr.responseJSON?.message ?? xhr.responseJSON?.errors?.[Object.keys(xhr.responseJSON.errors)[0]]?.[0] ?? 'Something went wrong.';
+                showError(msg);
+            }
         });
     });
+
+    $(document).on('click', '.edit-btn', function () {
+        var url = $(this).data('url');
+        $.get(url, function (res) {
+            if (!res.success) return showError('Could not load admin.');
+            var d = res.data;
+            clearForm();
+
+            $('#adminId').val(d.id);
+            $('#first_name').val(d.first_name);
+            $('#last_name').val(d.last_name);
+            $('#email').val(d.email);
+            $('#passwordRequired').hide();
+            $('#passwordHint').text('Leave blank to keep current password.');
+
+            $('#cardTitle').text('Edit Admin');
+            $('#addThisFormContainer').slideDown(300);
+            $('#newBtn').hide();
+            pageTop();
+        });
+    });
+
+    // Delete handled by global .deleteBtn handler in custom.js
+
 });
 </script>
 @endsection
