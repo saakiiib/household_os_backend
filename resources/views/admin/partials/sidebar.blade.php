@@ -1,93 +1,167 @@
 <style>
-    :root {
-        --section-overview: #42A5F5;
-        --section-people: #66BB6A;
-        --section-operations: #FFA726;
-        --section-billing: #AB47BC;
-        --section-support-comms: #26C6DA;
-        --section-content: #EC407A;
-        --section-security: #EF5350;
-        --section-insights: #26A69A;
-        --section-platform: #FFCA28;
-    }
-    .menu-section-header .nav-link {
-        padding: 10px 16px;
-        font-size: 12px;
-        font-weight: 800;
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
-        color: #E0E0E0 !important;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-top: 12px;
-        border-left: 3px solid transparent;
-        transition: all 0.2s;
-    }
-    .menu-section-header[data-section="overview"] .nav-link { border-left-color: var(--section-overview); }
-    .menu-section-header[data-section="people"] .nav-link { border-left-color: var(--section-people); }
-    .menu-section-header[data-section="operations"] .nav-link { border-left-color: var(--section-operations); }
-    .menu-section-header[data-section="billing"] .nav-link { border-left-color: var(--section-billing); }
-    .menu-section-header[data-section="support-comms"] .nav-link { border-left-color: var(--section-support-comms); }
-    .menu-section-header[data-section="content"] .nav-link { border-left-color: var(--section-content); }
-    .menu-section-header[data-section="security"] .nav-link { border-left-color: var(--section-security); }
-    .menu-section-header[data-section="insights"] .nav-link { border-left-color: var(--section-insights); }
-    .menu-section-header[data-section="platform"] .nav-link { border-left-color: var(--section-platform); }
+    /* ═══════════════════════════════════════════════════
+       APPLE-STYLE GLASS SIDEBAR
+       Soft frost · fine borders · spacious · refined
+       ═══════════════════════════════════════════════════ */
 
-    .menu-section-header .nav-link:hover {
-        background: rgba(255,255,255,0.06) !important;
+    html[data-layout="vertical"] .app-menu.navbar-menu {
+        background: rgba(246, 246, 248, 0.72) !important;
+        backdrop-filter: blur(40px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(40px) saturate(180%) !important;
+        border-right: 0.5px solid rgba(0, 0, 0, 0.08) !important;
+        box-shadow: 1px 0 0 rgba(255, 255, 255, 0.5) inset !important;
     }
-    .menu-section-header .section-arrow {
-        font-size: 14px;
-        width: 20px;
-        text-align: center;
-        transition: transform 0.2s;
-    }
-    .menu-section-header.section-closed .section-arrow {
-        transform: rotate(-90deg);
-    }
-    .menu-section-header.section-open .section-arrow {
-        transform: rotate(0deg);
-    }
-    .section-items .nav-link {
-        padding-left: 3rem !important;
-        margin-left: 8px;
-        color: #B0B0B0 !important;
-        border-left: 2px solid transparent;
-        transition: all 0.2s;
-    }
-    .section-items .nav-link:hover {
-        color: #FFFFFF !important;
-        background: rgba(255,255,255,0.05) !important;
-    }
-    .section-items .nav-link.active {
-        color: #FFFFFF !important;
-        font-weight: 600;
-    }
-    .section-items[data-section-items="overview"] .nav-link.active { background: rgba(66,165,245,0.15); border-left-color: var(--section-overview); color: var(--section-overview) !important; }
-    .section-items[data-section-items="people"] .nav-link.active { background: rgba(102,187,106,0.15); border-left-color: var(--section-people); color: var(--section-people) !important; }
-    .section-items[data-section-items="operations"] .nav-link.active { background: rgba(255,167,38,0.15); border-left-color: var(--section-operations); color: var(--section-operations) !important; }
-    .section-items[data-section-items="billing"] .nav-link.active { background: rgba(171,71,188,0.15); border-left-color: var(--section-billing); color: var(--section-billing) !important; }
-    .section-items[data-section-items="support-comms"] .nav-link.active { background: rgba(38,198,218,0.15); border-left-color: var(--section-support-comms); color: var(--section-support-comms) !important; }
-    .section-items[data-section-items="content"] .nav-link.active { background: rgba(236,64,122,0.15); border-left-color: var(--section-content); color: var(--section-content) !important; }
-    .section-items[data-section-items="security"] .nav-link.active { background: rgba(239,83,80,0.15); border-left-color: var(--section-security); color: var(--section-security) !important; }
-    .section-items[data-section-items="insights"] .nav-link.active { background: rgba(38,166,154,0.15); border-left-color: var(--section-insights); color: var(--section-insights) !important; }
-    .section-items[data-section-items="platform"] .nav-link.active { background: rgba(255,202,40,0.15); border-left-color: var(--section-platform); color: var(--section-platform) !important; }
 
-    .section-items[data-section-items="overview"] .nav-link:hover { border-left-color: var(--section-overview); }
-    .section-items[data-section-items="people"] .nav-link:hover { border-left-color: var(--section-people); }
-    .section-items[data-section-items="operations"] .nav-link:hover { border-left-color: var(--section-operations); }
-    .section-items[data-section-items="billing"] .nav-link:hover { border-left-color: var(--section-billing); }
-    .section-items[data-section-items="support-comms"] .nav-link:hover { border-left-color: var(--section-support-comms); }
-    .section-items[data-section-items="content"] .nav-link:hover { border-left-color: var(--section-content); }
-    .section-items[data-section-items="security"] .nav-link:hover { border-left-color: var(--section-security); }
-    .section-items[data-section-items="insights"] .nav-link:hover { border-left-color: var(--section-insights); }
-    .section-items[data-section-items="platform"] .nav-link:hover { border-left-color: var(--section-platform); }
+    html[data-layout="vertical"] .app-menu .navbar-brand-box {
+        background: rgba(255, 255, 255, 0.45) !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+        border-bottom: 0.5px solid rgba(0, 0, 0, 0.06) !important;
+        padding: 24px 20px !important;
+    }
 
-    html[data-sidebar-size="sm"] .menu-section-header,
-    html[data-sidebar-size="sm"] .section-items {
+    .navbar-menu .navbar-nav .nav-link::before {
         display: none !important;
     }
+
+    /* Spacious section rhythm */
+    .menu-section-header {
+        margin-top: 26px;
+        margin-bottom: 6px;
+    }
+    .menu-section-header:first-of-type {
+        margin-top: 16px;
+    }
+
+    /* Soft system-style accents (Apple-ish) */
+    .menu-section-header[data-section="overview"]       { --section-accent: #007AFF; --section-soft: rgba(0, 122, 255, 0.10); --section-mid: rgba(0, 122, 255, 0.18); }
+    .menu-section-header[data-section="people"]         { --section-accent: #34C759; --section-soft: rgba(52, 199, 89, 0.10); --section-mid: rgba(52, 199, 89, 0.18); }
+    .menu-section-header[data-section="operations"]     { --section-accent: #FF9500; --section-soft: rgba(255, 149, 0, 0.10); --section-mid: rgba(255, 149, 0, 0.18); }
+    .menu-section-header[data-section="billing"]        { --section-accent: #AF52DE; --section-soft: rgba(175, 82, 222, 0.10); --section-mid: rgba(175, 82, 222, 0.18); }
+    .menu-section-header[data-section="support-comms"]  { --section-accent: #5AC8FA; --section-soft: rgba(90, 200, 250, 0.12); --section-mid: rgba(90, 200, 250, 0.20); }
+    .menu-section-header[data-section="content"]        { --section-accent: #FF2D55; --section-soft: rgba(255, 45, 85, 0.10); --section-mid: rgba(255, 45, 85, 0.18); }
+    .menu-section-header[data-section="security"]       { --section-accent: #FF3B30; --section-soft: rgba(255, 59, 48, 0.10); --section-mid: rgba(255, 59, 48, 0.18); }
+    .menu-section-header[data-section="insights"]       { --section-accent: #30B0C7; --section-soft: rgba(48, 176, 199, 0.10); --section-mid: rgba(48, 176, 199, 0.18); }
+    .menu-section-header[data-section="platform"]       { --section-accent: #8E8E93; --section-soft: rgba(142, 142, 147, 0.12); --section-mid: rgba(142, 142, 147, 0.20); }
+
+    .section-items[data-section-items="overview"]       { --section-accent: #007AFF; --section-soft: rgba(0, 122, 255, 0.10); --section-mid: rgba(0, 122, 255, 0.18); }
+    .section-items[data-section-items="people"]         { --section-accent: #34C759; --section-soft: rgba(52, 199, 89, 0.10); --section-mid: rgba(52, 199, 89, 0.18); }
+    .section-items[data-section-items="operations"]     { --section-accent: #FF9500; --section-soft: rgba(255, 149, 0, 0.10); --section-mid: rgba(255, 149, 0, 0.18); }
+    .section-items[data-section-items="billing"]        { --section-accent: #AF52DE; --section-soft: rgba(175, 82, 222, 0.10); --section-mid: rgba(175, 82, 222, 0.18); }
+    .section-items[data-section-items="support-comms"]  { --section-accent: #5AC8FA; --section-soft: rgba(90, 200, 250, 0.12); --section-mid: rgba(90, 200, 250, 0.20); }
+    .section-items[data-section-items="content"]        { --section-accent: #FF2D55; --section-soft: rgba(255, 45, 85, 0.10); --section-mid: rgba(255, 45, 85, 0.18); }
+    .section-items[data-section-items="security"]       { --section-accent: #FF3B30; --section-soft: rgba(255, 59, 48, 0.10); --section-mid: rgba(255, 59, 48, 0.18); }
+    .section-items[data-section-items="insights"]       { --section-accent: #0D9488; --section-soft: rgba(13, 148, 136, 0.10); --section-mid: rgba(13, 148, 136, 0.18); }
+    .section-items[data-section-items="platform"]       { --section-accent: #8E8E93; --section-soft: rgba(142, 142, 147, 0.12); --section-mid: rgba(142, 142, 147, 0.20); }
+
+    /* Section headers — quiet glass labels */
+    .navbar-menu .navbar-nav .menu-section-header .nav-link {
+        padding: 10px 16px !important;
+        margin: 0 14px !important;
+        color: #6B7280 !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 10px !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.8px !important;
+        text-transform: uppercase;
+        transition: color 0.2s ease, background 0.2s ease;
+    }
+    .navbar-menu .navbar-nav .menu-section-header .nav-link:hover {
+        color: var(--section-accent) !important;
+        background: var(--section-soft) !important;
+    }
+    .navbar-menu .navbar-nav .menu-section-header .section-arrow {
+        color: #9CA3AF !important;
+    }
+    .navbar-menu .navbar-nav .menu-section-header:hover .section-arrow {
+        color: var(--section-accent) !important;
+    }
+    .menu-section-header .section-arrow {
+        font-size: 15px;
+        width: 20px;
+        text-align: center;
+        transition: transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), color 0.2s;
+    }
+    .menu-section-header.section-closed .section-arrow { transform: rotate(-90deg); }
+    .menu-section-header.section-open .section-arrow { transform: rotate(0deg); }
+
+    /* Menu items — larger, soft glass */
+    .navbar-menu .navbar-nav .section-items .nav-link {
+        padding: 12px 16px !important;
+        margin: 2px 12px !important;
+        color: #1C1C1E !important;
+        background: transparent !important;
+        border-radius: 12px !important;
+        font-size: 15px !important;
+        font-weight: 450 !important;
+        letter-spacing: -0.015em;
+        border: 0.5px solid transparent !important;
+        transition: all 0.22s cubic-bezier(0.25, 0.1, 0.25, 1);
+        position: relative;
+    }
+    .navbar-menu .navbar-nav .section-items .nav-link i {
+        color: #8E8E93 !important;
+        font-size: 18px !important;
+        margin-right: 14px !important;
+        width: 22px;
+        text-align: center;
+        transition: color 0.2s ease;
+    }
+    .navbar-menu .navbar-nav .section-items .nav-link:hover {
+        color: #1C1C1E !important;
+        background: rgba(255, 255, 255, 0.55) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border-color: rgba(0, 0, 0, 0.04) !important;
+        box-shadow:
+            0 1px 3px rgba(0, 0, 0, 0.04),
+            inset 0 0.5px 0 rgba(255, 255, 255, 0.8) !important;
+    }
+    .navbar-menu .navbar-nav .section-items .nav-link:hover i {
+        color: var(--section-accent) !important;
+    }
+
+    /* Active — Apple-style filled glass + accent */
+    .navbar-menu .navbar-nav .section-items .nav-link.active {
+        color: var(--section-accent) !important;
+        background: var(--section-soft) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        border-color: var(--section-mid) !important;
+        font-weight: 560 !important;
+        box-shadow:
+            0 1px 4px rgba(0, 0, 0, 0.04),
+            inset 0 0.5px 0 rgba(255, 255, 255, 0.7) !important;
+    }
+    .navbar-menu .navbar-nav .section-items .nav-link.active i {
+        color: var(--section-accent) !important;
+    }
+
+    /* Scrollbar — ultra thin, Apple-like */
+    #scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+    }
+    #scrollbar::-webkit-scrollbar {
+        width: 5px;
+    }
+    #scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    #scrollbar::-webkit-scrollbar-thumb {
+        background: rgba(0, 0, 0, 0.12);
+        border-radius: 10px;
+    }
+    #scrollbar::-webkit-scrollbar-thumb:hover {
+        background: rgba(0, 0, 0, 0.22);
+    }
+
+    /* Collapsed */
+    html[data-sidebar-size="sm"] .menu-section-header,
+    html[data-sidebar-size="sm"] .section-items { display: none !important; }
 </style>
 
 @php
@@ -159,7 +233,6 @@
                 {{-- OVERVIEW --}}
                 <li class="nav-item menu-section-header {{ $activeSection === 'overview' ? 'section-open' : 'section-closed' }}" data-section="overview">
                     <a href="javascript:void(0);" class="nav-link">
-                        <span class="section-dot" style="background: var(--section-overview);"></span>
                         <i class="ri-arrow-down-s-line section-arrow"></i>
                         <span>Overview</span>
                     </a>
@@ -171,7 +244,6 @@
                 {{-- PEOPLE --}}
                 <li class="nav-item menu-section-header {{ $activeSection === 'people' ? 'section-open' : 'section-closed' }}" data-section="people">
                     <a href="javascript:void(0);" class="nav-link">
-                        <span class="section-dot" style="background: var(--section-people);"></span>
                         <i class="ri-arrow-down-s-line section-arrow"></i>
                         <span>People</span>
                     </a>
@@ -184,7 +256,6 @@
                 {{-- OPERATIONS --}}
                 <li class="nav-item menu-section-header {{ $activeSection === 'operations' ? 'section-open' : 'section-closed' }}" data-section="operations">
                     <a href="javascript:void(0);" class="nav-link">
-                        <span class="section-dot" style="background: var(--section-operations);"></span>
                         <i class="ri-arrow-down-s-line section-arrow"></i>
                         <span>Operations</span>
                     </a>
