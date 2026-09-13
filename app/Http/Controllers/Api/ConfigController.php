@@ -4,14 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
-use Illuminate\Support\Facades\Storage;
 
 class ConfigController extends Controller
 {
     public function index()
     {
         $logo = Setting::get('logo');
-        $logoUrl = $logo ? Storage::disk('public')->url($logo) : null;
+        $logoUrl = $logo ? asset($logo) : null;
 
         return response()->json([
             'google_web_client_id' => config('services.google.client_id'),

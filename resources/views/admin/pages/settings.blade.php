@@ -65,7 +65,7 @@
                     <div class="card-body">
                         <div class="text-center mb-3">
                             @if(!empty($settings['logo']))
-                                <img src="{{ Storage::disk('public')->url($settings['logo']) }}" alt="Logo" id="logoPreview" class="img-fluid rounded" style="max-height: 80px;">
+                                <img src="{{ asset($settings['logo']) }}" alt="Logo" id="logoPreview" class="img-fluid rounded" style="max-height: 80px;">
                             @else
                                 <img src="{{ asset('logo.png') }}" alt="Logo" id="logoPreview" class="img-fluid rounded" style="max-height: 80px;">
                             @endif
@@ -83,7 +83,7 @@
                     <div class="card-body">
                         <div class="text-center mb-3">
                             @if(!empty($settings['favicon']))
-                                <img src="{{ Storage::disk('public')->url($settings['favicon']) }}" alt="Favicon" id="faviconPreview" class="img-fluid rounded" style="max-height: 64px;">
+                                <img src="{{ asset($settings['favicon']) }}" alt="Favicon" id="faviconPreview" class="img-fluid rounded" style="max-height: 64px;">
                             @else
                                 <div class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 64px; height: 64px; margin: 0 auto;">
                                     <i class="ri-global-line fs-2 text-muted"></i>

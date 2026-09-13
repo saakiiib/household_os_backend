@@ -49,14 +49,14 @@
     <div class="navbar-brand-box">
         <a href="{{ route('admin.dashboard') }}" class="logo logo-dark">
             @if($settingLogo)
-                <span class="logo-lg"><img src="{{ Storage::disk('public')->url($settingLogo) }}" alt="{{ $companyName }}" height="32"></span>
+                <span class="logo-lg"><img src="{{ asset($settingLogo) }}" alt="{{ $companyName }}" height="32"></span>
             @else
                 <span class="logo-lg"><b>{{ $companyName }}</b></span>
             @endif
         </a>
         <a href="{{ route('admin.dashboard') }}" class="logo logo-light">
             @if($settingLogo)
-                <span class="logo-lg"><img src="{{ Storage::disk('public')->url($settingLogo) }}" alt="{{ $companyName }}" height="32"></span>
+                <span class="logo-lg"><img src="{{ asset($settingLogo) }}" alt="{{ $companyName }}" height="32"></span>
             @else
                 <span class="logo-lg"><b>{{ $companyName }}</b></span>
             @endif

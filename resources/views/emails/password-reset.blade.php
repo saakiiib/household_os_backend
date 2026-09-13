@@ -1,7 +1,7 @@
 @php
   $companyName = \App\Models\Setting::get('company_name', 'Household OS');
   $logo = \App\Models\Setting::get('logo');
-  $logoUrl = $logo ? \Illuminate\Support\Facades\Storage::disk('public')->url($logo) : asset('logo.png');
+  $logoUrl = $logo ? asset($logo) : asset('logo.png');
   $tagline = \App\Models\Setting::get('footer_tagline', 'The operating system for modern family life.');
   $disclaimer = \App\Models\Setting::get('footer_disclaimer', 'This is an automated service email. Please do not share verification or reset codes with anyone.');
 @endphp

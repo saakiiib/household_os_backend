@@ -12,7 +12,7 @@
     <title>@yield('title') - {{ $companyName }} Admin</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     @if($favicon)
-        <link rel="icon" type="image/x-icon" href="{{ Storage::disk('public')->url($favicon) }}">
+        <link rel="icon" type="image/x-icon" href="{{ asset($favicon) }}">
     @endif
 
     <script src="{{ asset('resources/backend/js/layout.js') }}"></script>

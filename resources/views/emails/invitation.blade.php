@@ -1,7 +1,7 @@
 @php
   $companyName = \App\Models\Setting::get('company_name', 'Household OS');
   $logo = \App\Models\Setting::get('logo');
-  $logoUrl = $logo ? \Illuminate\Support\Facades\Storage::disk('public')->url($logo) : asset('logo.png');
+  $logoUrl = $logo ? asset($logo) : asset('logo.png');
   $appStoreUrl = \App\Models\Setting::get('app_store_url', 'https://apps.apple.com/app/household-os/id000000000');
   $playStoreUrl = \App\Models\Setting::get('play_store_url', 'https://play.google.com/store/apps/details?id=com.householdos.app');
   $tagline = \App\Models\Setting::get('footer_tagline', 'The operating system for modern family life.');
