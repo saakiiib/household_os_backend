@@ -75,7 +75,7 @@ class SmartSuggestionController extends Controller
             })
             ->orderBy('due_date')
             ->limit(100)
-            ->get(['id', 'title', 'category', 'description', 'due_date', 'visibility', 'created_by_user_id']);
+            ->get(['id', 'title', 'category', 'description', 'due_date', 'important_date_type', 'visibility', 'created_by_user_id']);
 
         $states = SmartSuggestionState::where('household_id', $householdId)
             ->where('user_id', $userId)
@@ -85,6 +85,14 @@ class SmartSuggestionController extends Controller
         $today = Carbon::today();
 
         foreach ($documents as $document) {
+            // Some extracted dates are useful document facts but are not renewal
+            // dates (for example a pension retirement date). Explicitly typed
+            // non-renewal dates must never generate a Create Renewal suggestion.
+            $dateType = $document->important_date_type;
+            if (in_array($dateType, ['retirement', 'review', 'other'], true)) {
+                continue;
+            }
+
             $due = Carbon::parse($document->due_date)->startOfDay();
             $days = (int) $today->diffInDays($due, false);
 
