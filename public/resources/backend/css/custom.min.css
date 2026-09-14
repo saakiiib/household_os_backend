@@ -173,100 +173,11 @@
     transform: translateY(-1px) !important;
 }
 
-/* === PREMIUM SIDEBAR === */
-.navbar-menu {
-    background: #CCFBF1 !important;
-    border-right: 1px solid rgba(13, 148, 136, 0.2) !important;
-}
+/* === PREMIUM SIDEBAR (glass handled in sidebar.blade.php) === */
 
+/* Sidebar nav-link transitions (glass handled in sidebar.blade.php) */
 .navbar-menu .navbar-nav .nav-link {
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    position: relative;
-    border-radius: 10px !important;
-    margin: 2px 8px !important;
-    padding: 11px 14px !important;
-    color: #0F172A !important;
-    font-weight: 600;
-}
-
-.navbar-menu .navbar-nav .nav-link::after {
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.navbar-menu .navbar-nav .nav-link.active {
-    background: #0F766E !important;
-    font-weight: 700 !important;
-    color: #FFFFFF !important;
-    box-shadow: 0 4px 14px rgba(15, 118, 110, 0.45) !important;
-}
-
-.navbar-menu .navbar-nav .nav-link.active i {
-    color: #FFFFFF !important;
-}
-
-.navbar-menu .navbar-nav .nav-link:hover {
-    background: #99F6E4 !important;
-    color: #134E4A !important;
-}
-
-.navbar-menu .navbar-nav .nav-link:hover i {
-    color: #0F766E !important;
-}
-
-.navbar-menu .navbar-nav .nav-link i {
-    font-size: 18px !important;
-    transition: color 0.2s ease !important;
-    color: #0F766E !important;
-}
-
-/* Sidebar Submenu */
-.navbar-menu .navbar-nav .nav-sm .nav-link {
-    font-size: 0.8125rem !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    margin: 1px 8px !important;
-    padding: 9px 14px 9px 28px !important;
-    color: #0F172A !important;
-}
-
-.navbar-menu .navbar-nav .nav-sm .nav-link i {
-    font-size: 16px !important;
-    color: #0F766E !important;
-}
-
-.navbar-menu .navbar-nav .nav-sm .nav-link.active {
-    background: #0F766E !important;
-    color: #FFFFFF !important;
-    font-weight: 700 !important;
-    box-shadow: 0 3px 12px rgba(15, 118, 110, 0.4) !important;
-}
-
-.navbar-menu .navbar-nav .nav-sm .nav-link.active i {
-    color: #FFFFFF !important;
-}
-
-.navbar-menu .navbar-nav .nav-sm .nav-link:hover {
-    background: #99F6E4 !important;
-    color: #134E4A !important;
-}
-
-.navbar-menu .navbar-nav .nav-sm .nav-link:hover i {
-    color: #0F766E !important;
-}
-
-.navbar-menu .navbar-nav .nav-sm .nav-link.active:before {
-    background-color: #FFFFFF !important;
-    transform: translateY(-50%) scale(1.2) !important;
-}
-
-.navbar-menu .navbar-nav .nav-sm .nav-link:hover:before {
-    background-color: #0F766E !important;
-    transform: translateY(-50%) scale(1.1) !important;
-}
-
-/* Sidebar brand box */
-.navbar-brand-box {
-    background: #B2F5EA !important;
-    border-bottom: 2px solid rgba(13, 148, 136, 0.25) !important;
 }
 
 /* === PREMIUM NAVBAR === */
@@ -288,56 +199,7 @@
     transform: scale(0.95);
 }
 
-/* Override Velzon dark sidebar nav-link colors */
-[data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link {
-    color: #0F172A !important;
-    border-radius: 10px !important;
-    margin: 2px 8px !important;
-    padding: 11px 14px !important;
-    font-weight: 600;
-}
-
-[data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link.active {
-    color: #FFFFFF !important;
-    background: #0F766E !important;
-    font-weight: 700 !important;
-    box-shadow: 0 4px 14px rgba(15, 118, 110, 0.45) !important;
-}
-
-[data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link.active i {
-    color: #FFFFFF !important;
-}
-
-[data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link:hover {
-    color: #134E4A !important;
-    background: #99F6E4 !important;
-}
-
-[data-layout=vertical][data-sidebar=dark] .navbar-nav .nav-link:hover i {
-    color: #0F766E !important;
-}
-
-[data-layout=vertical][data-sidebar=dark] .navbar-menu .nav-sm .nav-link {
-    font-size: 0.8125rem !important;
-    margin: 1px 8px !important;
-    padding: 9px 14px 9px 28px !important;
-    color: #0F172A !important;
-}
-
-[data-layout=vertical][data-sidebar=dark] .navbar-menu .nav-sm .nav-link.active {
-    color: #FFFFFF !important;
-    background: #0F766E !important;
-    font-weight: 700 !important;
-}
-
-[data-layout=vertical][data-sidebar=dark] .navbar-menu .nav-sm .nav-link:hover {
-    color: #134E4A !important;
-    background: #99F6E4 !important;
-}
-
-[data-layout=vertical][data-sidebar=dark] .navbar-menu {
-    background: #CCFBF1 !important;
-}
+/* Override Velzon dark sidebar (glass handled in sidebar.blade.php) */
 
 /* Profile User */
 .header-profile-user {
@@ -975,8 +837,8 @@ select option {
 
 /* === PREMIUM ELEGANT SPACING === */
 .container-fluid {
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
 }
 
 /* === PREMIUM CARD STAT === */
@@ -1119,4 +981,372 @@ a {
     background: #0D9488 !important;
     color: #fff !important;
     border-radius: 8px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   APPLE-STYLE GLASSMORPHISM — GLOBAL ADMIN
+   Frosted glass · blur · transparency · premium depth
+   ═══════════════════════════════════════════════════════════ */
+
+/* --- Body: gradient background so glass has something to blur --- */
+body {
+    background: linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 25%, #fef3c7 50%, #fce7f3 75%, #ede9fe 100%) !important;
+    background-attachment: fixed !important;
+}
+
+#layout-wrapper {
+    background: transparent !important;
+}
+
+/* --- Main Content: frosted white glass --- */
+.main-content {
+    background: rgba(255, 255, 255, 0.55) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    min-height: 100vh;
+}
+
+/* Master layout <section class="page-content"> — top padding for fixed header */
+.page-content {
+    padding: 76px 1rem 1.5rem 1rem !important;
+    background: transparent !important;
+}
+
+/* Nested .page-content inside blades — remove duplicate padding */
+.page-content .page-content {
+    padding: 0 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+}
+
+/* Page title box — reduce top gap */
+.page-title-box {
+    margin: -8px -1rem 0.75rem -1rem !important;
+    padding: 8px 1rem !important;
+}
+
+.page-title-box h4 {
+    font-size: 1.1rem !important;
+    margin-bottom: 2px !important;
+}
+
+.page-title-box .text-muted {
+    font-size: 0.8rem !important;
+}
+
+/* --- Glass Header / Topbar --- */
+#page-topbar {
+    background: rgba(255, 255, 255, 0.65) !important;
+    backdrop-filter: blur(28px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
+    box-shadow: 0 1px 16px rgba(15, 23, 42, 0.06) !important;
+    padding: 0 1.25rem !important;
+}
+
+/* --- Admin User Glass Pill --- */
+.topbar-user-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px 6px 8px !important;
+    background: rgba(255, 255, 255, 0.6) !important;
+    backdrop-filter: blur(12px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(150%) !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    border-radius: 50px !important;
+    box-shadow: 0 1px 6px rgba(15, 23, 42, 0.06) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    cursor: pointer;
+}
+
+.topbar-user-pill:hover {
+    background: rgba(255, 255, 255, 0.85) !important;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, 0.1) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.topbar-user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0D9488, #14B8A6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 16px;
+    flex-shrink: 0;
+    box-shadow: 0 1px 4px rgba(13, 148, 136, 0.3);
+}
+
+.topbar-user-pill .user-name-text {
+    color: #1E293B;
+    font-size: 0.8125rem;
+    letter-spacing: -0.01em;
+}
+
+.topbar-user-pill .ri-arrow-down-s-line {
+    color: #64748B;
+    transition: transform 0.2s ease;
+}
+
+.topbar-user-pill[aria-expanded="true"] .ri-arrow-down-s-line {
+    transform: rotate(180deg);
+}
+
+/* --- Glass Cards --- */
+.card {
+    background: rgba(255, 255, 255, 0.65) !important;
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.6) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.03) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    margin-bottom: 1rem !important;
+}
+
+.card:hover {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+    border-color: rgba(255, 255, 255, 0.6) !important;
+    background: rgba(255, 255, 255, 0.4) !important;
+}
+
+.card-header {
+    background: rgba(255, 255, 255, 0.25) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.35) !important;
+    border-radius: 14px 14px 0 0 !important;
+    padding: 0.75rem 1.15rem !important;
+}
+
+.card-body {
+    padding: 1.15rem !important;
+    background: transparent !important;
+}
+
+/* --- Glass Modals --- */
+.modal-content {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(32px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.6) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 32px 80px -12px rgba(15, 23, 42, 0.18), 0 12px 32px -8px rgba(15, 23, 42, 0.1) !important;
+}
+
+.modal-backdrop.show {
+    backdrop-filter: blur(12px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(150%) !important;
+    background-color: rgba(15, 23, 42, 0.3) !important;
+}
+
+/* --- Glass Dropdowns --- */
+.dropdown-menu {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    box-shadow: 0 16px 48px -8px rgba(15, 23, 42, 0.14), 0 4px 12px -4px rgba(15, 23, 42, 0.06) !important;
+    border-radius: 14px !important;
+    padding: 6px !important;
+}
+
+/* --- Glass Form Inputs --- */
+.form-control,
+.form-select,
+textarea.form-control {
+    background: rgba(255, 255, 255, 0.7) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border: 1.5px solid rgba(0, 0, 0, 0.08) !important;
+    border-radius: 10px !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.form-control:focus,
+.form-select:focus,
+textarea.form-control:focus {
+    background: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-color: rgba(13, 148, 136, 0.4) !important;
+    box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.08), 0 1px 4px rgba(15, 23, 42, 0.04) !important;
+}
+
+.input-group-text {
+    background: rgba(248, 250, 252, 0.8) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border: 1.5px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+/* --- Glass DataTable Headers --- */
+table.dataTable thead th {
+    background: rgba(248, 250, 252, 0.75) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+.dataTables_wrapper .dataTables_length select,
+.dataTables_wrapper .dataTables_filter input {
+    background: rgba(255, 255, 255, 0.7) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+}
+
+/* --- Glass Offcanvas --- */
+.offcanvas {
+    background: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(28px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(160%) !important;
+}
+
+/* --- Glass Accordion --- */
+.accordion-item {
+    background: rgba(255, 255, 255, 0.65) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+.accordion-button {
+    background: rgba(255, 255, 255, 0.5) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+}
+
+.accordion-button:not(.collapsed) {
+    background: rgba(13, 148, 136, 0.04) !important;
+}
+
+/* --- Glass Tabs --- */
+.nav-tabs .nav-link {
+    background: rgba(255, 255, 255, 0.5) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border: 1px solid rgba(0, 0, 0, 0.04) !important;
+}
+
+.nav-tabs .nav-link.active {
+    background: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-bottom: 2px solid #0D9488 !important;
+}
+
+/* --- Glass Toasts --- */
+.toast {
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(20px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    box-shadow: 0 12px 40px -4px rgba(15, 23, 42, 0.12) !important;
+}
+
+/* --- Glass Popovers --- */
+.popover {
+    background: rgba(255, 255, 255, 0.92) !important;
+    backdrop-filter: blur(20px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+}
+
+/* --- Glass List Group --- */
+.list-group-item {
+    background: rgba(255, 255, 255, 0.6) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* --- Glass Alerts --- */
+.alert {
+    background: rgba(255, 255, 255, 0.7) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+}
+
+/* --- Glass Badges --- */
+.badge {
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
+}
+
+/* --- Glass Pagination --- */
+.page-link {
+    background: rgba(255, 255, 255, 0.6) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border: 1px solid rgba(0, 0, 0, 0.04) !important;
+}
+
+.page-item.active .page-link {
+    background: rgba(13, 148, 136, 0.9) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+}
+
+/* --- Glass SweetAlert2 --- */
+.swal2-popup {
+    background: rgba(255, 255, 255, 0.92) !important;
+    backdrop-filter: blur(32px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.6) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 32px 80px -12px rgba(15, 23, 42, 0.18) !important;
+}
+
+.swal2-backdrop {
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    background-color: rgba(15, 23, 42, 0.3) !important;
+}
+
+/* --- Glass Select2 Dropdown --- */
+.select2-dropdown {
+    background: rgba(255, 255, 255, 0.92) !important;
+    backdrop-filter: blur(20px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    box-shadow: 0 12px 40px -4px rgba(15, 23, 42, 0.14) !important;
+}
+
+.select2-selection {
+    background: rgba(255, 255, 255, 0.7) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+}
+
+/* --- Glass Summernote --- */
+.note-editor.note-frame {
+    background: rgba(255, 255, 255, 0.7) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+}
+
+.note-toolbar {
+    background: rgba(248, 250, 252, 0.75) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+}
+
+/* --- Glass Back-to-Top Button --- */
+#back-to-top {
+    background: rgba(13, 148, 136, 0.88) !important;
+    backdrop-filter: blur(12px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(160%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* --- Glass Footer --- */
+.footer {
+    background: rgba(255, 255, 255, 0.5) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-top: 1px solid rgba(0, 0, 0, 0.04) !important;
 }

@@ -56,7 +56,7 @@
 
     /* Section headers — compact, colored, glass pills */
     .navbar-menu .navbar-nav .menu-section-header .nav-link {
-        padding: 8px 12px !important;
+        padding: 10px 12px !important;
         margin: 0 10px !important;
         color: var(--section-accent) !important;
         background: rgba(255, 255, 255, 0.7) !important;
@@ -65,11 +65,12 @@
         border: 1px solid var(--section-mid) !important;
         box-shadow: 0 1px 4px var(--section-glow) !important;
         border-radius: 9px !important;
-        font-size: 10.5px !important;
+        font-size: 11px !important;
         font-weight: 750 !important;
         letter-spacing: 1.1px !important;
         text-transform: uppercase;
         transition: all 0.18s ease;
+        line-height: 1.4 !important;
     }
     .navbar-menu .navbar-nav .menu-section-header .nav-link:hover {
         background: var(--section-soft) !important;
@@ -79,10 +80,11 @@
         color: var(--section-accent) !important;
     }
     .menu-section-header .section-arrow {
-        font-size: 13px;
-        width: 16px;
+        font-size: 14px;
+        width: 18px;
         text-align: center;
         transition: transform 0.22s ease;
+        flex-shrink: 0;
     }
     .menu-section-header.section-closed .section-arrow { transform: rotate(-90deg); }
     .menu-section-header.section-open .section-arrow { transform: rotate(0deg); }
@@ -159,6 +161,11 @@
 
     html[data-sidebar-size="sm"] .menu-section-header,
     html[data-sidebar-size="sm"] .section-items { display: none !important; }
+
+    /* Bottom scroll space in sidebar */
+    .navbar-menu #scrollbar .navbar-nav {
+        padding-bottom: 120px !important;
+    }
 </style>
 
 @php
@@ -194,6 +201,7 @@
                 @php
                     $routeName = Route::currentRouteName();
                     $cur = match (true) {
+                        $routeName === 'admin.dashboard' => 'dashboard',
                         str_starts_with($routeName, 'admin.users') => 'users',
                         str_starts_with($routeName, 'admin.households') => 'households',
                         str_starts_with($routeName, 'admin.tasks') => 'tasks',

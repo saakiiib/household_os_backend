@@ -14,12 +14,14 @@
 
             <div class="d-flex align-items-center">
                 <div class="dropdown ms-sm-3 header-item topbar-user">
-                    <button type="button" class="btn" id="page-header-user-dropdown" data-bs-toggle="dropdown"
+                    <button type="button" class="btn topbar-user-pill" id="page-header-user-dropdown" data-bs-toggle="dropdown"
                         aria-haspopup="true" aria-expanded="false">
-                        <span class="d-flex align-items-center">
-                            <span class="text-start ms-xl-2">
-                                <span class="d-none d-xl-inline-block ms-1 fw-medium user-name-text">{{ auth()->user()->name }}</span>
+                        <span class="d-flex align-items-center gap-2">
+                            <span class="topbar-user-avatar">
+                                <i class="ri-user-3-line"></i>
                             </span>
+                            <span class="d-none d-xl-inline-block fw-semibold user-name-text">{{ auth()->user()->name ?? 'Admin' }}</span>
+                            <i class="ri-arrow-down-s-line fs-14"></i>
                         </span>
                     </button>
                     <div class="dropdown-menu dropdown-menu-end">

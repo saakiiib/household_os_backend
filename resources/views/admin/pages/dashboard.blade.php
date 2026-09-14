@@ -2,21 +2,7 @@
 @section('title', 'Executive Dashboard')
 
 @section('content')
-<div class="page-content">
-    <div class="container-fluid">
-
-        <div class="row">
-            <div class="col-12">
-                <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                    <div>
-                        <h4 class="mb-sm-0 font-size-18">Executive Dashboard</h4>
-                        <p class="text-muted mb-0">A real-time view of platform growth, revenue, engagement, operations and risk.</p>
-                    </div>
-                    <div class="page-title-right d-flex gap-2 align-items-center">
-                    </div>
-                </div>
-            </div>
-        </div>
+<div class="container-fluid">
 
         <div class="row">
             @php
@@ -230,7 +216,6 @@
         </div>
 
     </div>
-</div>
 @endsection
 
 @section('script')
