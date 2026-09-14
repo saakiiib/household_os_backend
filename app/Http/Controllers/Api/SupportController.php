@@ -61,6 +61,7 @@ class SupportController extends Controller
             'category' => ['required', Rule::in(array_keys(SupportTicket::CATEGORIES))],
             'subject' => ['required', 'string', 'max:120'],
             'message' => ['required', 'string', 'max:4000'],
+            'diagnostic_context' => ['nullable', 'string', 'max:4000'],
             'attachments' => ['nullable', 'array', 'max:' . self::MAX_ATTACHMENTS],
             'attachments.*' => ['file', 'mimes:jpg,jpeg,png,webp,heic,heif', 'max:' . self::MAX_ATTACHMENT_KB],
         ]);
@@ -69,6 +70,18 @@ class SupportController extends Controller
         $household = $user->activeHousehold();
 
         $ticket = DB::transaction(function () use ($request, $validated, $user, $household) {
+            $diagnostics = null;
+            if (!empty($validated['diagnostic_context'])) {
+                $decoded = json_decode($validated['diagnostic_context'], true);
+                if (is_array($decoded)) {
+                    // Allow only non-sensitive, presentation-safe keys from the app.
+                    $diagnostics = collect($decoded)
+                        ->only(['platform', 'os_version', 'app_version', 'build_number', 'category'])
+                        ->map(fn($value) => mb_substr((string) $value, 0, 120))
+                        ->all();
+                }
+            }
+
             $ticket = SupportTicket::create([
                 'user_id' => $user->id,
                 'household_id' => $household?->id,
@@ -76,6 +89,7 @@ class SupportController extends Controller
                 'subject' => trim($validated['subject']),
                 'status' => 'open',
                 'priority' => 'normal',
+                'diagnostic_context' => $diagnostics,
                 'last_message_at' => now(),
                 'user_last_read_at' => now(),
             ]);

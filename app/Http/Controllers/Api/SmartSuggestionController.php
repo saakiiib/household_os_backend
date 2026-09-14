@@ -7,6 +7,7 @@ use App\Models\Document;
 use App\Models\HouseholdMember;
 use App\Models\Renewal;
 use App\Models\SmartSuggestionState;
+use App\Models\Task;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -154,6 +155,70 @@ class SmartSuggestionController extends Controller
                     'category' => $document->category,
                     'due_date' => $due->format('Y-m-d'),
                     'notes' => 'Created from HouseholdOS Smart Suggestions based on the important date saved with "' . $document->title . '".',
+                ],
+            ];
+        }
+
+        // Phase 3: help the relevant renewal owner/assignee prepare before a due date.
+        // This is confirm-first: the suggestion opens a pre-filled Task form; it never
+        // creates a task automatically.
+        $renewals = Renewal::query()
+            ->where('household_id', $householdId)
+            ->where('status', 'pending')
+            ->whereNotNull('due_date')
+            ->where(function ($q) use ($userId) {
+                $q->where('created_by_user_id', $userId)
+                    ->orWhere('assigned_user_id', $userId);
+            })
+            ->whereDate('due_date', '>=', $today->copy()->addDay()->toDateString())
+            ->whereDate('due_date', '<=', $today->copy()->addDays(30)->toDateString())
+            ->orderBy('due_date')
+            ->limit(50)
+            ->get(['id', 'title', 'category', 'due_date', 'created_by_user_id', 'assigned_user_id']);
+
+        foreach ($renewals as $renewal) {
+            $due = Carbon::parse($renewal->due_date)->startOfDay();
+            $days = (int) $today->diffInDays($due, false);
+            $key = 'renewal_prepare_task:' . $renewal->id . ':' . $due->format('Y-m-d');
+
+            if (!$includeHidden && in_array($states[$key] ?? null, ['dismissed', 'accepted'], true)) {
+                continue;
+            }
+
+            $taskDue = $due->copy()->subDays(7);
+            if ($taskDue->lte($today)) {
+                $taskDue = $today->copy()->addDay();
+            }
+
+            $taskTitle = 'Prepare for ' . $renewal->title;
+            $alreadyHasTask = Task::query()
+                ->where('household_id', $householdId)
+                ->where('status', '!=', 'completed')
+                ->whereRaw('LOWER(TRIM(title)) = ?', [Str::lower(trim($taskTitle))])
+                ->whereDate('due_date', $taskDue->format('Y-m-d'))
+                ->exists();
+            if ($alreadyHasTask) {
+                continue;
+            }
+
+            $suggestions[] = [
+                'key' => $key,
+                'type' => 'renewal_prepare_task',
+                'source_type' => 'renewal',
+                'source_id' => $renewal->id,
+                'message' => $renewal->title . ' is due in ' . $days . ' day' . ($days === 1 ? '' : 's') . '. Create a preparation task?',
+                'action_label' => 'Create task',
+                'tone' => $days <= 7 ? 'urgent' : 'upcoming',
+                'priority' => $days <= 7 ? 9 : 7,
+                'document' => [
+                    // Keep the common sorting shape without exposing unrelated document data.
+                    'due_date' => $due->format('Y-m-d'),
+                ],
+                'prefill' => [
+                    'title' => $taskTitle,
+                    'description' => 'Prepare for the upcoming ' . $renewal->title . ' renewal.',
+                    'due_date' => $taskDue->format('Y-m-d'),
+                    'notes' => 'Created from HouseholdOS Smart Suggestions for renewal #' . $renewal->id . ' due ' . $due->format('j M Y') . '.',
                 ],
             ];
         }

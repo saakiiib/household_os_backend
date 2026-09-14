@@ -15,6 +15,7 @@ class SupportTicket extends Model
         'admin_last_read_at' => 'datetime',
         'resolved_at' => 'datetime',
         'closed_at' => 'datetime',
+        'diagnostic_context' => 'array',
     ];
 
     public const CATEGORIES = [

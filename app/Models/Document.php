@@ -13,6 +13,8 @@ class Document extends Model
 
     protected $casts = [
         'due_date' => 'date',
+        'document_date' => 'date',
+        'metadata_confirmed_at' => 'datetime',
     ];
 
     public function household()

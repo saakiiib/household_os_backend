@@ -66,6 +66,8 @@ class DocumentsController extends Controller
                 $q->where('title', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%")
                   ->orWhere('category', 'like', "%{$search}%")
+                  ->orWhere('provider', 'like', "%{$search}%")
+                  ->orWhere('reference_number', 'like', "%{$search}%")
                   ->orWhereHas('createdBy', function ($uq) use ($search) {
                       $uq->where('first_name', 'like', "%{$search}%")
                         ->orWhere('last_name', 'like', "%{$search}%");
@@ -118,6 +120,10 @@ class DocumentsController extends Controller
             'category'          => 'required|string|max:100',
             'description'       => 'nullable|string|max:2000',
             'due_date'          => 'nullable|date',
+            'provider'           => 'nullable|string|max:255',
+            'reference_number'   => 'nullable|string|max:255',
+            'document_date'      => 'nullable|date',
+            'metadata_source'    => 'nullable|in:manual,on_device_ocr_confirmed',
             'visibility'        => 'required|in:all,specific',
             'allowed_user_ids'  => 'required_if:visibility,specific|array|min:1',
             'allowed_user_ids.*' => [
@@ -200,6 +206,11 @@ class DocumentsController extends Controller
                 'category'           => $request->category,
                 'description'        => $request->description,
                 'due_date'           => $request->due_date,
+                'provider'            => $request->provider,
+                'reference_number'    => $request->reference_number,
+                'document_date'       => $request->document_date,
+                'metadata_source'     => $request->input('metadata_source', 'manual'),
+                'metadata_confirmed_at' => $request->input('metadata_source') === 'on_device_ocr_confirmed' ? now() : null,
                 'visibility'         => $visibility,
             ]);
 
@@ -292,6 +303,10 @@ class DocumentsController extends Controller
             'category'          => 'sometimes|string|max:100',
             'description'       => 'nullable|string|max:2000',
             'due_date'          => 'nullable|date',
+            'provider'           => 'nullable|string|max:255',
+            'reference_number'   => 'nullable|string|max:255',
+            'document_date'      => 'nullable|date',
+            'metadata_source'    => 'nullable|in:manual,on_device_ocr_confirmed',
             'visibility'        => 'sometimes|in:all,specific',
             'allowed_user_ids'  => [
                 Rule::requiredIf(fn() => $request->input('visibility') === 'specific'),
@@ -322,7 +337,10 @@ class DocumentsController extends Controller
             ], 422);
         }
 
-        $updateData = $request->only(['title', 'category', 'description', 'due_date']);
+        $updateData = $request->only(['title', 'category', 'description', 'due_date', 'provider', 'reference_number', 'document_date', 'metadata_source']);
+        if ($request->has('metadata_source')) {
+            $updateData['metadata_confirmed_at'] = $request->input('metadata_source') === 'on_device_ocr_confirmed' ? now() : null;
+        }
 
         if ($request->has('visibility')) {
             $updateData['visibility'] = $request->visibility;
@@ -586,6 +604,11 @@ class DocumentsController extends Controller
             'category'          => $doc->category,
             'description'       => $doc->description,
             'due_date'          => $doc->due_date instanceof \DateTimeInterface ? $doc->due_date->format('Y-m-d') : $doc->due_date,
+            'provider'           => $doc->provider,
+            'reference_number'   => $doc->reference_number,
+            'document_date'      => $doc->document_date instanceof \DateTimeInterface ? $doc->document_date->format('Y-m-d') : $doc->document_date,
+            'metadata_source'    => $doc->metadata_source,
+            'metadata_confirmed_at' => $doc->metadata_confirmed_at?->toIso8601String(),
             'visibility'        => $doc->visibility,
             'allowed_user_ids'  => $doc->allowedMembers->pluck('id'),
             'created_by_user_id'=> $doc->created_by_user_id,

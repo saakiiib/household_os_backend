@@ -38,6 +38,14 @@
                 <p><strong>Customer:</strong><br>{{ $ticket->user?->name ?? 'Deleted user' }}<br><span class="text-muted">{{ $ticket->user?->email }}</span></p>
                 <p><strong>Household:</strong><br>{{ $ticket->household?->name ?? '—' }}</p>
                 <p><strong>Category:</strong><br>{{ \App\Models\SupportTicket::CATEGORIES[$ticket->category] ?? $ticket->category }}</p>
+                @if(!empty($ticket->diagnostic_context))
+                <div class="alert alert-light border py-2 px-3">
+                    <strong>App diagnostics (customer approved)</strong><br>
+                    @foreach($ticket->diagnostic_context as $key => $value)
+                        <small><span class="text-muted">{{ ucwords(str_replace('_',' ', $key)) }}:</span> {{ $value }}</small><br>
+                    @endforeach
+                </div>
+                @endif
                 <p><strong>Created:</strong><br>{{ $ticket->created_at->format('d M Y H:i') }}</p>
                 <p><strong>Live status:</strong><br><span id="supportLiveStatus">{{ \App\Models\SupportTicket::STATUSES[$ticket->status] ?? $ticket->status }}</span></p>
                 <hr>
