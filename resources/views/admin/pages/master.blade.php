@@ -15,11 +15,11 @@
         <link rel="icon" type="image/x-icon" href="{{ asset($favicon) }}">
     @endif
 
-    <script src="{{ asset('resources/backend/js/layout.js') }}"></script>
-    <link href="{{ asset('resources/backend/css/bootstrap.min.css') }}" rel="stylesheet" type="text/css" />
-    <link href="{{ asset('resources/backend/css/icons.min.css') }}" rel="stylesheet" type="text/css" />
-    <link href="{{ asset('resources/backend/css/app.min.css') }}" rel="stylesheet" type="text/css" />
-    <link href="{{ asset('resources/backend/css/custom.min.css') }}" rel="stylesheet" type="text/css" />
+    <script src="{{ asset('resources/backend/js/layout.js') }}?v={{ filemtime(public_path('resources/backend/js/layout.js')) }}"></script>
+    <link href="{{ asset('resources/backend/css/bootstrap.min.css') }}?v={{ filemtime(public_path('resources/backend/css/bootstrap.min.css')) }}" rel="stylesheet" type="text/css" />
+    <link href="{{ asset('resources/backend/css/icons.min.css') }}?v={{ filemtime(public_path('resources/backend/css/icons.min.css')) }}" rel="stylesheet" type="text/css" />
+    <link href="{{ asset('resources/backend/css/app.min.css') }}?v={{ filemtime(public_path('resources/backend/css/app.min.css')) }}" rel="stylesheet" type="text/css" />
+    <link href="{{ asset('resources/backend/css/custom.min.css') }}?v={{ filemtime(public_path('resources/backend/css/custom.min.css')) }}" rel="stylesheet" type="text/css" />
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-lite.min.css" rel="stylesheet" />
@@ -58,15 +58,15 @@
         <i class="ri-arrow-up-line"></i>
     </button>
 
-    <script src="{{ asset('resources/backend/libs/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
-    <script src="{{ asset('resources/backend/libs/simplebar/simplebar.min.js') }}"></script>
-    <script src="{{ asset('resources/backend/libs/feather-icons/feather.min.js') }}"></script>
+    <script src="{{ asset('resources/backend/libs/bootstrap/js/bootstrap.bundle.min.js') }}?v={{ filemtime(public_path('resources/backend/libs/bootstrap/js/bootstrap.bundle.min.js')) }}"></script>
+    <script src="{{ asset('resources/backend/libs/simplebar/simplebar.min.js') }}?v={{ filemtime(public_path('resources/backend/libs/simplebar/simplebar.min.js')) }}"></script>
+    <script src="{{ asset('resources/backend/libs/feather-icons/feather.min.js') }}?v={{ filemtime(public_path('resources/backend/libs/feather-icons/feather.min.js')) }}"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.20/dist/summernote-lite.min.js"></script>
-    <script src="{{ asset('resources/backend/libs/sweetalert2/sweetalert2.min.js') }}"></script>
-    <script src="{{ asset('resources/backend/js/app.js') }}"></script>
-    <script src="{{ asset('resources/backend/js/custom.js') }}"></script>
+    <script src="{{ asset('resources/backend/libs/sweetalert2/sweetalert2.min.js') }}?v={{ filemtime(public_path('resources/backend/libs/sweetalert2/sweetalert2.min.js')) }}"></script>
+    <script src="{{ asset('resources/backend/js/app.js') }}?v={{ filemtime(public_path('resources/backend/js/app.js')) }}"></script>
+    <script src="{{ asset('resources/backend/js/custom.js') }}?v={{ filemtime(public_path('resources/backend/js/custom.js')) }}"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 
