@@ -47,7 +47,7 @@ class DocumentsController extends Controller
             ], 403);
         }
 
-        $query = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id'])
+        $query = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id', 'renewals:id,source_document_id,title,due_date,status,category'])
             ->where('household_id', $household_id);
 
         // Visibility filter: only show documents the user can see
@@ -239,7 +239,8 @@ class DocumentsController extends Controller
             ], 500);
         }
 
-        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id']);
+        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id', 'renewals:id,source_document_id,title,due_date,status,category']);
+        ActivityController::log((int) $household_id, $userId, 'document', $document->id, 'created');
 
         return response()->json([
             'success' => true,
@@ -255,7 +256,7 @@ class DocumentsController extends Controller
     {
         $userId = Auth::id();
 
-        $document = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id'])
+        $document = Document::with(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id', 'renewals:id,source_document_id,title,due_date,status,category'])
             ->where('household_id', $household_id)
             ->findOrFail($document_id);
 
@@ -340,7 +341,8 @@ class DocumentsController extends Controller
             $document->allowedMembers()->sync($request->input('allowed_user_ids', []));
         }
 
-        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id']);
+        $document->load(['createdBy:id,first_name,last_name,email,avatar', 'files', 'allowedMembers:id', 'renewals:id,source_document_id,title,due_date,status,category']);
+        ActivityController::log((int) $household_id, Auth::id(), 'document', $document->id, 'updated');
 
         return response()->json([
             'success' => true,
@@ -492,6 +494,8 @@ class DocumentsController extends Controller
             ], 500);
         }
 
+        ActivityController::log((int) $household_id, Auth::id(), 'document', $document->id, 'files_added', count($uploadedFiles) . ' file(s) added');
+
         return response()->json([
             'success' => true,
             'message' => count($uploadedFiles) . ' file(s) uploaded successfully',
@@ -594,6 +598,16 @@ class DocumentsController extends Controller
             'is_overdue'        => $doc->is_overdue,
             'days_until_due'    => $doc->days_until_due,
             'files'             => $doc->files->map(fn($file) => $this->formatFile($file)),
+            'related_renewals'  => $doc->renewals
+                ->sortByDesc('created_at')
+                ->values()
+                ->map(fn($renewal) => [
+                    'id' => $renewal->id,
+                    'title' => $renewal->title,
+                    'due_date' => $renewal->due_date instanceof \DateTimeInterface ? $renewal->due_date->format('Y-m-d') : $renewal->due_date,
+                    'status' => $renewal->status,
+                    'category' => $renewal->category,
+                ]),
             'created_at'        => $doc->created_at?->toIso8601String(),
             'updated_at'        => $doc->updated_at?->toIso8601String(),
         ];

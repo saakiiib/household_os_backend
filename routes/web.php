@@ -42,7 +42,7 @@ Route::get('/clean-db', function () {
     DB::statement('SET FOREIGN_KEY_CHECKS = 0');
     try {
         $tables = [
-            'support_attachments', 'support_messages', 'support_tickets',
+            'support_attachments', 'support_messages', 'support_tickets', 'smart_suggestion_states',
             'activity_logs', 'jobs', 'failed_jobs', 'job_batches',
             'documents', 'document_files', 'households', 'household_members',
             'invitations', 'notifications', 'payments', 'renewals',

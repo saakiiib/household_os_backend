@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\MembersController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\TasksController;
 use App\Http\Controllers\Api\DocumentsController;
+use App\Http\Controllers\Api\SmartSuggestionController;
 use App\Http\Controllers\Api\RenewalsController;
 use App\Http\Controllers\Api\ActivityController;
 use App\Http\Controllers\Api\VehiclesController;
@@ -149,6 +150,12 @@ Route::middleware(['auth:api', 'throttle:120,1,api:'])->group(function () {
             Route::post('documents/{document_id}/files', [DocumentsController::class, 'uploadFiles']);
             Route::delete('documents/{document_id}/files/{file_id}', [DocumentsController::class, 'deleteFile']);
             Route::get('documents/{document_id}/files/{file_id}/download', [DocumentsController::class, 'downloadFile']);
+        });
+
+        // Smart Suggestions (permission-aware derived household data)
+        Route::middleware('household.role')->group(function () {
+            Route::get('smart-suggestions', [SmartSuggestionController::class, 'index']);
+            Route::post('smart-suggestions/state', [SmartSuggestionController::class, 'state']);
         });
 
         // Renewals

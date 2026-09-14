@@ -48,6 +48,12 @@ class Renewal extends Model
         return $this->hasMany(Renewal::class, 'parent_renewal_id');
     }
 
+    /** Original HouseholdOS document that inspired/created this renewal. */
+    public function sourceDocument()
+    {
+        return $this->belongsTo(Document::class, 'source_document_id');
+    }
+
     public function vehicleServices()
     {
         return $this->hasMany(RenewalVehicleService::class);

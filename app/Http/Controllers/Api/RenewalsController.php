@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Household;
 use App\Models\HouseholdMember;
+use App\Models\Document;
 use App\Models\Renewal;
 use App\Services\EntitlementService;
 use Illuminate\Http\Request;
@@ -35,7 +36,8 @@ class RenewalsController extends Controller
             'createdBy:id,first_name,last_name,email,avatar',
             'assignedUser:id,first_name,last_name,email,avatar',
             'vehicle:id,title',
-            'vehicleServices'
+            'vehicleServices',
+            'sourceDocument:id,household_id,title,category,due_date,visibility,created_by_user_id'
         ])->where('household_id', $household_id);
 
         // Visibility: Shared household feature - every active member can view all household renewals.
@@ -94,6 +96,7 @@ class RenewalsController extends Controller
                     ->where('household_id', (int) $household_id)
                     ->where('status', 'active'),
             ],
+            'source_document_id' => 'nullable|integer',
             'frequency'         => 'required|in:monthly,quarterly,annual',
             'due_date'          => 'required_if:renewal_type,standard|nullable|date',
             'amount'            => 'nullable|numeric|min:0',
@@ -114,6 +117,18 @@ class RenewalsController extends Controller
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
             ], 422);
+        }
+
+        $sourceDocument = null;
+        if ($request->filled('source_document_id')) {
+            $sourceDocument = Document::where('household_id', $household_id)
+                ->find($request->integer('source_document_id'));
+            if (!$sourceDocument || !$sourceDocument->canUserView(Auth::id())) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The related document is not available to you.',
+                ], 403);
+            }
         }
 
         // Entitlement gate: free plan is limited to a number of active renewals.
@@ -153,6 +168,7 @@ class RenewalsController extends Controller
                 'title'              => $request->title,
                 'category'           => $request->category,
                 'assigned_user_id'   => $request->assigned_user_id,
+                'source_document_id' => $sourceDocument?->id,
                 'frequency'          => $request->frequency,
                 'due_date'           => $request->due_date,
                 'amount'             => $request->amount,
@@ -228,7 +244,9 @@ class RenewalsController extends Controller
             Log::error('Failed to send renewal creation notification: ' . $e->getMessage());
         }
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices', 'sourceDocument:id,household_id,title,category,due_date,visibility,created_by_user_id']);
+
+        ActivityController::log((int) $household_id, Auth::id(), 'renewal', $renewal->id, 'created');
 
         return response()->json([
             'success' => true,
@@ -257,6 +275,7 @@ class RenewalsController extends Controller
                 'vehicleServices',
                 'parent:id,title,due_date,status,amount',
                 'children:id,title,due_date,status,amount',
+                'sourceDocument:id,household_id,title,category,due_date,visibility,created_by_user_id',
             ])
             ->where('household_id', $household_id)
             ->findOrFail($renewal_id);
@@ -424,7 +443,8 @@ class RenewalsController extends Controller
             ], 500);
         }
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices', 'sourceDocument:id,household_id,title,category,due_date,visibility,created_by_user_id']);
+        ActivityController::log((int) $household_id, Auth::id(), 'renewal', $renewal->id, 'updated');
 
         return response()->json([
             'success' => true,
@@ -514,7 +534,8 @@ class RenewalsController extends Controller
 
         $renewal->update(['status' => 'completed']);
 
-        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
+        $renewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices', 'sourceDocument:id,household_id,title,category,due_date,visibility,created_by_user_id']);
+        ActivityController::log((int) $household_id, Auth::id(), 'renewal', $renewal->id, 'completed');
 
         return response()->json([
             'success' => true,
@@ -566,6 +587,7 @@ class RenewalsController extends Controller
                 'created_by_user_id' => $renewal->created_by_user_id, // Preserves original creator!
                 'assigned_user_id'   => $renewal->assigned_user_id,
                 'parent_renewal_id'  => $renewal->id,
+                'source_document_id' => $renewal->source_document_id,
                 'renewal_type'       => $renewal->renewal_type,
                 'vehicle_id'         => $renewal->vehicle_id,
                 'title'              => $renewal->title,
@@ -597,7 +619,8 @@ class RenewalsController extends Controller
             ], 500);
         }
 
-        $newRenewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices']);
+        $newRenewal->load(['createdBy:id,first_name,last_name,email,avatar', 'assignedUser:id,first_name,last_name,email,avatar', 'vehicle:id,title', 'vehicleServices', 'sourceDocument:id,household_id,title,category,due_date,visibility,created_by_user_id']);
+        ActivityController::log((int) $household_id, Auth::id(), 'renewal', $newRenewal->id, 'created');
 
         return response()->json([
             'success' => true,
@@ -678,6 +701,17 @@ class RenewalsController extends Controller
                 'service_date'   => $s->service_date instanceof \DateTimeInterface ? $s->service_date->format('Y-m-d') : $s->service_date,
                 'service_amount' => $s->service_amount,
             ]),
+            // A linked private document is only exposed to users who can currently view it.
+            // Other household members can still see the shared renewal without learning that
+            // a private source document exists.
+            'source_document'   => ($renewal->sourceDocument && $renewal->sourceDocument->canUserView(Auth::id())) ? [
+                'id' => $renewal->sourceDocument->id,
+                'title' => $renewal->sourceDocument->title,
+                'category' => $renewal->sourceDocument->category,
+                'due_date' => $renewal->sourceDocument->due_date instanceof \DateTimeInterface
+                    ? $renewal->sourceDocument->due_date->format('Y-m-d')
+                    : $renewal->sourceDocument->due_date,
+            ] : null,
             'has_document'      => $renewal->has_document,
             'document_name'     => $renewal->document_original_name,
             'document_type'     => $renewal->document_mime_type,

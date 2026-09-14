@@ -35,6 +35,12 @@ class Document extends Model
         return $this->belongsToMany(User::class, 'document_allowed_members', 'document_id', 'user_id');
     }
 
+    /** Renewals explicitly created from this HouseholdOS document. */
+    public function renewals()
+    {
+        return $this->hasMany(Renewal::class, 'source_document_id');
+    }
+
     /**
      * Check if a user can view this document.
      * Rule:
