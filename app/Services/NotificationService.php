@@ -23,13 +23,30 @@ class NotificationService
         $this->sendFcm([$user], $title, $body, $type, $data, $priority);
     }
 
-    public function sendToUsers(array $userIds, string $title, string $body, string $type, array $data = [], string $priority = 'normal'): void
+    /** Persist an in-app/bell notification without sending a device push. */
+    public function persistToUsers(array $userIds, string $title, string $body, string $type, array $data = [], string $priority = 'normal'): void
     {
-        $users = User::whereIn('id', $userIds)->get();
+        $users = User::whereIn('id', array_values(array_unique($userIds)))->get();
         foreach ($users as $user) {
             $this->saveToDb($user->id, $title, $body, $type, $data, $priority);
         }
+    }
+
+    /** Send a device push without creating another bell/database row. */
+    public function sendPushToUsers(array $userIds, string $title, string $body, string $type, array $data = [], string $priority = 'normal'): void
+    {
+        $users = User::whereIn('id', array_values(array_unique($userIds)))->get();
         $this->sendFcm($users->all(), $title, $body, $type, $data, $priority);
+    }
+
+    /**
+     * Real-time household event: persist for bell/dashboard recovery and also
+     * attempt an immediate device push (invitation, acceptance, approval, etc.).
+     */
+    public function sendToUsers(array $userIds, string $title, string $body, string $type, array $data = [], string $priority = 'normal'): void
+    {
+        $this->persistToUsers($userIds, $title, $body, $type, $data, $priority);
+        $this->sendPushToUsers($userIds, $title, $body, $type, $data, $priority);
     }
 
     private function saveToDb(int $userId, string $title, string $body, string $type, array $data, string $priority): void

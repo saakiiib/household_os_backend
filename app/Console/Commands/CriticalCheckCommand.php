@@ -116,7 +116,7 @@ class CriticalCheckCommand extends Command
                 ->exists();
 
             if (!$alreadySent) {
-                app(NotificationService::class)->sendToUsers(
+                app(NotificationService::class)->persistToUsers(
                     $recipientIds,
                     'Task overdue',
                     "'{$task->title}' was due {$task->due_date->format('d M Y')} — please complete it",
@@ -189,7 +189,7 @@ class CriticalCheckCommand extends Command
 
             if (!$alreadySent) {
                 $timeLabel = $task->due_time ? 'today at ' . \Carbon\Carbon::parse($task->due_time)->format('g:i A') : 'today';
-                app(NotificationService::class)->sendToUsers(
+                app(NotificationService::class)->persistToUsers(
                     $verifiedRecipients,
                     'Task due today',
                     "'{$task->title}' is due {$timeLabel}",
@@ -291,7 +291,7 @@ class CriticalCheckCommand extends Command
                 $title = $reminderType === 'overdue' ? 'Renewal overdue' : 'Renewal due today';
                 $body = $messageFn($renewal);
 
-                app(NotificationService::class)->sendToUsers(
+                app(NotificationService::class)->persistToUsers(
                     $recipientIds,
                     $title,
                     $body,
@@ -372,7 +372,7 @@ class CriticalCheckCommand extends Command
 
             if (!$alreadySent) {
                 $typeLabel = str_replace('_', ' ', $service->service_type);
-                app(NotificationService::class)->sendToUsers(
+                app(NotificationService::class)->persistToUsers(
                     $recipientIds,
                     ucfirst($typeLabel) . ' due today',
                     "'{$renewal->title}' — {$typeLabel} is due today",

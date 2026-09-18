@@ -179,15 +179,13 @@ class ReminderCheckCommand extends Command
             return;
         }
 
-        // Rule 3: Task Creator + Current Assignee.
+        // Personal reminder rule: assigned -> assignee only; unassigned -> creator.
         $recipientIds = [];
         if (!empty($task->assigned_user_id)) {
             $recipientIds[] = $task->assigned_user_id;
-        }
-        if (!empty($task->created_by_user_id) && $task->created_by_user_id !== $task->assigned_user_id) {
+        } elseif (!empty($task->created_by_user_id)) {
             $recipientIds[] = $task->created_by_user_id;
         }
-        $recipientIds = array_unique($recipientIds);
 
         // Rule 8: Verify each recipient still belongs to the household.
         $verifiedRecipients = [];
@@ -205,7 +203,7 @@ class ReminderCheckCommand extends Command
             return;
         }
 
-        app(NotificationService::class)->sendToUsers(
+        app(NotificationService::class)->persistToUsers(
             $verifiedRecipients,
             'Task reminder',
             "'{$task->title}' is due in {$label} on {$dueStr}",
@@ -243,15 +241,13 @@ class ReminderCheckCommand extends Command
                 continue;
             }
 
-            // Rule 4: Renewal Creator + Current Assignee (NOT all household members).
+            // Personal reminder rule: assigned -> assignee only; unassigned -> creator.
             $recipientIds = [];
-            if ($renewal->created_by_user_id) {
+            if (!empty($renewal->assigned_user_id)) {
+                $recipientIds[] = $renewal->assigned_user_id;
+            } elseif (!empty($renewal->created_by_user_id)) {
                 $recipientIds[] = $renewal->created_by_user_id;
             }
-            if ($renewal->assigned_user_id && $renewal->assigned_user_id !== $renewal->created_by_user_id) {
-                $recipientIds[] = $renewal->assigned_user_id;
-            }
-            $recipientIds = array_unique($recipientIds);
 
             // Rule 8: Verify each recipient still belongs to the household.
             $verifiedRecipients = [];
@@ -285,7 +281,7 @@ class ReminderCheckCommand extends Command
                 ? $renewal->due_date->format('M j, Y')
                 : Carbon::parse($renewal->due_date)->format('M j, Y');
 
-            app(NotificationService::class)->sendToUsers(
+            app(NotificationService::class)->persistToUsers(
                 $verifiedRecipients,
                 'Renewal reminder',
                 "'{$renewal->title}' is due in {$cfg['label']} on {$dueStr}",

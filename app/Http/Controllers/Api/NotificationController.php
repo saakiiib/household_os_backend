@@ -106,6 +106,7 @@ class NotificationController extends Controller
         $request->validate([
             'fcm_token' => 'required|string',
             'platform'  => 'nullable|string|in:ios,android,web',
+            'timezone'  => 'nullable|string|max:100',
         ]);
 
         $user = $request->user();
@@ -125,7 +126,7 @@ class NotificationController extends Controller
         // receive push notifications for the same user.
         DeviceToken::updateOrCreate(
             ['token' => $token],
-            ['user_id' => $user->id, 'platform' => $request->input('platform')]
+            ['user_id' => $user->id, 'platform' => $request->input('platform'), 'timezone' => $request->input('timezone')]
         );
 
         return response()->json([
