@@ -197,6 +197,64 @@
             </div>
         </div>
 
+        {{-- PLAN ENTITLEMENTS --}}
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card border-primary">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <div>
+                            <h4 class="card-title mb-1"><i class="ri-sliders-line me-2"></i>Plan Entitlements</h4>
+                            <div class="text-muted small">Controls household limits used by the API and mobile app. Enter <strong>unlimited</strong> for no count limit. Changes take effect without an app release.</div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @php
+                            $entitlementPlans = [
+                                'free' => ['Free after trial', 5, 3, 5, 50, 2, 10],
+                                'tasks' => ['Tasks', 'unlimited', 3, 5, 50, 6, 10],
+                                'renewals' => ['Renewals', 5, 'unlimited', 5, 50, 6, 10],
+                                'essentials' => ['Essentials', 'unlimited', 'unlimited', 'unlimited', 250, 6, 10],
+                                'documents' => ['Document Locker', 5, 3, 'unlimited', 500, 6, 10],
+                                'complete' => ['Complete / Complete Trial', 'unlimited', 'unlimited', 'unlimited', 500, 6, 10],
+                            ];
+                        @endphp
+                        <div class="table-responsive">
+                            <table class="table table-bordered align-middle mb-3">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Plan</th><th>Active Tasks</th><th>Active Renewals</th><th>Documents</th><th>Storage (MB)</th><th>Members</th><th>Max file (MB)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                @foreach($entitlementPlans as $code => $row)
+                                    <tr>
+                                        <td><strong>{{ $row[0] }}</strong></td>
+                                        @foreach(['tasks','renewals','documents','storage_mb','members','max_file_mb'] as $i => $field)
+                                            <td><input class="form-control form-control-sm" name="entitlement_{{ $code }}_{{ $field }}" value="{{ $settings['entitlement_'.$code.'_'.$field] ?? $row[$i+1] }}"></td>
+                                        @endforeach
+                                    </tr>
+                                @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Storage warning (%)</label>
+                                <input type="number" min="1" max="99" class="form-control" name="entitlement_storage_warning_percent" value="{{ $settings['entitlement_storage_warning_percent'] ?? 80 }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Storage almost full (%)</label>
+                                <input type="number" min="1" max="99" class="form-control" name="entitlement_storage_critical_percent" value="{{ $settings['entitlement_storage_critical_percent'] ?? 95 }}">
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end">
+                                <div class="alert alert-info py-2 mb-0 w-100"><i class="ri-information-line me-1"></i>Usage is calculated from live household data. Existing data is never deleted when a limit is reduced; new creation/upload is blocked until usage is within allowance or the plan is upgraded.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {{-- FOOTER --}}
         <div class="row">
             <div class="col-lg-12">

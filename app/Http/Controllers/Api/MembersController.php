@@ -140,10 +140,14 @@ class MembersController extends Controller
         // Enforce free-tier member limit (command.txt: subscription free fallback).
         $entitlement = app(\App\Services\EntitlementService::class);
         if (!$entitlement->canAddMember($household)) {
+            $plan = $entitlement->getPlanCode($household);
+            $limit = $entitlement->getLimits($plan)['members'];
+            $usage = \App\Models\HouseholdMember::where('household_id', $household->id)->where('status', 'active')->count();
             return response()->json([
                 'success' => false,
-                'message' => 'Your free plan is limited to ' . \App\Services\EntitlementService::FREE_MEMBERS
-                    . ' members. Upgrade your subscription to add more.',
+                'message' => 'Household member limit reached',
+                'code' => 'ENTITLEMENT_LIMIT_MEMBERS',
+                'entitlement' => ['plan' => $plan, 'limit' => $limit, 'usage' => $usage],
             ], 403);
         }
 

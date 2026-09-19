@@ -46,8 +46,9 @@ class DashboardController extends Controller
         // Storage stats
         $totalStorageUsed = (int) DocumentFile::sum('file_size');
         $storageUsedMB = round($totalStorageUsed / 1024 / 1024, 2);
-        $freeStorageMB = round(EntitlementService::FREE_DOCUMENT_BYTES / 1024 / 1024, 0);
-        $paidStorageGB = round(EntitlementService::DOCUMENTS_PLAN_BYTES / 1024 / 1024 / 1024, 1);
+        $entitlements = new EntitlementService();
+        $freeStorageMB = round($entitlements->getLimits('free')['documents_bytes'] / 1024 / 1024, 0);
+        $paidStorageGB = round($entitlements->getLimits('complete')['documents_bytes'] / 1024 / 1024 / 1024, 2);
 
         $trend = [
             'households' => $this->monthOverMonth(Household::class),

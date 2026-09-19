@@ -158,10 +158,12 @@ class DocumentsController extends Controller
                         'message' => "File at index {$i} is not a valid upload.",
                     ], 422);
                 }
-                if ($file->getSize() > 10240 * 1024) {
+                if ($file->getSize() > $this->entitlements->getLimits($this->entitlements->getPlanCode(Household::findOrFail($household_id)))['max_file_bytes']) {
                     return response()->json([
                         'success' => false,
-                        'message' => "File '{$file->getClientOriginalName()}' exceeds 10MB limit.",
+                        'message' => 'Document is too large',
+                        'code' => 'ENTITLEMENT_MAX_FILE_SIZE',
+                        'entitlement' => ['max_file_size_bytes' => $this->entitlements->getLimits($this->entitlements->getPlanCode(Household::findOrFail($household_id)))['max_file_bytes']],
                     ], 422);
                 }
                 $allowed = ['pdf','jpg','jpeg','png','gif','webp','doc','docx'];
@@ -184,12 +186,22 @@ class DocumentsController extends Controller
             // Entitlement gate: storage is capped per plan (command.txt §19 / §32).
             $additionalBytes = array_reduce($files, fn($sum, $f) => $sum + $f->getSize(), 0);
             $household = Household::findOrFail($household_id);
+            if (!$this->entitlements->canCreateDocument($household)) {
+                $plan = $this->entitlements->getPlanCode($household);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Document limit reached',
+                    'code' => 'ENTITLEMENT_LIMIT_DOCUMENT_COUNT',
+                    'entitlement' => ['plan' => $plan, 'limit' => $this->entitlements->getLimits($plan)['documents'], 'usage' => $this->entitlements->documentCount($household)],
+                ], 403);
+            }
             if (!$this->entitlements->canUploadDocument($household, $additionalBytes)) {
                 $usedMb = round($this->entitlements->getStorageUsed($household) / 1024 / 1024, 1);
                 return response()->json([
                     'success' => false,
-                    'message' => "Your Document Locker is above your storage allowance ({$usedMb} MB used). Upgrade to add more files.",
+                    'message' => 'Household storage is full',
                     'code' => 'ENTITLEMENT_LIMIT_STORAGE',
+                    'entitlement' => ['plan' => $this->entitlements->getPlanCode($household), 'limit_bytes' => $this->entitlements->getLimits($this->entitlements->getPlanCode($household))['documents_bytes'], 'used_bytes' => $this->entitlements->getStorageUsed($household)],
                 ], 403);
             }
         }
@@ -447,10 +459,12 @@ class DocumentsController extends Controller
                     'message' => "File at index {$i} is not a valid upload.",
                 ], 422);
             }
-            if ($file->getSize() > 10240 * 1024) {
+            if ($file->getSize() > $this->entitlements->getLimits($this->entitlements->getPlanCode(Household::findOrFail($household_id)))['max_file_bytes']) {
                 return response()->json([
                     'success' => false,
-                    'message' => "File '{$file->getClientOriginalName()}' exceeds 10MB limit.",
+                    'message' => 'Document is too large',
+                        'code' => 'ENTITLEMENT_MAX_FILE_SIZE',
+                        'entitlement' => ['max_file_size_bytes' => $this->entitlements->getLimits($this->entitlements->getPlanCode(Household::findOrFail($household_id)))['max_file_bytes']],
                 ], 422);
             }
             $allowed = ['pdf','jpg','jpeg','png','gif','webp','doc','docx'];
@@ -476,8 +490,9 @@ class DocumentsController extends Controller
         if (!$this->entitlements->canUploadDocument($household, $additionalBytes)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Storage limit reached. Upgrade to Document Locker or Complete for 5 GB.',
-                'code' => 'ENTITLEMENT_LIMIT_DOCUMENTS',
+                'message' => 'Household storage is full',
+                'code' => 'ENTITLEMENT_LIMIT_STORAGE',
+                'entitlement' => ['plan' => $this->entitlements->getPlanCode($household), 'limit_bytes' => $this->entitlements->getLimits($this->entitlements->getPlanCode($household))['documents_bytes'], 'used_bytes' => $this->entitlements->getStorageUsed($household)],
             ], 403);
         }
 

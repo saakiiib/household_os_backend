@@ -137,10 +137,14 @@ class TasksController extends Controller
         // Entitlement gate: free plan is limited to a number of active tasks.
         $household = Household::findOrFail($household_id);
         if (!(new EntitlementService())->canCreateTask($household)) {
+            $entitlements = new EntitlementService();
+            $plan = $entitlements->getPlanCode($household);
+            $limit = $entitlements->getLimits($plan)['tasks'];
             return response()->json([
                 'success' => false,
-                'message' => 'You have reached your Free plan Task limit (' . EntitlementService::FREE_TASKS . ' active). Upgrade to unlock unlimited Tasks.',
+                'message' => 'Task limit reached',
                 'code' => 'ENTITLEMENT_LIMIT_TASKS',
+                'entitlement' => ['plan' => $plan, 'limit' => $limit, 'usage' => $entitlements->activeTaskCount($household)],
             ], 403);
         }
 

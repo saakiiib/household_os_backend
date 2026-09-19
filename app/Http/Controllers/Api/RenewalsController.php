@@ -134,10 +134,14 @@ class RenewalsController extends Controller
         // Entitlement gate: free plan is limited to a number of active renewals.
         $household = Household::findOrFail($household_id);
         if (!(new EntitlementService())->canCreateRenewal($household)) {
+            $entitlements = new EntitlementService();
+            $plan = $entitlements->getPlanCode($household);
+            $limit = $entitlements->getLimits($plan)['renewals'];
             return response()->json([
                 'success' => false,
-                'message' => 'You have reached your Free plan Renewal limit (' . EntitlementService::FREE_RENEWALS . ' active). Upgrade to unlock unlimited Renewals.',
+                'message' => 'Renewal limit reached',
                 'code' => 'ENTITLEMENT_LIMIT_RENEWALS',
+                'entitlement' => ['plan' => $plan, 'limit' => $limit, 'usage' => $entitlements->activeRenewalCount($household)],
             ], 403);
         }
 
