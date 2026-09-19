@@ -81,24 +81,15 @@ class CriticalCheckCommand extends Command
 
             $recipientIds = [];
 
-            // Rule 3: Task Creator + Current Assignee.
-            if (!empty($task->assigned_user_id)) {
-                $isAssigneeActive = HouseholdMember::where('household_id', $task->household_id)
-                    ->where('user_id', $task->assigned_user_id)
+            // Personal reminder rule: assigned -> assignee only; unassigned -> creator.
+            $targetUserId = !empty($task->assigned_user_id) ? $task->assigned_user_id : $task->created_by_user_id;
+            if (!empty($targetUserId)) {
+                $isActive = HouseholdMember::where('household_id', $task->household_id)
+                    ->where('user_id', $targetUserId)
                     ->where('status', 'active')
                     ->exists();
-                if ($isAssigneeActive) {
-                    $recipientIds[] = $task->assigned_user_id;
-                }
-            }
-
-            if (!empty($task->created_by_user_id) && $task->created_by_user_id !== $task->assigned_user_id) {
-                $isCreatorActive = HouseholdMember::where('household_id', $task->household_id)
-                    ->where('user_id', $task->created_by_user_id)
-                    ->where('status', 'active')
-                    ->exists();
-                if ($isCreatorActive) {
-                    $recipientIds[] = $task->created_by_user_id;
+                if ($isActive) {
+                    $recipientIds[] = $targetUserId;
                 }
             }
 
@@ -136,7 +127,6 @@ class CriticalCheckCommand extends Command
 
         $tasks = Task::where('status', '!=', 'completed')
             ->whereNotNull('due_date')
-            ->whereNotNull('assigned_user_id')
             ->whereDate('due_date', '=', $today)
             ->with('assignedUser:id,first_name,last_name,email,fcm_token', 'createdBy:id,first_name,last_name,email')
             ->select('id', 'title', 'due_date', 'due_time', 'assigned_user_id', 'created_by_user_id', 'household_id')
@@ -154,15 +144,12 @@ class CriticalCheckCommand extends Command
                 continue;
             }
 
-            // Rule 3: Task Creator + Current Assignee.
+            // Personal reminder rule: assigned -> assignee only; unassigned -> creator.
             $recipientIds = [];
-            if (!empty($task->assigned_user_id)) {
-                $recipientIds[] = $task->assigned_user_id;
+            $targetUserId = !empty($task->assigned_user_id) ? $task->assigned_user_id : $task->created_by_user_id;
+            if (!empty($targetUserId)) {
+                $recipientIds[] = $targetUserId;
             }
-            if (!empty($task->created_by_user_id) && $task->created_by_user_id !== $task->assigned_user_id) {
-                $recipientIds[] = $task->created_by_user_id;
-            }
-            $recipientIds = array_unique($recipientIds);
 
             // Rule 8: Verify each recipient still belongs to the household.
             $verifiedRecipients = [];
@@ -249,32 +236,18 @@ class CriticalCheckCommand extends Command
         }
 
         foreach ($renewals as $renewal) {
-            // Rule 4: Renewal Creator + Current Assignee (Rule 8: verify membership).
+            // Personal reminder rule: assigned -> assignee only; unassigned -> creator.
             $recipientIds = [];
-
-            // Add creator with membership verification
-            if ($renewal->created_by_user_id) {
-                $isCreatorActive = HouseholdMember::where('household_id', $renewal->household_id)
-                    ->where('user_id', $renewal->created_by_user_id)
+            $targetUserId = !empty($renewal->assigned_user_id) ? $renewal->assigned_user_id : $renewal->created_by_user_id;
+            if (!empty($targetUserId)) {
+                $isActive = HouseholdMember::where('household_id', $renewal->household_id)
+                    ->where('user_id', $targetUserId)
                     ->where('status', 'active')
                     ->exists();
-                if ($isCreatorActive) {
-                    $recipientIds[] = $renewal->created_by_user_id;
+                if ($isActive) {
+                    $recipientIds[] = $targetUserId;
                 }
             }
-
-            // Add assigned user if different from creator and still active member
-            if ($renewal->assigned_user_id && $renewal->assigned_user_id !== $renewal->created_by_user_id) {
-                $isActiveMember = HouseholdMember::where('household_id', $renewal->household_id)
-                    ->where('user_id', $renewal->assigned_user_id)
-                    ->where('status', 'active')
-                    ->exists();
-                if ($isActiveMember) {
-                    $recipientIds[] = $renewal->assigned_user_id;
-                }
-            }
-
-            $recipientIds = array_unique($recipientIds);
 
             if (empty($recipientIds)) {
                 continue;
@@ -332,32 +305,18 @@ class CriticalCheckCommand extends Command
                 continue;
             }
 
-            // Rule 4: Renewal Creator + Current Assignee (Rule 8: verify membership).
+            // Personal reminder rule: assigned -> assignee only; unassigned -> creator.
             $recipientIds = [];
-
-            // Add creator with membership verification
-            if ($renewal->created_by_user_id) {
-                $isCreatorActive = HouseholdMember::where('household_id', $renewal->household_id)
-                    ->where('user_id', $renewal->created_by_user_id)
+            $targetUserId = !empty($renewal->assigned_user_id) ? $renewal->assigned_user_id : $renewal->created_by_user_id;
+            if (!empty($targetUserId)) {
+                $isActive = HouseholdMember::where('household_id', $renewal->household_id)
+                    ->where('user_id', $targetUserId)
                     ->where('status', 'active')
                     ->exists();
-                if ($isCreatorActive) {
-                    $recipientIds[] = $renewal->created_by_user_id;
+                if ($isActive) {
+                    $recipientIds[] = $targetUserId;
                 }
             }
-
-            // Add assigned user if different from creator and still active member
-            if ($renewal->assigned_user_id && $renewal->assigned_user_id !== $renewal->created_by_user_id) {
-                $isActiveMember = HouseholdMember::where('household_id', $renewal->household_id)
-                    ->where('user_id', $renewal->assigned_user_id)
-                    ->where('status', 'active')
-                    ->exists();
-                if ($isActiveMember) {
-                    $recipientIds[] = $renewal->assigned_user_id;
-                }
-            }
-
-            $recipientIds = array_unique($recipientIds);
 
             if (empty($recipientIds)) {
                 continue;

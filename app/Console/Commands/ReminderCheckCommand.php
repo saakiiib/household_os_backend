@@ -91,10 +91,7 @@ class ReminderCheckCommand extends Command
             ->get();
 
         foreach ($tasks as $task) {
-            if (empty($task->assigned_user_id)) {
-                continue;
-            }
-
+            // Unassigned tasks are valid: personal reminder falls back to the creator.
             $cfg = self::TASK_OFFSETS[$task->reminder_before];
             $base = $task->due_date instanceof Carbon
                 ? $task->due_date->copy()->startOfDay()
