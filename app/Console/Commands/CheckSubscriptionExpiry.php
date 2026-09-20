@@ -131,7 +131,7 @@ class CheckSubscriptionExpiry extends Command
 
     /**
      * Handle trial expiry:
-     * - Notify at 7d, 3d, 1d before trial_ends_at
+     * - Notify at 7d and 2d before trial_ends_at
      * - Auto-downgrade to free when trial_ends_at has passed and no active paid sub
      */
     private function handleTrialExpiry(): void
@@ -140,8 +140,7 @@ class CheckSubscriptionExpiry extends Command
 
         // Send trial expiry warnings
         $this->sendTrialWarnings(7, 'trial_7d');
-        $this->sendTrialWarnings(3, 'trial_3d');
-        $this->sendTrialWarnings(1, 'trial_1d');
+        $this->sendTrialWarnings(2, 'trial_2d');
 
         // Auto-downgrade expired trials to free
         $expiredTrials = Subscription::where('status', 'trial')
@@ -162,8 +161,10 @@ class CheckSubscriptionExpiry extends Command
                     'plan_status' => 'free',
                     'paid_plan' => null,
                     'billing_period' => null,
-                    'trial_started_at' => null,
-                    'trial_ends_at' => null,
+                    // Preserve trial dates as historical context so clients can
+                    // distinguish post-trial Free from an account that was always Free.
+                    'trial_started_at' => $sub->trial_started_at,
+                    'trial_ends_at' => $sub->trial_ends_at,
                     'subscription_plan_id' => null,
                 ]);
 
@@ -177,10 +178,10 @@ class CheckSubscriptionExpiry extends Command
 
                 foreach ($members as $member) {
                     if ($member->user) {
-                        app(NotificationService::class)->sendToUser(
-                            $member->user->id,
-                            'Trial ended',
-                            'Your Complete trial has ended. You are now on the Free plan with limited features.',
+                        app(NotificationService::class)->persistToUsers(
+                            [$member->user->id],
+                            'Built for households, growing with your support',
+                            'HouseholdOS is designed to make everyday household life simpler. Upgrade anytime to unlock more features and help us keep improving.',
                             'trial_expiry',
                             [
                                 'subscription_id' => $sub->id,
@@ -267,15 +268,14 @@ class CheckSubscriptionExpiry extends Command
                 if (!$member->user) continue;
 
                 $message = match ($days) {
-                    7 => 'Your Complete trial ends in 7 days. Choose a plan or continue with Free.',
-                    3 => 'Your Complete trial ends in 3 days. Choose how you\'d like to continue.',
-                    1 => 'Your Complete trial ends tomorrow. Choose a plan or continue with Free.',
+                    7 => "We hope you're enjoying HouseholdOS. Continue with Complete after your trial to keep all premium features.",
+                    2 => "Choose a plan anytime to keep the features that work best for your household. If you don't subscribe, you'll automatically continue on HouseholdOS Free.",
                     default => "Your Complete trial ends in {$days} days.",
                 };
 
-                app(NotificationService::class)->sendToUser(
-                    $member->user->id,
-                    $days <= 1 ? 'Trial ending soon' : 'Trial reminder',
+                app(NotificationService::class)->persistToUsers(
+                    [$member->user->id],
+                    $days <= 2 ? 'Your Complete trial ends in 2 days' : 'Your Complete trial has 7 days remaining',
                     $message,
                     'trial_expiry',
                     [
@@ -286,7 +286,7 @@ class CheckSubscriptionExpiry extends Command
                         'days_remaining' => $days,
                         'action' => 'view_subscription',
                     ],
-                    $days <= 1 ? 'high' : 'normal'
+                    $days <= 2 ? 'high' : 'normal'
                 );
             }
 

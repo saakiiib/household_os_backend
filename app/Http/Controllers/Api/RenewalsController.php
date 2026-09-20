@@ -98,7 +98,7 @@ class RenewalsController extends Controller
             ],
             'source_document_id' => 'nullable|integer',
             'frequency'         => 'required|in:monthly,quarterly,annual',
-            'due_date'          => 'required_if:renewal_type,standard|nullable|date',
+            'due_date'          => 'required_if:renewal_type,standard|nullable|date|after_or_equal:today',
             'amount'            => 'nullable|numeric|min:0',
             'reminder_before'   => 'nullable|in:30_days,14_days,7_days,3_days',
             'notes'             => 'nullable|string|max:2000',
@@ -117,6 +117,17 @@ class RenewalsController extends Controller
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
             ], 422);
+        }
+
+        if ($request->renewal_type === 'standard' && $request->filled('due_date') && $request->filled('reminder_before')) {
+            $days = ['30_days' => 30, '14_days' => 14, '7_days' => 7, '3_days' => 3][$request->reminder_before] ?? null;
+            if ($days !== null && !\Carbon\Carbon::parse($request->due_date)->startOfDay()->addHours(9)->subDays($days)->isFuture()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'That reminder time has already passed. Please choose a later reminder.',
+                    'errors' => ['reminder_before' => ['Reminder must be scheduled in the future']],
+                ], 422);
+            }
         }
 
         $sourceDocument = null;

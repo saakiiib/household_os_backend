@@ -89,9 +89,22 @@ class DocumentsController extends Controller
         $documents = $query->orderBy('created_at', 'desc')->get()
             ->map(fn($doc) => $this->formatDocument($doc, $userId));
 
+        $household = Household::findOrFail($household_id);
+        $summary = $this->entitlements->summary($household);
+
         return response()->json([
             'success' => true,
             'data' => $documents,
+            // Aggregate household storage only; never expose another member's private documents.
+            'storage' => [
+                'used_bytes' => $summary['usage']['documents_bytes'],
+                'limit_bytes' => $summary['limits']['documents_bytes'],
+                'available_bytes' => $summary['storage_remaining'],
+                'usage_percent' => $summary['usage_percent'],
+                'status' => $summary['storage_status'],
+                'max_file_size_bytes' => $summary['limits']['max_file_size_bytes'],
+                'can_upload' => $summary['can_upload'],
+            ],
         ]);
     }
 

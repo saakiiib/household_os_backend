@@ -33,7 +33,7 @@ class NotificationController extends Controller
             $query->where('created_at', '>=', Carbon::now()->subDays((int) $days));
         }
 
-        $notifications = $query->latest()->paginate(20);
+        $notifications = $query->latest()->limit(100)->paginate(20);
 
         return response()->json([
             'success' => true,
@@ -75,9 +75,11 @@ class NotificationController extends Controller
 
         $notification->update(['read_at' => Carbon::now()]);
 
+        $unreadCount = Notification::where('user_id', $request->user()->id)->whereNull('read_at')->count();
         return response()->json([
             'success' => true,
             'message' => 'Marked as read.',
+            'unread_count' => $unreadCount,
         ]);
     }
 
@@ -94,6 +96,7 @@ class NotificationController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'All marked as read.',
+            'unread_count' => 0,
         ]);
     }
 

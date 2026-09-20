@@ -14,3 +14,6 @@ Schedule::command('recurring:generate')->everyFiveMinutes();
 
 // Check for expired trials and send subscription expiry warnings (7d, 3d, 1d)
 Schedule::command('subscription:check-expiry')->everyFiveMinutes();
+
+// Bell history retention: 30 days / 100 items per user; actionable items are preserved.
+Schedule::command('notifications:cleanup')->dailyAt('03:20')->withoutOverlapping();

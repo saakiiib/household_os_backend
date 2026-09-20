@@ -1124,7 +1124,15 @@ class AppleIapService
                 break;
 
             case 'DID_FAIL_TO_RENEW':
-                $subscription->moveToGracePeriod();
+                // This fallback path has no verified gracePeriodExpiresDate.
+                // Do not invent a local grace duration: Apple's signed renewal
+                // info is authoritative. A later refresh/webhook can promote
+                // billing_retry to grace_period with Apple's exact expiry.
+                $subscription->update([
+                    'status' => 'billing_retry',
+                    'grace_period_expires_at' => null,
+                    'expires_at' => $subscription->current_period_end,
+                ]);
                 break;
 
             case 'GRACE_PERIOD_EXPIRED':

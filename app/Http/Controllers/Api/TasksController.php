@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Household;
 use App\Models\HouseholdMember;
 use App\Models\Task;
+use App\Models\DeviceToken;
+use Carbon\Carbon;
 use App\Services\EntitlementService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
@@ -121,6 +123,44 @@ class TasksController extends Controller
                 'success' => false,
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        // New tasks must be in the future in the user's device timezone.
+        // If no explicit time is supplied, treat the task as due by end-of-day.
+        $timezone = DeviceToken::where('user_id', $userId)
+            ->whereNotNull('timezone')
+            ->latest('updated_at')
+            ->value('timezone') ?: config('app.timezone', 'UTC');
+        try {
+            $dueTime = $request->filled('due_time') ? $request->due_time : '23:59';
+            $dueAt = Carbon::createFromFormat('Y-m-d H:i', $request->due_date . ' ' . $dueTime, $timezone);
+            if (!$dueAt->isFuture()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The due date and time for a new task must be in the future.',
+                    'errors' => ['due_date' => ['Choose a future time']],
+                ], 422);
+            }
+
+            $reminderMinutes = [
+                '15_minutes' => 15, '1_hour' => 60, '1_day' => 1440,
+                '3_days' => 4320, '1_week' => 10080,
+            ];
+            if ($request->filled('reminder_before')) {
+                $minutes = $reminderMinutes[$request->reminder_before] ?? null;
+                if ($minutes !== null && !$dueAt->copy()->subMinutes($minutes)->isFuture()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'That reminder time has already passed. Please choose a later reminder.',
+                        'errors' => ['reminder_before' => ['Reminder must be scheduled in the future']],
+                    ], 422);
+                }
+            }
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Please choose a valid due date and time.',
             ], 422);
         }
 

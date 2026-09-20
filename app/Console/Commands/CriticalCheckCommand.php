@@ -103,7 +103,6 @@ class CriticalCheckCommand extends Command
                 ->where('data->id', $task->id)
                 ->where('data->reminder_type', 'overdue')
                 ->whereIn('user_id', $recipientIds)
-                ->whereDate('created_at', $today)
                 ->exists();
 
             if (!$alreadySent) {
@@ -253,12 +252,16 @@ class CriticalCheckCommand extends Command
                 continue;
             }
 
-            $alreadySent = \App\Models\Notification::where('type', 'renewal_reminder')
+            $sentQuery = \App\Models\Notification::where('type', 'renewal_reminder')
                 ->where('data->id', $renewal->id)
                 ->where('data->reminder_type', $reminderType)
-                ->whereIn('user_id', $recipientIds)
-                ->whereDate('created_at', $today)
-                ->exists();
+                ->whereIn('user_id', $recipientIds);
+            // Overdue is a state transition, not a daily event. Persist it once.
+            // Due-today remains date-scoped because it represents today's event.
+            if ($reminderType !== 'overdue') {
+                $sentQuery->whereDate('created_at', $today);
+            }
+            $alreadySent = $sentQuery->exists();
 
             if (!$alreadySent) {
                 $title = $reminderType === 'overdue' ? 'Renewal overdue' : 'Renewal due today';
