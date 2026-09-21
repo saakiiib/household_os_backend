@@ -92,7 +92,6 @@ class DashboardController extends Controller
         }
 
         $stripeOk = !empty(config('services.stripe.secret'));
-        $paypalOk = !empty(config('services.paypal.client_id'));
         $mailOk = !empty(config('mail.mailers.smtp.host'))
             && !empty(config('mail.mailers.smtp.username'))
             && !empty(config('mail.mailers.smtp.password'));
@@ -101,7 +100,6 @@ class DashboardController extends Controller
             ['label' => 'API', 'value' => 'Operational', 'status' => 'ok'],
             ['label' => 'Database', 'value' => $dbOk ? 'Healthy' : 'Down', 'status' => $dbOk ? 'ok' : 'warning'],
             ['label' => 'Stripe', 'value' => $stripeOk ? 'Connected' : 'Not configured', 'status' => $stripeOk ? 'ok' : 'warning'],
-            ['label' => 'PayPal', 'value' => $paypalOk ? 'Connected' : 'Not configured', 'status' => $paypalOk ? 'ok' : 'warning'],
             ['label' => 'Email', 'value' => $mailOk ? 'Configured' : 'Not configured', 'status' => $mailOk ? 'ok' : 'warning'],
         ];
 

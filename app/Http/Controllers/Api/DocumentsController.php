@@ -269,11 +269,11 @@ class DocumentsController extends Controller
                 $this->fileService->delete($path);
             }
 
-            Log::error('Document store failed: ' . $e->getMessage());
+            Log::error('Document store failed', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create document: ' . $e->getMessage(),
+                'message' => 'Failed to create document. Please try again.',
             ], 500);
         }
 
@@ -427,11 +427,11 @@ class DocumentsController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Document delete failed: ' . $e->getMessage());
+            Log::error('Document delete failed', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete document: ' . $e->getMessage(),
+                'message' => 'Failed to delete document. Please try again.',
             ], 500);
         }
 
@@ -538,11 +538,11 @@ class DocumentsController extends Controller
                 $this->fileService->delete($path);
             }
 
-            Log::error('File upload failed: ' . $e->getMessage());
+            Log::error('File upload failed', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to upload files: ' . $e->getMessage(),
+                'message' => 'Failed to upload files. Please try again.',
             ], 500);
         }
 
@@ -581,11 +581,11 @@ class DocumentsController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('File delete failed: ' . $e->getMessage());
+            Log::error('File delete failed', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete file: ' . $e->getMessage(),
+                'message' => 'Failed to delete file. Please try again.',
             ], 500);
         }
 

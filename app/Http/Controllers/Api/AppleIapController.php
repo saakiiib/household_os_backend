@@ -30,7 +30,7 @@ class AppleIapController extends Controller
         $user = $request->user();
         if (!$user) {
             Log::warning('AppleIapController@verify: no authenticated user', [
-                'transaction_id' => $request->transaction_id,
+                'transaction_suffix' => substr((string) $request->transaction_id, -6),
             ]);
             return response()->json([
                 'success' => false,
@@ -40,7 +40,7 @@ class AppleIapController extends Controller
 
         Log::info('AppleIapController@verify: start', [
             'user_id' => $user->id,
-            'transaction_id' => $request->transaction_id,
+            'transaction_suffix' => substr((string) $request->transaction_id, -6),
             'has_app_account_token' => !empty($request->input('app_account_token')),
         ]);
 
@@ -57,7 +57,7 @@ class AppleIapController extends Controller
                 // returns a failure reason that we must surface for debugging.
                 Log::warning('AppleIapController@verify: verification failed', [
                     'user_id' => $user->id,
-                    'transaction_id' => $request->transaction_id,
+                    'transaction_suffix' => substr((string) $request->transaction_id, -6),
                     'message' => $result['message'] ?? 'unknown',
                     'code' => $result['code'] ?? null,
                 ]);
@@ -128,7 +128,7 @@ class AppleIapController extends Controller
             if (!$result['success']) {
                 Log::warning('AppleIapController@restore: verification failed', [
                     'user_id' => $user->id,
-                    'original_transaction_id' => $request->original_transaction_id,
+                    'transaction_suffix' => substr((string) $request->original_transaction_id, -6),
                     'message' => $result['message'] ?? 'unknown',
                     'code' => $result['code'] ?? null,
                 ]);

@@ -90,7 +90,7 @@ class GooglePlayIapService
 
             Log::info('GooglePlayIapService: Google API response', [
                 'paymentState' => $result['paymentState'] ?? 'missing',
-                'orderId' => $result['orderId'] ?? 'missing',
+                'orderId_suffix' => isset($result['orderId']) ? substr((string) $result['orderId'], -6) : 'missing',
                 'expiryTimeMillis' => $result['expiryTimeMillis'] ?? 'missing',
                 'autoRenewing' => $result['autoRenewing'] ?? 'missing',
             ]);

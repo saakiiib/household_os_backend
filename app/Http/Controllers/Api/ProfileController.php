@@ -222,11 +222,11 @@ class ProfileController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            \Log::error('Account deletion failed: ' . $e->getMessage());
+            \Log::error('Account deletion failed', ['error' => $e->getMessage()]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete account: ' . $e->getMessage(),
+                'message' => 'Failed to delete account. Please try again.',
             ], 500);
         }
     }

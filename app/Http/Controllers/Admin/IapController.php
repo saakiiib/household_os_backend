@@ -100,7 +100,7 @@ class IapController extends Controller
             Log::error('Admin reverifyApple failed', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Re-verification failed: ' . $e->getMessage(),
+                'message' => 'Re-verification failed. Please try again.',
             ], 500);
         }
     }
@@ -135,7 +135,7 @@ class IapController extends Controller
             Log::error('Admin reverifyGoogle failed', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Re-verification failed: ' . $e->getMessage(),
+                'message' => 'Re-verification failed. Please try again.',
             ], 500);
         }
     }

@@ -143,18 +143,26 @@ class Renewal extends Model
             return null;
         }
 
-        $path = public_path(ltrim($this->document_file_path, '/'));
+        // Legacy "/uploads/..." rows (public disk era). New rows are
+        // disk-relative paths on private storage and have no public path.
+        if (str_starts_with(ltrim($this->document_file_path, '/'), 'uploads/')) {
+            $path = public_path(ltrim($this->document_file_path, '/'));
 
-        return is_file($path) ? $path : null;
+            return is_file($path) ? $path : null;
+        }
+
+        $absolute = \Illuminate\Support\Facades\Storage::disk(
+            \App\Services\FileEncryptionService::DISK
+        )->path($this->document_file_path);
+
+        return is_file($absolute) ? $absolute : null;
     }
 
     protected static function booted(): void
     {
         static::deleted(function (Renewal $renewal) {
-            $fullPath = $renewal->documentFullPath();
-
-            if ($fullPath) {
-                @unlink($fullPath);
+            if (!empty($renewal->document_file_path)) {
+                app(\App\Services\FileEncryptionService::class)->delete($renewal->document_file_path);
             }
         });
     }

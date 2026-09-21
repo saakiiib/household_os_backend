@@ -242,7 +242,7 @@ class SubscriptionController extends Controller
             default => 'free',
         };
 
-        \Log::info('SUBSCRIPTION CURRENT RESPONSE DEBUG', [
+        \Log::debug('SUBSCRIPTION CURRENT RESPONSE DEBUG', [
             'subscription_id' => $subscription->id,
             'status' => $subscription->status,
             'is_active' => $subscription->isActive(),

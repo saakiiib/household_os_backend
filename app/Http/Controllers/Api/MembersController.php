@@ -214,7 +214,7 @@ class MembersController extends Controller
                     );
                     $notificationSent = true;
                 } catch (\Throwable $e) {
-                    \Log::error('Invitation push resend failed for ' . $invitedEmail . ': ' . $e->getMessage());
+                    \Log::error('Invitation push resend failed', ['invitation_id' => $existingInvitation->id ?? null, 'error' => $e->getMessage()]);
                 }
             } else {
                 // New user — send email (they need it to know they were invited)
@@ -227,7 +227,7 @@ class MembersController extends Controller
                         ));
                     $notificationSent = true;
                 } catch (\Exception $e) {
-                    \Log::error('Invitation email resend failed for ' . $invitedEmail . ': ' . $e->getMessage());
+                    \Log::error('Invitation email resend failed', ['invitation_id' => $existingInvitation->id ?? null, 'error' => $e->getMessage()]);
                 }
             }
 
@@ -307,7 +307,7 @@ class MembersController extends Controller
                     ));
                 $emailSent = true;
             } catch (\Exception $e) {
-                \Log::error('Invitation email failed for ' . $invitedEmail . ': ' . $e->getMessage());
+                \Log::error('Invitation email failed', ['invitation_id' => $invitation->id ?? null, 'error' => $e->getMessage()]);
             }
         }
 

@@ -8,17 +8,19 @@ use App\Models\HouseholdMember;
 use App\Models\Document;
 use App\Models\Renewal;
 use App\Services\EntitlementService;
+use App\Services\FileEncryptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class RenewalsController extends Controller
 {
+    public function __construct(
+        private FileEncryptionService $fileService,
+    ) {}
     /**
      * GET /api/households/{household_id}/renewals
      * Every active household member can see all household renewals.
@@ -173,6 +175,7 @@ class RenewalsController extends Controller
         }
 
         DB::beginTransaction();
+        $encryptedPath = null;
 
         try {
             $renewal = Renewal::create([
@@ -194,17 +197,11 @@ class RenewalsController extends Controller
 
             if ($request->hasFile('document')) {
                 $file = $request->file('document');
-                $filename = Str::random(32) . '.' . $file->getClientOriginalExtension();
-                $directory = public_path('uploads/renewals');
-
-                if (!File::isDirectory($directory)) {
-                    File::makeDirectory($directory, 0755, true);
-                }
-
-                $file->move($directory, $filename);
+                $path = $this->fileService->encryptAndStore($file, 'renewals');
+                $encryptedPath = $path;
 
                 $renewal->update([
-                    'document_file_path'     => '/uploads/renewals/' . $filename,
+                    'document_file_path'     => $path,
                     'document_original_name' => $file->getClientOriginalName(),
                     'document_mime_type'     => $file->getMimeType(),
                 ]);
@@ -223,9 +220,13 @@ class RenewalsController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
+            if ($encryptedPath) {
+                $this->fileService->delete($encryptedPath);
+            }
+            Log::error('Renewal store failed', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create renewal: ' . $e->getMessage(),
+                'message' => 'Failed to create renewal. Please try again.',
             ], 500);
         }
 
@@ -401,11 +402,11 @@ class RenewalsController extends Controller
                 }
             }
 
+            $oldPaths = [];
+            $newPaths = [];
+
             if ($request->boolean('remove_document') && $renewal->document_file_path) {
-                $fullPath = $renewal->documentFullPath();
-                if ($fullPath) {
-                    @unlink($fullPath);
-                }
+                $oldPaths[] = $renewal->document_file_path;
                 $renewal->update([
                     'document_file_path'     => null,
                     'document_original_name' => null,
@@ -415,24 +416,15 @@ class RenewalsController extends Controller
 
             if ($request->hasFile('document')) {
                 if ($renewal->document_file_path) {
-                    $oldFull = $renewal->documentFullPath();
-                    if ($oldFull) {
-                        @unlink($oldFull);
-                    }
+                    $oldPaths[] = $renewal->document_file_path;
                 }
 
                 $file = $request->file('document');
-                $filename = Str::random(32) . '.' . $file->getClientOriginalExtension();
-                $directory = public_path('uploads/renewals');
-
-                if (!File::isDirectory($directory)) {
-                    File::makeDirectory($directory, 0755, true);
-                }
-
-                $file->move($directory, $filename);
+                $path = $this->fileService->encryptAndStore($file, 'renewals');
+                $newPaths[] = $path;
 
                 $renewal->update([
-                    'document_file_path'     => '/uploads/renewals/' . $filename,
+                    'document_file_path'     => $path,
                     'document_original_name' => $file->getClientOriginalName(),
                     'document_mime_type'     => $file->getMimeType(),
                 ]);
@@ -450,11 +442,19 @@ class RenewalsController extends Controller
             }
 
             DB::commit();
+
+            foreach ($oldPaths as $oldPath) {
+                $this->fileService->delete($oldPath);
+            }
         } catch (\Exception $e) {
             DB::rollBack();
+            foreach ($newPaths ?? [] as $newPath) {
+                $this->fileService->delete($newPath);
+            }
+            Log::error('Renewal update failed', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update renewal: ' . $e->getMessage(),
+                'message' => 'Failed to update renewal. Please try again.',
             ], 500);
         }
 
@@ -513,16 +513,18 @@ class RenewalsController extends Controller
             ], 404);
         }
 
-        $fullPath = $renewal->documentFullPath();
+        $contents = $this->fileService->decrypt($renewal->document_file_path);
 
-        if (!$fullPath) {
+        if ($contents === null) {
             return response()->json([
                 'success' => false,
                 'message' => 'Document file not found on server',
             ], 404);
         }
 
-        return response()->download($fullPath, $renewal->document_original_name);
+        return response($contents)
+            ->header('Content-Type', $renewal->document_mime_type ?: 'application/octet-stream')
+            ->header('Content-Disposition', 'inline; filename="' . ($renewal->document_original_name ?? 'document') . '"');
     }
 
     /**
@@ -628,9 +630,10 @@ class RenewalsController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Renewal renew failed', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to renew: ' . $e->getMessage(),
+                'message' => 'Failed to renew. Please try again.',
             ], 500);
         }
 

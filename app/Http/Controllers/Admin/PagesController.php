@@ -386,7 +386,6 @@ class PagesController extends Controller
         }
 
         $stripeOk = !empty(config('services.stripe.secret'));
-        $paypalOk = !empty(config('services.paypal.client_id'));
         $mailOk = !empty(config('mail.mailers.smtp.host'))
             && !empty(config('mail.mailers.smtp.username'))
             && !empty(config('mail.mailers.smtp.password'));
@@ -395,7 +394,6 @@ class PagesController extends Controller
             ['label' => 'API', 'value' => 'Operational', 'status' => 'ok', 'icon' => 'ri-server-line'],
             ['label' => 'Database', 'value' => $dbOk ? 'Connected' : 'Down', 'status' => $dbOk ? 'ok' : 'warning', 'icon' => 'ri-database-2-line'],
             ['label' => 'Stripe', 'value' => $stripeOk ? 'Connected' : 'Not configured', 'status' => $stripeOk ? 'ok' : 'warning', 'icon' => 'ri-visa-line'],
-            ['label' => 'PayPal', 'value' => $paypalOk ? 'Connected' : 'Not configured', 'status' => $paypalOk ? 'ok' : 'warning', 'icon' => 'ri-paypal-line'],
             ['label' => 'Email', 'value' => $mailOk ? 'Configured' : 'Not configured', 'status' => $mailOk ? 'ok' : 'warning', 'icon' => 'ri-mail-line'],
         ];
 

@@ -32,16 +32,8 @@ Route::get('app/version', [AppVersionController::class, 'check'])->middleware('t
 Route::get('subscription/plans', [SubscriptionController::class, 'index']);
 Route::get('subscription/products', [SubscriptionController::class, 'products']);
 
-// PayPal return URL (user redirected here after approving payment)
-Route::get('subscription/paypal-capture', function () {
-    return response()->json([
-        'message' => 'Payment approved. You can close this window and return to the app.',
-    ]);
-});
-
 // Payment webhooks (public, no auth)
 Route::post('subscription/stripe/webhook', [PaymentController::class, 'stripeWebhook']);
-Route::post('subscription/paypal/webhook', [PaymentController::class, 'paypalWebhook']);
 
 // Apple IAP webhook (public, no auth - Apple sends these directly)
 Route::post('subscription/apple/webhook', [AppleIapController::class, 'webhook']);
@@ -214,7 +206,6 @@ Route::middleware(['auth:api', 'throttle:120,1,api:'])->group(function () {
     Route::post('subscription/checkout', [PaymentController::class, 'checkout']);
     Route::post('subscription/cancel', [SubscriptionController::class, 'cancel']);
     Route::get('subscription/history', [SubscriptionController::class, 'history']);
-    Route::post('subscription/paypal/capture', [PaymentController::class, 'paypalCapture']);
     Route::post('subscription/stripe/confirm', [PaymentController::class, 'stripeConfirm']);
 
     // Apple IAP
