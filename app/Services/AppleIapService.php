@@ -609,7 +609,7 @@ class AppleIapService
                 $lastError = 'No subscription transactions returned.';
             } catch (\Exception $e) {
                 Log::error('AppleIapService: status request failed', ['error' => $e->getMessage()]);
-                $lastError = $e->getMessage();
+                $lastError = 'Failed to reach App Store. Please try again.';
             }
         }
 
