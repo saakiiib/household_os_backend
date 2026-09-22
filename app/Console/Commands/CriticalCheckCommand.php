@@ -7,6 +7,7 @@ use App\Models\Renewal;
 use App\Models\HouseholdMember;
 use App\Models\Subscription;
 use App\Models\Task;
+use App\Models\DeviceToken;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 
@@ -63,27 +64,23 @@ class CriticalCheckCommand extends Command
 
         $tasks = Task::where('status', '!=', 'completed')
             ->whereNotNull('due_date')
-            ->whereDate('due_date', '<=', $today)
+            ->whereDate('due_date', '<=', $now->copy()->addDay()->toDateString())
             ->with('assignedUser:id,first_name,last_name,email,fcm_token', 'createdBy:id,first_name,last_name,email')
             ->select('id', 'title', 'due_date', 'due_time', 'created_by_user_id', 'assigned_user_id', 'household_id')
             ->get();
 
         foreach ($tasks as $task) {
-            // Only flag as overdue once the actual due date/time has passed.
-            if ($this->itemDueDateTime($task->due_date, $task->due_time)->gt($now)) {
-                continue;
-            }
-
-            // Hold off until the morning hour so it doesn't fire at midnight.
-            if ($now->hour < self::MORNING_HOUR) {
-                continue;
-            }
-
             $recipientIds = [];
 
             // Personal reminder rule: assigned -> assignee only; unassigned -> creator.
             $targetUserId = !empty($task->assigned_user_id) ? $task->assigned_user_id : $task->created_by_user_id;
             if (!empty($targetUserId)) {
+                $localNow = $this->localNowForUser((int) $targetUserId);
+                $localDue = $this->itemDueDateTime($task->due_date, $task->due_time, $localNow->getTimezone()->getName());
+                if ($localDue->gt($localNow) || $localNow->hour < self::MORNING_HOUR) {
+                    continue;
+                }
+
                 $isActive = HouseholdMember::where('household_id', $task->household_id)
                     ->where('user_id', $targetUserId)
                     ->where('status', 'active')
@@ -99,9 +96,9 @@ class CriticalCheckCommand extends Command
                 continue;
             }
 
+            $sentKey = md5('task-critical|' . $task->id . '|overdue|' . $task->due_date->format('Y-m-d') . '|' . ($task->due_time ?? ''));
             $alreadySent = \App\Models\Notification::where('type', 'task_reminder')
-                ->where('data->id', $task->id)
-                ->where('data->reminder_type', 'overdue')
+                ->where('data->sent_key', $sentKey)
                 ->whereIn('user_id', $recipientIds)
                 ->exists();
 
@@ -111,7 +108,7 @@ class CriticalCheckCommand extends Command
                     'Task overdue',
                     "'{$task->title}' was due {$task->due_date->format('d M Y')} — please complete it",
                     'task_reminder',
-                    ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'overdue', 'household_id' => $task->household_id],
+                    ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'overdue', 'sent_key' => $sentKey, 'household_id' => $task->household_id],
                     'critical'
                 );
                 $this->sent++;
@@ -126,27 +123,21 @@ class CriticalCheckCommand extends Command
 
         $tasks = Task::where('status', '!=', 'completed')
             ->whereNotNull('due_date')
-            ->whereDate('due_date', '=', $today)
+            ->whereBetween('due_date', [$now->copy()->subDay()->toDateString(), $now->copy()->addDay()->toDateString()])
             ->with('assignedUser:id,first_name,last_name,email,fcm_token', 'createdBy:id,first_name,last_name,email')
             ->select('id', 'title', 'due_date', 'due_time', 'assigned_user_id', 'created_by_user_id', 'household_id')
             ->get();
 
         foreach ($tasks as $task) {
-            // Skip if the due time has already passed — that's an "overdue"
-            // notification now, not a "due today" heads-up.
-            if ($this->itemDueDateTime($task->due_date, $task->due_time)->lte($now)) {
-                continue;
-            }
-
-            // Hold off until the morning hour so it doesn't fire at midnight.
-            if ($now->hour < self::MORNING_HOUR) {
-                continue;
-            }
-
             // Personal reminder rule: assigned -> assignee only; unassigned -> creator.
             $recipientIds = [];
             $targetUserId = !empty($task->assigned_user_id) ? $task->assigned_user_id : $task->created_by_user_id;
             if (!empty($targetUserId)) {
+                $localNow = $this->localNowForUser((int) $targetUserId);
+                $localDue = $this->itemDueDateTime($task->due_date, $task->due_time, $localNow->getTimezone()->getName());
+                if (!$localDue->isSameDay($localNow) || $localDue->lte($localNow) || $localNow->hour < self::MORNING_HOUR) {
+                    continue;
+                }
                 $recipientIds[] = $targetUserId;
             }
 
@@ -166,11 +157,10 @@ class CriticalCheckCommand extends Command
                 continue;
             }
 
+            $sentKey = md5('task-critical|' . $task->id . '|due_today|' . $task->due_date->format('Y-m-d') . '|' . ($task->due_time ?? ''));
             $alreadySent = \App\Models\Notification::where('type', 'task_reminder')
-                ->where('data->id', $task->id)
-                ->where('data->reminder_type', 'due_today')
+                ->where('data->sent_key', $sentKey)
                 ->whereIn('user_id', $verifiedRecipients)
-                ->whereDate('created_at', $today)
                 ->exists();
 
             if (!$alreadySent) {
@@ -180,7 +170,7 @@ class CriticalCheckCommand extends Command
                     'Task due today',
                     "'{$task->title}' is due {$timeLabel}",
                     'task_reminder',
-                    ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'due_today', 'household_id' => $task->household_id],
+                    ['type' => 'task', 'id' => $task->id, 'reminder_type' => 'due_today', 'sent_key' => $sentKey, 'household_id' => $task->household_id],
                     'high'
                 );
                 $this->sent++;
@@ -192,14 +182,9 @@ class CriticalCheckCommand extends Command
     {
         $today = now()->startOfDay();
 
-        // Hold off until the morning hour so it doesn't fire at midnight.
-        if (now()->hour < self::MORNING_HOUR) {
-            return;
-        }
-
         $renewals = Renewal::where('status', 'pending')
             ->whereNotNull('due_date')
-            ->whereDate('due_date', '<', $today)
+            ->whereDate('due_date', '<=', now()->addDay()->toDateString())
             ->select('id', 'title', 'due_date', 'household_id', 'created_by_user_id', 'assigned_user_id')
             ->get();
 
@@ -212,14 +197,9 @@ class CriticalCheckCommand extends Command
     {
         $today = now()->startOfDay();
 
-        // Hold off until the morning hour so it doesn't fire at midnight.
-        if (now()->hour < self::MORNING_HOUR) {
-            return;
-        }
-
         $renewals = Renewal::where('status', 'pending')
             ->whereNotNull('due_date')
-            ->whereDate('due_date', '=', $today)
+            ->whereBetween('due_date', [now()->subDay()->toDateString(), now()->addDay()->toDateString()])
             ->select('id', 'title', 'due_date', 'household_id', 'created_by_user_id', 'assigned_user_id')
             ->get();
 
@@ -239,6 +219,16 @@ class CriticalCheckCommand extends Command
             $recipientIds = [];
             $targetUserId = !empty($renewal->assigned_user_id) ? $renewal->assigned_user_id : $renewal->created_by_user_id;
             if (!empty($targetUserId)) {
+                $localNow = $this->localNowForUser((int) $targetUserId);
+                $dueLocal = \Carbon\Carbon::parse($renewal->due_date->format('Y-m-d'), $localNow->getTimezone()->getName());
+                $isDueToday = $dueLocal->isSameDay($localNow);
+                $isOverdue = $dueLocal->lt($localNow->copy()->startOfDay());
+                if ($localNow->hour < self::MORNING_HOUR ||
+                    ($reminderType === 'due_today' && !$isDueToday) ||
+                    ($reminderType === 'overdue' && !$isOverdue)) {
+                    continue;
+                }
+
                 $isActive = HouseholdMember::where('household_id', $renewal->household_id)
                     ->where('user_id', $targetUserId)
                     ->where('status', 'active')
@@ -252,16 +242,11 @@ class CriticalCheckCommand extends Command
                 continue;
             }
 
-            $sentQuery = \App\Models\Notification::where('type', 'renewal_reminder')
-                ->where('data->id', $renewal->id)
-                ->where('data->reminder_type', $reminderType)
-                ->whereIn('user_id', $recipientIds);
-            // Overdue is a state transition, not a daily event. Persist it once.
-            // Due-today remains date-scoped because it represents today's event.
-            if ($reminderType !== 'overdue') {
-                $sentQuery->whereDate('created_at', $today);
-            }
-            $alreadySent = $sentQuery->exists();
+            $sentKey = md5('renewal-critical|' . $renewal->id . '|' . $reminderType . '|' . $renewal->due_date->format('Y-m-d'));
+            $alreadySent = \App\Models\Notification::where('type', 'renewal_reminder')
+                ->where('data->sent_key', $sentKey)
+                ->whereIn('user_id', $recipientIds)
+                ->exists();
 
             if (!$alreadySent) {
                 $title = $reminderType === 'overdue' ? 'Renewal overdue' : 'Renewal due today';
@@ -272,7 +257,7 @@ class CriticalCheckCommand extends Command
                     $title,
                     $body,
                     'renewal_reminder',
-                    ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $reminderType, 'household_id' => $renewal->household_id],
+                    ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => $reminderType, 'sent_key' => $sentKey, 'household_id' => $renewal->household_id],
                     $priority
                 );
                 $this->sent++;
@@ -284,17 +269,12 @@ class CriticalCheckCommand extends Command
     {
         $today = now()->startOfDay();
 
-        // Hold off until the morning hour so it doesn't fire at midnight.
-        if (now()->hour < self::MORNING_HOUR) {
-            return;
-        }
-
         // Include creator/assignee IDs: recipient routing below depends on
         // them. Loading only id/household/title made every vehicle-service
         // notification have an empty recipient list and therefore never send.
         $services = \App\Models\RenewalVehicleService::with('renewal:id,household_id,title,created_by_user_id,assigned_user_id')
             ->whereHas('renewal', fn($q) => $q->where('status', 'pending'))
-            ->whereDate('service_date', '=', $today)
+            ->whereBetween('service_date', [now()->subDay()->toDateString(), now()->addDay()->toDateString()])
             ->select('id', 'renewal_id', 'service_type', 'service_date')
             ->get();
 
@@ -312,6 +292,12 @@ class CriticalCheckCommand extends Command
             $recipientIds = [];
             $targetUserId = !empty($renewal->assigned_user_id) ? $renewal->assigned_user_id : $renewal->created_by_user_id;
             if (!empty($targetUserId)) {
+                $localNow = $this->localNowForUser((int) $targetUserId);
+                $serviceLocal = \Carbon\Carbon::parse($service->service_date->format('Y-m-d'), $localNow->getTimezone()->getName());
+                if (!$serviceLocal->isSameDay($localNow) || $localNow->hour < self::MORNING_HOUR) {
+                    continue;
+                }
+
                 $isActive = HouseholdMember::where('household_id', $renewal->household_id)
                     ->where('user_id', $targetUserId)
                     ->where('status', 'active')
@@ -325,11 +311,10 @@ class CriticalCheckCommand extends Command
                 continue;
             }
 
+            $sentKey = md5('vehicle-service|' . $service->id . '|' . $service->service_type . '|' . $service->service_date->format('Y-m-d'));
             $alreadySent = \App\Models\Notification::where('type', 'renewal_reminder')
-                ->where('data->id', $service->id)
-                ->where('data->reminder_type', 'service_due_today')
+                ->where('data->sent_key', $sentKey)
                 ->whereIn('user_id', $recipientIds)
-                ->whereDate('created_at', $today)
                 ->exists();
 
             if (!$alreadySent) {
@@ -339,7 +324,7 @@ class CriticalCheckCommand extends Command
                     ucfirst($typeLabel) . ' due today',
                     "'{$renewal->title}' — {$typeLabel} is due today",
                     'renewal_reminder',
-                    ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type, 'household_id' => $renewal->household_id],
+                    ['type' => 'renewal', 'id' => $renewal->id, 'reminder_type' => 'service_due_today', 'service_type' => $service->service_type, 'sent_key' => $sentKey, 'household_id' => $renewal->household_id],
                     'critical'
                 );
                 $this->sent++;
@@ -347,13 +332,30 @@ class CriticalCheckCommand extends Command
         }
     }
 
+    /** Recipient-local clock based on the most recently registered device timezone. */
+    private function localNowForUser(int $userId): \Carbon\Carbon
+    {
+        $timezone = DeviceToken::where('user_id', $userId)
+            ->whereNotNull('timezone')
+            ->latest('updated_at')
+            ->value('timezone') ?: config('app.timezone', 'UTC');
+
+        try {
+            return now($timezone);
+        } catch (\Throwable $e) {
+            return now(config('app.timezone', 'UTC'));
+        }
+    }
+
     /**
      * Build the actual due date/time for an item from its date + optional time.
      * Falls back to 09:00 when no time is set.
      */
-    private function itemDueDateTime($date, $time = null): \Carbon\Carbon
+    private function itemDueDateTime($date, $time = null, ?string $timezone = null): \Carbon\Carbon
     {
-        $dt = $date instanceof \Carbon\Carbon ? $date->copy() : \Carbon\Carbon::parse($date);
+        $timezone = $timezone ?: config('app.timezone', 'UTC');
+        $dateString = $date instanceof \Carbon\Carbon ? $date->format('Y-m-d') : \Carbon\Carbon::parse($date)->format('Y-m-d');
+        $dt = \Carbon\Carbon::parse($dateString, $timezone);
         $dt->setTime(9, 0, 0);
 
         if ($time) {

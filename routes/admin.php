@@ -13,6 +13,8 @@ use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\IapController;
 use App\Http\Controllers\Admin\SettingController;
 use App\Http\Controllers\Admin\SupportCommunicationController;
+use App\Http\Controllers\Admin\PromotionController;
+use App\Http\Controllers\Admin\AnnouncementController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
@@ -62,6 +64,15 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     // Payments
     Route::get('/payments', [PaymentController::class, 'index'])->name('admin.payments.index');
     Route::get('/payments/{payment}', [PaymentController::class, 'show'])->name('admin.payments.show');
+
+    // B61 Promotional Codes & Campaigns (Apple offer identifiers only for App Store subscription benefits)
+    Route::get('/promotions', [PromotionController::class, 'index'])->name('admin.promotions.index');
+    Route::post('/promotions', [PromotionController::class, 'store'])->name('admin.promotions.store');
+    Route::patch('/promotions/{promotion}/toggle', [PromotionController::class, 'toggle'])->name('admin.promotions.toggle');
+
+    // B61 Admin Announcements
+    Route::get('/announcements', [AnnouncementController::class, 'index'])->name('admin.announcements.index');
+    Route::post('/announcements', [AnnouncementController::class, 'store'])->name('admin.announcements.store');
 
     // Customer Support Communications
     Route::get('/support-communications', [SupportCommunicationController::class, 'index'])->name('admin.support.index');

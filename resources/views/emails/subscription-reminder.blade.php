@@ -1,7 +1,10 @@
 @php
   $companyName = \App\Models\Setting::get('company_name', 'Household OS');
-  $logo = \App\Models\Setting::get('logo');
-  $logoUrl = $logo ? asset($logo) : asset('logo.png');
+  // Embed the email logo as a CID attachment. This avoids broken images when
+  // APP_URL is private/misconfigured or the recipient blocks remote images.
+  $logoUrl = isset($message) && file_exists(public_path('logo.png'))
+      ? $message->embed(public_path('logo.png'))
+      : asset('logo.png');
   $tagline = \App\Models\Setting::get('footer_tagline', 'The operating system for modern family life.');
   $disclaimer = \App\Models\Setting::get('footer_disclaimer', 'This is an automated service email. Please do not share verification or reset codes with anyone.');
 @endphp
@@ -121,6 +124,8 @@
 
         <div class="footer">
           {{ $companyName }} — {{ $tagline }}<br>
+          <a href="https://householdosapp.com" style="color:#64748b;text-decoration:none;">householdosapp.com</a> ·
+          <a href="mailto:info@mentosoftware.co.uk" style="color:#64748b;text-decoration:none;">info@mentosoftware.co.uk</a><br>
           {{ $disclaimer }}
         </div>
       </td>

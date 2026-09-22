@@ -88,9 +88,12 @@
                             <thead class="table-light">
                                 <tr>
                                     <th>Household</th>
-                                    <th>Owner</th>
+                                    <th>Coordinator</th>
                                     <th>Members</th>
-                                    <th>Status</th>
+                                    <th>Plan</th>
+                                    <th>Subscription / Billing</th>
+                                    <th>Storage</th>
+                                    <th>Tasks / Renewals / Docs</th>
                                     <th>Created</th>
                                     <th>Action</th>
                                 </tr>
@@ -116,11 +119,14 @@ $(function () {
             { data: 'name_link', name: 'name', orderable: true, searchable: true },
             { data: 'creator_name', name: 'creator_id', orderable: false, searchable: false },
             { data: 'members_count', name: 'members_count', orderable: false, searchable: false },
+            { data: 'plan_fmt', name: 'plan', orderable: false, searchable: false },
             { data: 'subscription_status', name: 'status', orderable: false, searchable: false },
+            { data: 'storage_fmt', name: 'storage', orderable: false, searchable: false },
+            { data: 'activity_fmt', name: 'activity', orderable: false, searchable: false },
             { data: 'date_fmt', name: 'created_at', orderable: true, searchable: false },
             { data: 'action', name: 'action', orderable: false, searchable: false }
         ],
-        order: [[4, 'desc']],
+        order: [[7, 'desc']],
         language: { emptyTable: 'No records found', zeroRecords: 'No matching households' }
     });
 });

@@ -89,8 +89,11 @@
                                 <tr>
                                     <th>Name</th>
                                     <th>Email</th>
+                                    <th>Household</th>
                                     <th>Role</th>
-                                    <th>Joined</th>
+                                    <th>Plan</th>
+                                    <th>Subscription</th>
+                                    <th>Status / Joined</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
@@ -114,11 +117,14 @@ $(function () {
         columns: [
             { data: 'name_link', name: 'first_name', orderable: true, searchable: true },
             { data: 'email_link', name: 'email', orderable: true, searchable: true },
-            { data: 'role_badge', name: 'is_admin', orderable: false, searchable: false },
+            { data: 'household_fmt', name: 'household', orderable: false, searchable: false },
+            { data: 'role_badge', name: 'role', orderable: false, searchable: false },
+            { data: 'plan_fmt', name: 'plan', orderable: false, searchable: false },
+            { data: 'subscription_fmt', name: 'subscription', orderable: false, searchable: false },
             { data: 'date_fmt', name: 'created_at', orderable: true, searchable: false },
             { data: 'action', name: 'action', orderable: false, searchable: false }
         ],
-        order: [[3, 'desc']],
+        order: [[6, 'desc']],
         language: { emptyTable: 'No records found', zeroRecords: 'No matching users' }
     });
 });

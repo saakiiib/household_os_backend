@@ -13,7 +13,7 @@ class UserController extends Controller
         $isDataTable = request()->ajax() && request()->has('draw');
 
         if ($isDataTable) {
-            $query = User::with('households')
+            $query = User::with('households.subscription.plan')
                 ->where('is_admin', false)
                 ->select('id', 'first_name', 'last_name', 'email', 'status', 'is_admin', 'created_at');
 
@@ -26,12 +26,15 @@ class UserController extends Controller
                     return '<a href="' . route('admin.users.show', $user) . '" class="text-muted">' . e($user->email) . '</a>';
                 })
                 ->addColumn('households_count', fn($user) => $user->households->count())
-                ->addColumn('role_badge', fn($user) => '<span class="badge bg-soft-secondary">User</span>')
+                ->addColumn('household_fmt', function($user){$h=$user->households->first();return $h?'<a href="'.route('admin.households.show',$h).'">'.e($h->name).'</a>':'<span class="text-muted">None</span>';})
+                ->addColumn('role_badge', function($user){$h=$user->households->first();$role=$h?($h->pivot->role??'member'):'—';return '<span class="badge bg-soft-secondary">'.e(ucfirst($role==='admin'?'Coordinator':$role)).'</span>';})
+                ->addColumn('plan_fmt', function($user){$h=$user->households->first();if(!$h)return '—';return e(ucfirst((new \App\Services\EntitlementService())->getPlanCode($h)));})
+                ->addColumn('subscription_fmt', function($user){$s=$user->households->first()?->subscription;return $s?'<span class="badge badge-soft-'.(in_array($s->status,['active','trial'])?'success':'warning').'">'.e(ucfirst(str_replace('_',' ',$s->status))).'</span>':'<span class="badge badge-soft-secondary">Free</span>';})
                 ->addColumn('date_fmt', fn($user) => $user->created_at->format('d M Y'))
                 ->addColumn('action', function ($user) {
                     return '<a href="' . route('admin.users.show', $user) . '" class="btn btn-sm btn-soft-primary">View</a>';
                 })
-                ->rawColumns(['name_link', 'email_link', 'role_badge', 'action'])
+                ->rawColumns(['name_link', 'email_link', 'household_fmt', 'role_badge', 'subscription_fmt', 'action'])
                 ->make(true);
         }
 

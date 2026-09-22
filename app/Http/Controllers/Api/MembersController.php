@@ -465,8 +465,8 @@ class MembersController extends Controller
                 $userName = $user->name ?? $user->email;
                 app(NotificationService::class)->sendToUsers(
                     $adminIds,
-                    'New Member Request',
-                    $userName . ' wants to join ' . $invitation->household->name . '. Review and approve.',
+                    'Member awaiting approval',
+                    $userName . ' accepted the invitation to join ' . $invitation->household->name . '. Please confirm their membership.',
                     'member_request',
                     [
                         'module' => 'household',

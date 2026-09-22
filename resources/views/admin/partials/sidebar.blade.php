@@ -281,6 +281,7 @@
                 </li>
                 <li class="nav-item section-items {{ $activeSection !== 'billing' ? 'd-none' : '' }}" data-section-items="billing"><a href="{{ route('admin.subscriptions.index') }}" class="nav-link {{ $cur === 'subscriptions' ? 'active' : '' }}"><i class="ri-star-line"></i><span>Subscriptions</span></a></li>
                 <li class="nav-item section-items {{ $activeSection !== 'billing' ? 'd-none' : '' }}" data-section-items="billing"><a href="{{ route('admin.payments.index') }}" class="nav-link {{ $cur === 'payments' ? 'active' : '' }}"><i class="ri-money-pound-circle-line"></i><span>Payments</span></a></li>
+                <li class="nav-item section-items {{ $activeSection !== 'billing' ? 'd-none' : '' }}" data-section-items="billing"><a href="{{ route('admin.promotions.index') }}" class="nav-link {{ $cur === 'promotions' ? 'active' : '' }}"><i class="ri-coupon-3-line"></i><span>Promotions</span></a></li>
                 <li class="nav-item section-items {{ $activeSection !== 'billing' ? 'd-none' : '' }}" data-section-items="billing"><a href="{{ route('admin.page', ['page' => 'revenue']) }}" class="nav-link {{ $cur === 'revenue' ? 'active' : '' }}"><i class="ri-line-chart-line"></i><span>Revenue Analytics</span></a></li>
 
                 {{-- SUPPORT & COMMS --}}
@@ -294,6 +295,7 @@
                 <li class="nav-item section-items {{ $activeSection !== 'support-comms' ? 'd-none' : '' }}" data-section-items="support-comms"><a href="{{ route('admin.page', ['page' => 'escalations']) }}" class="nav-link {{ $cur === 'escalations' ? 'active' : '' }}"><i class="ri-alarm-warning-line"></i><span>Escalations</span></a></li>
                 <li class="nav-item section-items {{ $activeSection !== 'support-comms' ? 'd-none' : '' }}" data-section-items="support-comms"><a href="{{ route('admin.page', ['page' => 'communications']) }}" class="nav-link {{ $cur === 'communications' ? 'active' : '' }}"><i class="ri-chat-3-line"></i><span>Communication Centre</span></a></li>
                 <li class="nav-item section-items {{ $activeSection !== 'support-comms' ? 'd-none' : '' }}" data-section-items="support-comms"><a href="{{ route('admin.page', ['page' => 'notifications']) }}" class="nav-link {{ $cur === 'notifications' ? 'active' : '' }}"><i class="ri-notification-3-line"></i><span>Push Notifications</span></a></li>
+                <li class="nav-item section-items {{ $activeSection !== 'support-comms' ? 'd-none' : '' }}" data-section-items="support-comms"><a href="{{ route('admin.announcements.index') }}" class="nav-link {{ $cur === 'announcements' ? 'active' : '' }}"><i class="ri-megaphone-line"></i><span>Announcements</span></a></li>
                 <li class="nav-item section-items {{ $activeSection !== 'support-comms' ? 'd-none' : '' }}" data-section-items="support-comms"><a href="{{ route('admin.page', ['page' => 'templates']) }}" class="nav-link {{ $cur === 'templates' ? 'active' : '' }}"><i class="ri-file-text-line"></i><span>Message Templates</span></a></li>
 
                 {{-- CONTENT --}}

@@ -17,3 +17,6 @@ Schedule::command('subscription:check-expiry')->everyFiveMinutes();
 
 // Bell history retention: 30 days / 100 items per user; actionable items are preserved.
 Schedule::command('notifications:cleanup')->dailyAt('03:20')->withoutOverlapping();
+
+// B61 scheduled admin announcements
+Schedule::command('announcements:send-scheduled')->everyMinute()->withoutOverlapping();

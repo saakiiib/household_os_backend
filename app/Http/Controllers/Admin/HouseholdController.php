@@ -12,7 +12,7 @@ class HouseholdController extends Controller
     public function index()
     {
         if (request()->ajax()) {
-            return DataTables::of(Household::with('creator', 'members', 'subscription')
+            return DataTables::of(Household::with('creator', 'members', 'subscription.plan')->withCount(['tasks','renewals','documents'])
                 ->select('id', 'name', 'invite_code', 'created_by_user_id', 'created_at'))
                 ->addColumn('name_link', function ($h) {
                     return '<a href="' . route('admin.households.show', $h) . '" class="fw-semibold text-body">' . e($h->name) . '</a>';
@@ -27,6 +27,9 @@ class HouseholdController extends Controller
                 ->addColumn('subscription_status', fn($h) => $h->subscription
                     ? '<span class="badge badge-soft-' . ($h->subscription->status === 'active' ? 'success' : 'warning') . '">' . ucfirst($h->subscription->status) . '</span>'
                     : '<span class="badge badge-soft-secondary">None</span>')
+                ->addColumn('plan_fmt', fn($h) => '<span class="fw-semibold">' . e(ucfirst((new EntitlementService())->getPlanCode($h))) . '</span>')
+                ->addColumn('storage_fmt', function($h){ $e=new EntitlementService(); $used=$e->getStorageUsed($h); $limit=$e->getLimits($e->getPlanCode($h))['documents_bytes']; return number_format($used/1048576,1).' / '.number_format($limit/1048576,0).' MB'; })
+                ->addColumn('activity_fmt', fn($h) => $h->tasks_count.' / '.$h->renewals_count.' / '.$h->documents_count)
                 ->addColumn('date_fmt', fn($h) => $h->created_at->format('d M Y'))
                 ->addColumn('action', function ($h) {
                     return '<div class="dropdown">
@@ -36,7 +39,7 @@ class HouseholdController extends Controller
                         </div>
                     </div>';
                 })
-                ->rawColumns(['name_link', 'creator_name', 'members_count', 'subscription_status', 'action'])
+                ->rawColumns(['name_link', 'creator_name', 'members_count', 'subscription_status', 'plan_fmt', 'action'])
                 ->make(true);
         }
 

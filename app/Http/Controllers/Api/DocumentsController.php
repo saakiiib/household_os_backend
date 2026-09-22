@@ -212,7 +212,7 @@ class DocumentsController extends Controller
                 $usedMb = round($this->entitlements->getStorageUsed($household) / 1024 / 1024, 1);
                 return response()->json([
                     'success' => false,
-                    'message' => 'Household storage is full',
+                    'message' => 'Your existing documents are safe, but this household is over its current storage allowance. Delete or download documents to free space, or upgrade your plan before uploading new files.',
                     'code' => 'ENTITLEMENT_LIMIT_STORAGE',
                     'entitlement' => ['plan' => $this->entitlements->getPlanCode($household), 'limit_bytes' => $this->entitlements->getLimits($this->entitlements->getPlanCode($household))['documents_bytes'], 'used_bytes' => $this->entitlements->getStorageUsed($household)],
                 ], 403);
@@ -503,7 +503,7 @@ class DocumentsController extends Controller
         if (!$this->entitlements->canUploadDocument($household, $additionalBytes)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Household storage is full',
+                'message' => 'Your existing documents are safe, but this household is over its current storage allowance. Delete or download documents to free space, or upgrade your plan before uploading new files.',
                 'code' => 'ENTITLEMENT_LIMIT_STORAGE',
                 'entitlement' => ['plan' => $this->entitlements->getPlanCode($household), 'limit_bytes' => $this->entitlements->getLimits($this->entitlements->getPlanCode($household))['documents_bytes'], 'used_bytes' => $this->entitlements->getStorageUsed($household)],
             ], 403);
