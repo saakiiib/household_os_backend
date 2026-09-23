@@ -11,6 +11,7 @@ use App\Models\SubscriptionPlan;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
@@ -612,9 +613,9 @@ class HouseholdController extends Controller
 
     /**
      * POST /api/households/{id}/transfer-ownership
-     * Transfer household ownership to another active member, then remove the
-     * current creator's membership (spec: "Transfer Household Ownership").
-     * Requires: the current household creator.
+     * Transfer household coordination to another active member while keeping
+     * the former Coordinator as an ordinary active member. Subscription/IAP
+     * ownership is intentionally unchanged. Requires: current Coordinator.
      */
     public function transferOwnership(Request $request, $id)
     {
@@ -625,18 +626,16 @@ class HouseholdController extends Controller
         $user = $request->user();
         $household = Household::findOrFail($id);
 
-        // Allowed for the household creator, or any active admin member.
+        // B69: Coordinator transfer is an ownership operation, not a generic
+        // admin action. Only the current Coordinator may hand over the role.
+        // This keeps household ownership deterministic and, importantly, does
+        // not touch the household subscription or its Apple/Google purchaser.
         $isCreator = $household->created_by_user_id === $user->id;
-        $isAdmin = HouseholdMember::where('household_id', $id)
-            ->where('user_id', $user->id)
-            ->where('status', 'active')
-            ->where('role', 'admin')
-            ->exists();
 
-        if (!$isCreator && !$isAdmin) {
+        if (!$isCreator) {
             return response()->json([
                 'success' => false,
-                'message' => 'Only the household creator or an admin can transfer ownership.',
+                'message' => 'Only the current household Coordinator can transfer the Coordinator role.',
             ], 403);
         }
 
@@ -661,17 +660,24 @@ class HouseholdController extends Controller
             ], 422);
         }
 
-        // Promote the new owner to admin, reassign creator, then remove old creator.
-        $newOwnerMember->update(['role' => 'admin']);
-        $household->update(['created_by_user_id' => $newOwnerId]);
+        // B69: transfer only household coordination. The old Coordinator stays
+        // in the household as an ordinary member. Never rewrite subscription
+        // subscriber_user_id, transaction IDs, app_account_token, product,
+        // billing period, expiry, auto-renew, or payment history here.
+        DB::transaction(function () use ($household, $id, $user, $newOwnerMember, $newOwnerId) {
+            $newOwnerMember->update(['role' => 'admin']);
 
-        HouseholdMember::where('household_id', $id)
-            ->where('user_id', $user->id)
-            ->delete();
+            HouseholdMember::where('household_id', $id)
+                ->where('user_id', $user->id)
+                ->where('status', 'active')
+                ->update(['role' => 'member']);
+
+            $household->update(['created_by_user_id' => $newOwnerId]);
+        });
 
         return response()->json([
             'success' => true,
-            'message' => 'Household ownership transferred successfully.',
+            'message' => 'Coordinator transferred successfully. You remain a member of this household.',
             'data' => [
                 'household_id' => $household->id,
                 'new_owner_user_id' => $newOwnerId,
