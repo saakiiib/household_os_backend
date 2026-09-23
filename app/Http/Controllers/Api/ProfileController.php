@@ -127,12 +127,29 @@ class ProfileController extends Controller
 
         $user = Auth::user();
 
+        // B68 safety: a household must never be orphaned by deleting its
+        // Coordinator while other active members remain. The Coordinator must
+        // use the existing transfer-ownership flow first.
+        $createdHouseholds = Household::where('created_by_user_id', $user->id)->get();
+        foreach ($createdHouseholds as $household) {
+            $hasOtherActiveMembers = HouseholdMember::where('household_id', $household->id)
+                ->where('user_id', '!=', $user->id)
+                ->where('status', 'active')
+                ->exists();
+
+            if ($hasOtherActiveMembers) {
+                return response()->json([
+                    'success' => false,
+                    'code' => 'coordinator_transfer_required',
+                    'message' => 'Please transfer the Coordinator role to another household member before deleting your account.',
+                ], 409);
+            }
+        }
+
         DB::beginTransaction();
 
         try {
-            // Find households where user is the creator
-            $createdHouseholds = Household::where('created_by_user_id', $user->id)->get();
-
+            // Delete households where this user is the sole remaining Coordinator/member.
             foreach ($createdHouseholds as $household) {
                 $householdId = $household->id;
 
