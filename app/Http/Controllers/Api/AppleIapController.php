@@ -61,10 +61,23 @@ class AppleIapController extends Controller
                     'message' => $result['message'] ?? 'unknown',
                     'code' => $result['code'] ?? null,
                 ]);
+                $code = $result['code'] ?? null;
+                // B70: preserve Apple/household reconciliation codes for the
+                // client. These are business-state conflicts, not malformed
+                // purchase requests. Returning 409 lets Flutter distinguish a
+                // stale StoreKit transaction from a genuine purchase failure.
+                $status = in_array($code, [
+                    'APP_ACCOUNT_TOKEN_MISMATCH',
+                    'APPLE_TOKEN_MISMATCH',
+                    'SUBSCRIPTION_LINKED_ELSEWHERE',
+                    'DUPLICATE_SUBSCRIPTION',
+                ], true) ? 409 : 422;
+
                 return response()->json([
                     'success' => false,
                     'message' => $result['message'],
-                ], 422);
+                    'code' => $code,
+                ], $status);
             }
 
             $subscription = $result['subscription'];
@@ -132,10 +145,23 @@ class AppleIapController extends Controller
                     'message' => $result['message'] ?? 'unknown',
                     'code' => $result['code'] ?? null,
                 ]);
+                $code = $result['code'] ?? null;
+                // B70: preserve Apple/household reconciliation codes for the
+                // client. These are business-state conflicts, not malformed
+                // purchase requests. Returning 409 lets Flutter distinguish a
+                // stale StoreKit transaction from a genuine purchase failure.
+                $status = in_array($code, [
+                    'APP_ACCOUNT_TOKEN_MISMATCH',
+                    'APPLE_TOKEN_MISMATCH',
+                    'SUBSCRIPTION_LINKED_ELSEWHERE',
+                    'DUPLICATE_SUBSCRIPTION',
+                ], true) ? 409 : 422;
+
                 return response()->json([
                     'success' => false,
                     'message' => $result['message'],
-                ], 422);
+                    'code' => $code,
+                ], $status);
             }
 
             $subscription = $result['subscription'];
