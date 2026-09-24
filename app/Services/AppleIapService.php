@@ -449,10 +449,19 @@ class AppleIapService
             // is Apple-signed, so its transaction info is trusted and lets us
             // record the subscription without a second Apple call.
             if (!$statusResult['success']) {
+                // B72: the status code is NOT part of signedTransactionInfo.
+                // When the status API is temporarily unavailable, derive the
+                // safest lifecycle state from the verified V2 notification and
+                // signed renewal info instead of defaulting to ACTIVE.
+                $fallbackStatus = $this->statusFromVerifiedNotification(
+                    notificationType: $notificationType,
+                    subtype: $subtype,
+                    renewalInfo: $renewalInfo,
+                );
                 $statusResult = [
                     'success' => true,
                     'environment' => $environment,
-                    'status' => (int) ($tx['status'] ?? self::STATUS_ACTIVE),
+                    'status' => $fallbackStatus,
                     'transaction' => $tx,
                     'renewalInfo' => $renewalInfo,
                 ];
@@ -992,6 +1001,19 @@ class AppleIapService
             ? $this->appleMillisToAppTime((int) $renewalInfo['gracePeriodExpiresDate'])
             : null;
 
+        // B72: Billing Grace Period is an Apple entitlement, not a local
+        // HouseholdOS grace window. If Apple's signed renewal info contains a
+        // future grace expiry, preserve paid access through that exact time.
+        // Conversely, billing retry without a grace date gets no invented
+        // extension after the paid transaction period ends.
+        $isBillingRetry = filter_var(
+            $renewalInfo['isInBillingRetryPeriod'] ?? false,
+            FILTER_VALIDATE_BOOLEAN
+        );
+        if ($isBillingRetry && $gracePeriodExpiresAt && now()->isBefore($gracePeriodExpiresAt)) {
+            $finalStatus = 'grace_period';
+        }
+
         // Guard: don't let Apple's expiry overwrite a local expiry that is
         // significantly further in the future (sandbox / stale API response).
         if ($periodEnd && $subscription->expires_at && $finalStatus === 'active'
@@ -1040,6 +1062,13 @@ class AppleIapService
             unset($metadata['pending_product_id'], $metadata['pending_plan'], $metadata['pending_billing_period'], $metadata['pending_change_effective_at']);
         }
 
+        $metadata['apple_is_in_billing_retry'] = $isBillingRetry;
+        if (array_key_exists('expirationIntent', $renewalInfo)) {
+            $metadata['apple_expiration_intent'] = $renewalInfo['expirationIntent'];
+        } else {
+            unset($metadata['apple_expiration_intent']);
+        }
+
         $update = [
             'status' => $finalStatus,
             'latest_transaction_id' => $tx['transactionId'] ?? $subscription->latest_transaction_id,
@@ -1054,6 +1083,8 @@ class AppleIapService
                 ? ((int) $renewalInfo['autoRenewStatus'] === 1)
                 : $subscription->auto_renew,
             'last_verified_at' => now(),
+            'expired_at' => $finalStatus === 'expired' ? now() : null,
+            'revoked_at' => $finalStatus === 'revoked' ? now() : null,
             'metadata' => $metadata,
         ];
 
@@ -1101,6 +1132,44 @@ class AppleIapService
                 $this->recordPayment($subscription, $tx['transactionId']);
             }
         }
+    }
+
+    /**
+     * B72 fallback for a verified App Store Server Notification V2 when the
+     * status API cannot be reached. Never infer extra paid time locally.
+     */
+    private function statusFromVerifiedNotification(?string $notificationType, ?string $subtype, array $renewalInfo): int
+    {
+        $graceMs = !empty($renewalInfo['gracePeriodExpiresDate'])
+            ? (int) $renewalInfo['gracePeriodExpiresDate']
+            : null;
+        $inRetry = filter_var(
+            $renewalInfo['isInBillingRetryPeriod'] ?? false,
+            FILTER_VALIDATE_BOOLEAN
+        );
+
+        if ($notificationType === 'REVOKE' || $notificationType === 'REFUND') {
+            return self::STATUS_REVOKED;
+        }
+        if ($notificationType === 'GRACE_PERIOD_EXPIRED' || $notificationType === 'EXPIRED') {
+            return self::STATUS_EXPIRED;
+        }
+        if ($notificationType === 'DID_FAIL_TO_RENEW') {
+            if ($graceMs && $graceMs > (int) floor(microtime(true) * 1000)) {
+                return self::STATUS_GRACE_PERIOD;
+            }
+            return self::STATUS_RETRY;
+        }
+        if ($notificationType === 'DID_RECOVER' || $notificationType === 'DID_RENEW' || $notificationType === 'SUBSCRIBED') {
+            return self::STATUS_ACTIVE;
+        }
+        if ($inRetry) {
+            return ($graceMs && $graceMs > (int) floor(microtime(true) * 1000))
+                ? self::STATUS_GRACE_PERIOD
+                : self::STATUS_RETRY;
+        }
+
+        return self::STATUS_ACTIVE;
     }
 
     private function applyByNotificationType(string $originalTransactionId, ?string $notificationType, ?array $tx): void

@@ -35,7 +35,7 @@ class PaymentController extends Controller
                 ->addColumn('amount_fmt', fn($p) => '£'.number_format($p->amount,2))
                 ->addColumn('gateway_fmt', fn($p) => ucfirst($p->gateway))
                 ->addColumn('status_badge', function($p){$state=$p->subscription->status ?? $p->status;$cls=match($state){'succeeded','completed','active'=>'success','failed'=>'danger','refunded'=>'info','grace_period','billing_retry'=>'warning','expired'=>'secondary',default=>'warning'};return '<span class="badge badge-soft-'.$cls.'">'.e(ucfirst(str_replace('_',' ',$state))).'</span>';})
-                ->addColumn('date_fmt', fn($p) => $p->created_at->format('d M Y H:i'))
+                ->addColumn('date_fmt', fn($p) => $p->created_at->copy()->timezone('Europe/London')->format('d M Y H:i'))
                 ->addColumn('action', fn($p) => '<a href="'.route('admin.payments.show',$p).'" class="btn btn-sm btn-light"><i class="ri-eye-line"></i></a>')
                 ->rawColumns(['household_link','status_badge','action'])->make(true);
         }

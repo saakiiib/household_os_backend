@@ -32,7 +32,7 @@
                         @if($payment->gateway_payment_id)
                             <p class="mb-2"><strong>Gateway ID:</strong> <code>{{ $payment->gateway_payment_id }}</code></p>
                         @endif
-                        <p class="mb-2"><strong>Date:</strong> {{ $payment->created_at->format('d M Y H:i') }}</p>
+                        <p class="mb-2"><strong>Date:</strong> {{ $payment->created_at->copy()->timezone('Europe/London')->format('d M Y H:i') }}</p>
                         @if($payment->failure_reason)
                             <p class="mb-0"><strong>Failure Reason:</strong> <span class="text-danger">{{ $payment->failure_reason }}</span></p>
                         @endif

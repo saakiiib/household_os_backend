@@ -226,7 +226,12 @@ class SubscriptionController extends Controller
         // A paid household must not create a second subscription. The current
         // payer, however, must be allowed to change the existing App Store /
         // Play subscription (upgrade, downgrade or billing duration).
-        $canPurchase = !$hasActivePaidSubscription || $isSubscriber;
+        $isAppleBillingRetry = $subscription->provider === 'apple'
+            && $subscription->status === 'billing_retry';
+        // B72: Apple may keep trying to recover a failed renewal for up to its
+        // billing-retry window. Do not encourage a second subscription purchase
+        // while that recovery is in progress.
+        $canPurchase = !$isAppleBillingRetry && (!$hasActivePaidSubscription || $isSubscriber);
         $canManage = $isSubscriber;
 
         // Normalised entitlement state — single source of truth that the
@@ -299,6 +304,7 @@ class SubscriptionController extends Controller
                 'days_until_renewal' => $subscription->daysUntilRenewal(),
                 'grace_days_remaining' => $subscription->graceDaysRemaining(),
                 'is_in_grace_period' => $subscription->isInGracePeriod(),
+                'is_in_billing_retry' => $isAppleBillingRetry,
                 'is_active' => $subscription->isActive(),
                 'is_trial' => $subscription->isTrial(),
             ],

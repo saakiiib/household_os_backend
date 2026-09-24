@@ -57,8 +57,8 @@
                             @php $cls = match($subscription->status) { 'active' => 'success', 'trial' => 'info', 'expired' => 'danger', default => 'warning' }; @endphp
                             <span class="badge badge-soft-{{ $cls }}">{{ ucfirst($subscription->status) }}</span>
                         </p>
-                        <p class="mb-2"><strong>Period Start:</strong> {{ $subscription->current_period_start ? $subscription->current_period_start->format('d M Y') : '-' }}</p>
-                        <p class="mb-2"><strong>Period End:</strong> {{ $subscription->current_period_end ? $subscription->current_period_end->format('d M Y H:i:s') : '-' }}</p>
+                        <p class="mb-2"><strong>Period Start:</strong> {{ $subscription->current_period_start ? $subscription->current_period_start->copy()->timezone('Europe/London')->format('d M Y') : '-' }}</p>
+                        <p class="mb-2"><strong>Period End:</strong> {{ $subscription->current_period_end ? $subscription->current_period_end->copy()->timezone('Europe/London')->format('d M Y H:i:s') : '-' }}</p>
                         @if($subscription->provider)
                             <p class="mb-2"><strong>Provider:</strong> {{ ucfirst(str_replace('_', ' ', $subscription->provider)) }}</p>
                         @endif
@@ -66,7 +66,7 @@
                             <p class="mb-2"><strong>Environment:</strong> {{ $subscription->environment }}</p>
                         @endif
                         @if($subscription->grace_period_expires_at)
-                            <p class="mb-2"><strong>Grace Period Ends:</strong> {{ $subscription->grace_period_expires_at->format('d M Y H:i:s') }}</p>
+                            <p class="mb-2"><strong>Grace Period Ends:</strong> {{ $subscription->grace_period_expires_at->copy()->timezone('Europe/London')->format('d M Y H:i:s') }}</p>
                         @endif
                         @if($subscription->original_transaction_id)
                             <p class="mb-2"><strong>Original Transaction ID:</strong> <code>{{ $subscription->original_transaction_id }}</code></p>
@@ -78,13 +78,13 @@
                             <p class="mb-2"><strong>Auto Renew:</strong> {{ $subscription->auto_renew ? 'Yes' : 'No' }}</p>
                         @endif
                         @if($subscription->trial_started_at)
-                            <p class="mb-2"><strong>Trial Started:</strong> {{ $subscription->trial_started_at->format('d M Y') }}</p>
+                            <p class="mb-2"><strong>Trial Started:</strong> {{ $subscription->trial_started_at->copy()->timezone('Europe/London')->format('d M Y') }}</p>
                         @endif
                         @if($subscription->trial_ends_at)
-                            <p class="mb-2"><strong>Trial Ends:</strong> {{ $subscription->trial_ends_at->format('d M Y') }}</p>
+                            <p class="mb-2"><strong>Trial Ends:</strong> {{ $subscription->trial_ends_at->copy()->timezone('Europe/London')->format('d M Y') }}</p>
                         @endif
                         @if($subscription->cancelled_at)
-                            <p class="mb-0"><strong>Cancelled:</strong> {{ $subscription->cancelled_at->format('d M Y') }}</p>
+                            <p class="mb-0"><strong>Cancelled:</strong> {{ $subscription->cancelled_at->copy()->timezone('Europe/London')->format('d M Y') }}</p>
                         @endif
                     </div>
                 </div>
@@ -118,7 +118,7 @@
                                         @php $cls = match($payment->status) { 'completed' => 'success', 'failed' => 'danger', default => 'warning' }; @endphp
                                         <span class="badge badge-soft-{{ $cls }}">{{ ucfirst($payment->status) }}</span>
                                     </td>
-                                    <td>{{ $payment->created_at->format('d M Y H:i') }}</td>
+                                    <td>{{ $payment->created_at->copy()->timezone('Europe/London')->format('d M Y H:i') }}</td>
                                     <td class="text-center">
                                         <a href="{{ route('admin.payments.show', $payment) }}" class="btn btn-sm btn-light"><i class="ri-eye-line"></i></a>
                                     </td>
