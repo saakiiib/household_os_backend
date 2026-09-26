@@ -26,6 +26,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return trim("{$this->first_name} {$this->last_name}");
     }
 
+    public function socialIdentities()
+    {
+        return $this->hasMany(SocialIdentity::class);
+    }
+
     public function households()
     {
         return $this->belongsToMany(Household::class, 'household_members')

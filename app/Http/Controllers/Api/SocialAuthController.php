@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\SocialIdentity;
+use Illuminate\Support\Facades\DB;
 use Firebase\JWT\JWK;
 use Firebase\JWT\JWT;
 use Illuminate\Http\Request;
@@ -85,6 +87,56 @@ class SocialAuthController extends Controller
         );
     }
 
+    /** Explicitly link an additional verified sign-in method to the authenticated user. */
+    public function linkGoogle(Request $request)
+    {
+        $request->validate(['id_token' => 'required|string|max:10000']);
+        try { $identity = $this->verifyGoogleToken($request->string('id_token')->toString()); }
+        catch (\Throwable $e) { return response()->json(['success'=>false,'message'=>'Invalid Google sign-in. Please try again.'], 401); }
+        return $this->linkIdentity($request->user(), 'google', $identity['sub'], $identity['email']);
+    }
+
+    public function linkApple(Request $request)
+    {
+        $request->validate(['identity_token' => 'required|string|max:12000']);
+        try { $identity = $this->verifyAppleToken($request->string('identity_token')->toString()); }
+        catch (\Throwable $e) { return response()->json(['success'=>false,'message'=>'Invalid Apple sign-in. Please try again.'], 401); }
+        return $this->linkIdentity($request->user(), 'apple', $identity['sub'], $identity['email']);
+    }
+
+    public function linkedMethods(Request $request)
+    {
+        $user = $request->user();
+        $providers = $user->socialIdentities()->pluck('provider')->all();
+        if ($user->provider && !in_array($user->provider, $providers, true)) $providers[] = $user->provider;
+        // A null legacy provider identifies accounts created with HouseholdOS
+        // email/password. Social-only accounts contain a generated unusable
+        // password, so never infer password sign-in from the password column.
+        if (!$user->provider) $providers[] = 'password';
+        return response()->json(['success'=>true,'data'=>['providers'=>array_values(array_unique($providers))]]);
+    }
+
+    private function linkIdentity(User $user, string $provider, string $subject, string $email)
+    {
+        $subject = trim($subject); $email = strtolower(trim($email));
+        if ($subject === '' || !filter_var($email, FILTER_VALIDATE_EMAIL))
+            return response()->json(['success'=>false,'message'=>'The identity provider did not return a usable account.'], 401);
+
+        $owner = SocialIdentity::where('provider',$provider)->where('provider_subject',$subject)->first();
+        if ($owner && $owner->user_id !== $user->id)
+            return response()->json(['success'=>false,'message'=>'This sign-in method is already linked to another HouseholdOS account.'], 409);
+
+        $existing = SocialIdentity::where('user_id',$user->id)->where('provider',$provider)->first();
+        if ($existing && $existing->provider_subject !== $subject)
+            return response()->json(['success'=>false,'message'=>'A different '.$provider.' account is already linked.'], 409);
+
+        SocialIdentity::updateOrCreate(
+            ['user_id'=>$user->id,'provider'=>$provider],
+            ['provider_subject'=>$subject,'provider_email'=>$email,'linked_at'=>now()]
+        );
+        return response()->json(['success'=>true,'message'=>ucfirst($provider).' sign-in connected.','data'=>['provider'=>$provider]]);
+    }
+
     /**
      * Resolve a social identity safely.
      *
@@ -131,45 +183,42 @@ class SocialAuthController extends Controller
             $lastName = $lastName !== '' ? $lastName : ($parts[1] ?? '');
         }
 
-        // 1) Stable provider subject is the primary social identity key.
-        $user = User::where('provider', $provider)
-            ->where('provider_id', $providerId)
-            ->first();
+        // 1) Stable provider subject is the primary identity key. B76 supports
+        // multiple explicitly-linked sign-in methods per HouseholdOS user.
+        $identity = SocialIdentity::where('provider', $provider)
+            ->where('provider_subject', $providerId)->first();
+        $user = $identity?->user;
 
-        // 2) A verified email may attach this provider to a legacy password-only
-        // account, but never overwrite a different existing social provider.
+        // Legacy B75/B73 fallback while existing users are lazily migrated.
+        if (!$user) {
+            $user = User::where('provider', $provider)
+                ->where('provider_id', $providerId)->first();
+            if ($user) {
+                SocialIdentity::firstOrCreate(
+                    ['provider' => $provider, 'provider_subject' => $providerId],
+                    ['user_id' => $user->id, 'provider_email' => $email, 'linked_at' => now()]
+                );
+            }
+        }
+
+        // 2) An email collision is NOT authority to link identities. Even when
+        // Google/Apple reports a verified email, the user must first authenticate
+        // to the existing HouseholdOS account and explicitly connect the provider
+        // from Account Settings. This protects password accounts as well as
+        // Google <-> Apple transitions from email-only account takeover/linking.
         if (!$user) {
             $emailUser = User::whereRaw('LOWER(email) = ?', [$email])->first();
 
             if ($emailUser) {
                 $existingProvider = strtolower(trim((string) $emailUser->provider));
-                $existingProviderId = trim((string) $emailUser->provider_id);
+                $originalMethod = $existingProvider !== ''
+                    ? ucfirst($existingProvider)
+                    : 'email and password';
 
-                if ($existingProvider !== '' && $existingProvider !== $provider) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'An account with this email already uses a different sign-in method. Please use your original sign-in method.',
-                    ], 409);
-                }
-
-                if ($existingProvider === $provider && $existingProviderId !== '' && $existingProviderId !== $providerId) {
-                    Log::warning('Social login subject mismatch for existing email', [
-                        'provider' => $provider,
-                        'user_id' => $emailUser->id,
-                    ]);
-
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'This sign-in could not be linked to the existing account. Please use your original sign-in method.',
-                    ], 409);
-                }
-
-                $emailUser->update([
-                    'provider' => $provider,
-                    'provider_id' => $providerId,
-                    'email_verified_at' => $emailUser->email_verified_at ?: now(),
-                ]);
-                $user = $emailUser->fresh();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This email already belongs to a HouseholdOS account. Sign in with '.$originalMethod.' first, then connect '.ucfirst($provider).' in Account Settings.',
+                ], 409);
             }
         }
 
@@ -187,6 +236,18 @@ class SocialAuthController extends Controller
                 'status' => 'active',
             ]);
         }
+
+        // Persist the verified provider subject. Never link a provider subject
+        // that is already owned by another HouseholdOS user.
+        $ownedIdentity = SocialIdentity::where('provider', $provider)
+            ->where('provider_subject', $providerId)->first();
+        if ($ownedIdentity && $ownedIdentity->user_id !== $user->id) {
+            return response()->json(['success' => false, 'message' => 'This sign-in identity is already linked to another HouseholdOS account.'], 409);
+        }
+        SocialIdentity::updateOrCreate(
+            ['user_id' => $user->id, 'provider' => $provider],
+            ['provider_subject' => $providerId, 'provider_email' => $email, 'linked_at' => now()]
+        );
 
         if ($user->status !== 'active') {
             return response()->json([

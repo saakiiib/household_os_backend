@@ -184,10 +184,24 @@ class GooglePlayIapService
 
         $existingSubscription = Subscription::where('household_id', $household->id)->first();
 
+        // B76: a device/platform change must never replace an active subscription
+        // from the other store. Household entitlement is cross-platform, while
+        // billing ownership remains with the store/purchaser that created it.
+        if ($existingSubscription) {
+            $existingProvider = strtolower((string) ($existingSubscription->provider ?: $existingSubscription->payment_method));
+            $incomingProvider = 'google_play';
+            $protectedStatuses = ['active', 'grace_period', 'billing_retry', 'trial'];
+            if ($existingProvider !== '' && !in_array($existingProvider, ['google', 'google_play'], true)
+                && in_array(strtolower((string) $existingSubscription->status), $protectedStatuses, true)) {
+                throw new \RuntimeException('This household already has a subscription billed through another store. Manage that subscription with its original billing provider.');
+            }
+        }
+
         $subscription = DB::transaction(function () use ($user, $household, $plan, $billingType, $googleProductId, $orderId, $autoRenewing, $isRestored, $existingSubscription, $periodStart, $periodEnd, $purchaseToken, $subscriptionState) {
             $decision = GoogleSubscriptionSnapshot::resolve($subscriptionState, $periodEnd, now());
             $data = [
-                'user_id' => $user->id,
+                'user_id' => $existingSubscription?->user_id ?? $user->id,
+                'subscriber_user_id' => $existingSubscription?->subscriber_user_id ?? $existingSubscription?->user_id ?? $user->id,
                 'household_id' => $household->id,
                 'subscription_plan_id' => $plan->id,
                 'status' => $decision['status'],
@@ -234,7 +248,7 @@ class GooglePlayIapService
             // Record the payment
             $amount = $billingType === 'annual' ? $plan->annual_price : $plan->monthly_price;
             Payment::create([
-                'user_id' => $user->id,
+                'user_id' => $existingSubscription?->subscriber_user_id ?? $existingSubscription?->user_id ?? $user->id,
                 'household_id' => $household->id,
                 'subscription_id' => $subscription->id,
                 'subscription_plan_id' => $plan->id,
@@ -264,7 +278,8 @@ class GooglePlayIapService
             ]);
 
             Log::info('GooglePlayIapService: subscription activated', [
-                'user_id' => $user->id,
+                'user_id' => $existingSubscription?->user_id ?? $user->id,
+                'subscriber_user_id' => $existingSubscription?->subscriber_user_id ?? $existingSubscription?->user_id ?? $user->id,
                 'household_id' => $household->id,
                 'plan' => $plan->slug,
                 'expires_at' => $periodEnd->toIso8601String(),

@@ -270,6 +270,21 @@ class AppleIapService
                 ->where('original_transaction_id', '!=', $originalTransactionId)
                 ->first();
 
+            if ($existingPaidSub) {
+                $existingProvider = strtolower((string) ($existingPaidSub->provider ?: $existingPaidSub->payment_method));
+                if ($existingProvider !== '' && !in_array($existingProvider, ['apple', 'apple_iap'], true)) {
+                    Log::warning('AppleIapService: cross-store duplicate purchase blocked', [
+                        'household_id' => $household->id,
+                        'existing_provider' => $existingProvider,
+                    ]);
+                    return [
+                        'success' => false,
+                        'message' => 'This household already has a subscription billed through another store. Manage that subscription with its original billing provider.',
+                        'code' => 'CROSS_STORE_SUBSCRIPTION',
+                    ];
+                }
+            }
+
             if ($existingPaidSub && ($existingPaidSub->subscriber_user_id ?? $existingPaidSub->user_id) !== $user->id) {
                 Log::warning('AppleIapService: duplicate purchase attempt on already-paid household', [
                     'household_id' => $household->id,
@@ -677,8 +692,10 @@ class AppleIapService
 
         $subscription = DB::transaction(function () use ($user, $household, $plan, $productId, $billingPeriod, $originalTransactionId, $latestTransactionId, $environment, $purchaseDateMs, $expiresDateMs, $appAccountToken, $deviceId, $status, $existingSubscription, $autoRenew, $periodStart, $periodEnd) {
             $data = [
-                'user_id' => $user->id,
-                'subscriber_user_id' => $user->id,
+                // B76: verification/restore from another household member or a
+                // Coordinator transfer must never rewrite the original payer.
+                'user_id' => $existingSubscription?->user_id ?? $user->id,
+                'subscriber_user_id' => $existingSubscription?->subscriber_user_id ?? $existingSubscription?->user_id ?? $user->id,
                 'household_id' => $household->id,
                 'subscription_plan_id' => $plan->id,
                 'status' => $status,

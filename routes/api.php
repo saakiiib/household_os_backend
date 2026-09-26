@@ -74,6 +74,10 @@ Route::prefix('auth')->middleware('throttle:10,1,auth:')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth:api', 'throttle:120,1,api:'])->group(function () {
+    Route::get('auth/social/methods', [SocialAuthController::class, 'linkedMethods']);
+    Route::post('auth/social/link/google', [SocialAuthController::class, 'linkGoogle']);
+    Route::post('auth/social/link/apple', [SocialAuthController::class, 'linkApple']);
+
     Route::get('invitations/pending', [AuthController::class, 'pendingInvitations']);
 
     // Profile
