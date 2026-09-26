@@ -59,8 +59,20 @@
                         </p>
                         <p class="mb-2"><strong>Period Start:</strong> {{ $subscription->current_period_start ? $subscription->current_period_start->copy()->timezone('Europe/London')->format('d M Y') : '-' }}</p>
                         <p class="mb-2"><strong>Period End:</strong> {{ $subscription->current_period_end ? $subscription->current_period_end->copy()->timezone('Europe/London')->format('d M Y H:i:s') : '-' }}</p>
-                        @if($subscription->provider)
-                            <p class="mb-2"><strong>Provider:</strong> {{ ucfirst(str_replace('_', ' ', $subscription->provider)) }}</p>
+                        @php
+                            $providerLabel = match(strtolower((string) $subscription->provider)) {
+                                'stripe' => 'Stripe (Website)',
+                                'apple' => 'Apple (App Store)',
+                                'google_play', 'google' => 'Google Play',
+                                'paypal' => 'PayPal',
+                                default => $subscription->provider ? ucfirst(str_replace('_', ' ', $subscription->provider)) : null,
+                            };
+                        @endphp
+                        @if($providerLabel)
+                            <p class="mb-2"><strong>Provider:</strong> {{ $providerLabel }}</p>
+                        @endif
+                        @if($subscription->payment_method)
+                            <p class="mb-2"><strong>Payment Method:</strong> {{ ucfirst($subscription->payment_method) }}</p>
                         @endif
                         @if($subscription->environment)
                             <p class="mb-2"><strong>Environment:</strong> {{ $subscription->environment }}</p>

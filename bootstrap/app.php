@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'subscription' => App\Http\Middleware\RequireSubscription::class,
             'throttle'       => \Illuminate\Routing\Middleware\ThrottleRequests::class,
             'admin'          => App\Http\Middleware\IsAdmin::class,
+            'web.verified'   => App\Http\Middleware\EnsureWebVerified::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

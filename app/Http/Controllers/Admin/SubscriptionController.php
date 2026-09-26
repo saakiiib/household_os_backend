@@ -12,7 +12,7 @@ class SubscriptionController extends Controller
     {
         if (request()->ajax()) {
             return DataTables::of(Subscription::with('user', 'household', 'plan')
-                ->select('id', 'user_id', 'household_id', 'subscription_plan_id', 'status', 'billing_period', 'product_id', 'metadata', 'current_period_end'))
+                ->select('id', 'user_id', 'household_id', 'subscription_plan_id', 'status', 'billing_period', 'provider', 'payment_method', 'product_id', 'metadata', 'current_period_end'))
                 ->addColumn('user_link', function ($s) {
                     if (!$s->user) return 'N/A';
                     return '<a href="' . route('admin.users.show', $s->user) . '" class="text-body">' . e($s->user->name) . '</a>';
@@ -36,11 +36,21 @@ class SubscriptionController extends Controller
                     $cls = match($s->status) { 'active' => 'success', 'trial' => 'info', 'expired' => 'danger', default => 'warning' };
                     return '<span class="badge badge-soft-' . $cls . '">' . ucfirst($s->status) . '</span>';
                 })
+                ->addColumn('provider_badge', function ($s) {
+                    [$label, $cls] = match(strtolower((string) $s->provider)) {
+                        'stripe' => ['Stripe (Website)', 'primary'],
+                        'apple' => ['Apple (App Store)', 'dark'],
+                        'google_play', 'google' => ['Google Play', 'success'],
+                        'paypal' => ['PayPal', 'info'],
+                        default => [$s->payment_method ? ucfirst($s->payment_method) : '—', 'secondary'],
+                    };
+                    return '<span class="badge badge-soft-' . $cls . '">' . e($label) . '</span>';
+                })
                 ->addColumn('period_end_fmt', fn($s) => $s->current_period_end ? $s->current_period_end->copy()->timezone('Europe/London')->format('d M Y H:i:s') : '-')
                 ->addColumn('action', function ($s) {
                     return '<a href="' . route('admin.subscriptions.show', $s) . '" class="btn btn-sm btn-light"><i class="ri-eye-line"></i></a>';
                 })
-                ->rawColumns(['user_link', 'household_link', 'next_plan', 'status_badge', 'action'])
+                ->rawColumns(['user_link', 'household_link', 'next_plan', 'status_badge', 'provider_badge', 'action'])
                 ->make(true);
         }
 

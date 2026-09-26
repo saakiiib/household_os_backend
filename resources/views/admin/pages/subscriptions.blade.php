@@ -93,6 +93,7 @@
                                     <th>Billing</th>
                                     <th>Next Plan</th>
                                     <th>Status</th>
+                                    <th>Provider</th>
                                     <th>Period End</th>
                                     <th>Action</th>
                                 </tr>
@@ -121,6 +122,7 @@ $(function () {
             { data: 'billing_label', name: 'billing_period', orderable: false, searchable: false },
             { data: 'next_plan', name: 'metadata', orderable: false, searchable: false },
             { data: 'status_badge', name: 'status', orderable: false, searchable: false },
+            { data: 'provider_badge', name: 'provider', orderable: false, searchable: false },
             { data: 'period_end_fmt', name: 'current_period_end', orderable: true, searchable: false },
             { data: 'action', name: 'action', orderable: false, searchable: false }
         ],

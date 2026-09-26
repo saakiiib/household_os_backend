@@ -42,11 +42,17 @@ class StripeService
 
     /**
      * Create a Stripe Checkout Session for subscription.
+     *
+     * Optional $successUrl/$cancelUrl allow the web (Blade) flow to receive
+     * browser-friendly return pages. When omitted, the legacy JSON endpoints
+     * consumed by the mobile app WebView are used.
      */
     public function createCheckoutSession(
         User $user,
         SubscriptionPlan $plan,
-        string $paymentType // 'monthly' or 'annual'
+        string $paymentType, // 'monthly' or 'annual'
+        ?string $successUrl = null,
+        ?string $cancelUrl = null
     ): array {
         $customer = $this->getOrCreateCustomer($user);
 
@@ -82,8 +88,8 @@ class StripeService
                 ],
             ],
             'mode' => 'subscription',
-            'success_url' => config('app.frontend_url', 'http://192.168.0.103:8000') . '/api/subscription/stripe/success?session_id={CHECKOUT_SESSION_ID}',
-            'cancel_url' => config('app.frontend_url', 'http://192.168.0.103:8000') . '/api/subscription/stripe/cancel',
+            'success_url' => $successUrl ?? config('app.frontend_url', 'http://192.168.0.103:8000') . '/api/subscription/stripe/success?session_id={CHECKOUT_SESSION_ID}',
+            'cancel_url' => $cancelUrl ?? config('app.frontend_url', 'http://192.168.0.103:8000') . '/api/subscription/stripe/cancel',
             'metadata' => [
                 'user_id' => $user->id,
                 'household_id' => $household->id,
@@ -212,6 +218,7 @@ class StripeService
             'paid_plan' => $plan->slug,
             'billing_period' => $paymentType,
             'payment_method' => 'stripe',
+            'provider' => 'stripe',
             'stripe_subscription_id' => $session->subscription ?? null,
             'stripe_customer_id' => $session->customer ?? null,
             'current_period_start' => $periodStart,
@@ -349,6 +356,7 @@ class StripeService
                 'paid_plan' => $plan->slug,
                 'billing_period' => $paymentType,
                 'payment_method' => 'stripe',
+                'provider' => 'stripe',
                 'stripe_subscription_id' => $session->subscription,
                 'stripe_customer_id' => $session->customer,
                 'current_period_start' => $periodStart,

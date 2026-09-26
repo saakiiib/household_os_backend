@@ -1,6 +1,10 @@
 <?php
 
 use App\Http\Controllers\Admin\LoginController;
+use App\Http\Controllers\Web\BillingController;
+use App\Http\Controllers\Web\LoginController as WebLoginController;
+use App\Http\Controllers\Web\RegisterController;
+use App\Http\Controllers\Web\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
@@ -74,6 +78,27 @@ Route::get('/clean-db', function () {
         200,
         ['Content-Type' => 'text/html']
     );
+});
+
+// Public website registration + subscription (linked from householdosapp.com).
+// Guests can register; everything after registration requires the session.
+Route::get('/register', [RegisterController::class, 'show'])->name('web.register');
+Route::post('/register', [RegisterController::class, 'store'])->name('web.register.store')->middleware('throttle:10,1');
+Route::get('/signin', [WebLoginController::class, 'show'])->name('web.login');
+Route::post('/signin', [WebLoginController::class, 'store'])->name('web.login.store')->middleware('throttle:10,1');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/verify-email', [VerifyEmailController::class, 'notice'])->name('verification.notice');
+    Route::post('/verify-email', [VerifyEmailController::class, 'verify'])->name('verification.verify')->middleware('throttle:10,1');
+    Route::post('/verify-email/resend', [VerifyEmailController::class, 'resend'])->name('verification.resend')->middleware('throttle:3,1');
+    Route::post('/signout', [WebLoginController::class, 'destroy'])->name('web.logout');
+});
+
+Route::middleware(['auth', 'web.verified'])->group(function () {
+    Route::get('/plans', [BillingController::class, 'plans'])->name('billing.plans');
+    Route::post('/subscribe', [BillingController::class, 'subscribe'])->name('billing.subscribe')->middleware('throttle:10,1');
+    Route::get('/billing/success', [BillingController::class, 'success'])->name('billing.success');
+    Route::get('/billing/cancel', [BillingController::class, 'cancel'])->name('billing.cancel');
 });
 
 require __DIR__.'/admin.php';
