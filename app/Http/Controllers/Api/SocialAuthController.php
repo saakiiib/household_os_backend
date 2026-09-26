@@ -217,7 +217,7 @@ class SocialAuthController extends Controller
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'This email already belongs to a HouseholdOS account. Sign in with '.$originalMethod.' first, then connect '.ucfirst($provider).' in Account Settings.',
+                    'message' => 'This email already belongs to a HouseholdOS account. Sign in with '.$originalMethod.' first, then go to Settings > Profile > Sign-in Methods and connect '.ucfirst($provider).'.',
                 ], 409);
             }
         }

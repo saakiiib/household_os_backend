@@ -98,61 +98,67 @@ class HouseholdController extends Controller
             ->where('status', 'pending')
             ->update(['status' => 'cancelled']);
 
-        $household = Household::create([
-            'name' => $request->name,
-            'created_by_user_id' => Auth::id(),
-            'description' => $request->description,
-            'privacy_level' => $request->privacy_level ?? 'private',
-            'status' => 'active',
-            'app_account_token' => (string) Str::uuid(),
-        ]);
-
-        // Automatically make the creator an admin
-        HouseholdMember::create([
-            'household_id' => $household->id,
-            'user_id' => Auth::id(),
-            'role' => 'admin',
-            'status' => 'active',
-            'joined_at' => now(),
-        ]);
-
-        // Create 1-month free trial on Complete plan for this household
-        $completePlan = SubscriptionPlan::where('code', 'complete')
-            ->orWhere('slug', 'complete')
-            ->first();
-        if ($completePlan) {
-            $now = now();
-            $trialEnd = $now->copy()->addDays(30);
-            Subscription::create([
-                'user_id' => Auth::id(),
-                'subscriber_user_id' => Auth::id(),
-                'household_id' => $household->id,
-                'subscription_plan_id' => $completePlan->id,
-                'status' => 'trial',
-                'plan_status' => 'trial_complete',
-                'paid_plan' => null,
-                // A HouseholdOS trial is local, not an App Store / Play
-                // subscription. Explicit values are important because older
-                // schemas default provider=apple and auto_renew=true.
-                'provider' => null,
-                'product_id' => null,
-                'billing_period' => null,
-                'auto_renew' => false,
-                'trial_started_at' => $now,
-                'trial_ends_at' => $trialEnd,
-                'current_period_start' => $now,
-                'current_period_end' => $trialEnd,
-                'expires_at' => $trialEnd,
+        [$household, $membership] = DB::transaction(function () use ($request) {
+            $household = Household::create([
+                'name' => $request->name,
+                'created_by_user_id' => Auth::id(),
+                'description' => $request->description,
+                'privacy_level' => $request->privacy_level ?? 'private',
+                'status' => 'active',
+                'app_account_token' => (string) Str::uuid(),
             ]);
-        }
-
-        // Seed default categories for this household
-        app(CategoriesController::class)->seed($household->id);
-
-        $membership = HouseholdMember::where('household_id', $household->id)
-            ->where('user_id', Auth::id())
-            ->where('status', 'active')
-            ->first();
+    
+            // Automatically make the creator an admin
+            HouseholdMember::create([
+                'household_id' => $household->id,
+                'user_id' => Auth::id(),
+                'role' => 'admin',
+                'status' => 'active',
+                'joined_at' => now(),
+            ]);
+    
+            // Create 1-month free trial on Complete plan for this household
+            $completePlan = SubscriptionPlan::where('code', 'complete')
+                ->orWhere('slug', 'complete')
+                ->first();
+            if (!$completePlan) {
+                throw new \RuntimeException('Complete subscription plan is not configured.');
+            }
+            {
+                $now = now();
+                $trialEnd = $now->copy()->addDays(30);
+                Subscription::create([
+                    'user_id' => Auth::id(),
+                    'subscriber_user_id' => Auth::id(),
+                    'household_id' => $household->id,
+                    'subscription_plan_id' => $completePlan->id,
+                    'status' => 'trial',
+                    'plan_status' => 'trial_complete',
+                    'paid_plan' => null,
+                    // A HouseholdOS trial is local, not an App Store / Play
+                    // subscription. Explicit values are important because older
+                    // schemas default provider=apple and auto_renew=true.
+                    'provider' => null,
+                    'product_id' => null,
+                    'billing_period' => null,
+                    'auto_renew' => false,
+                    'trial_started_at' => $now,
+                    'trial_ends_at' => $trialEnd,
+                    'current_period_start' => $now,
+                    'current_period_end' => $trialEnd,
+                    'expires_at' => $trialEnd,
+                ]);
+            }
+    
+            // Seed default categories for this household
+            app(CategoriesController::class)->seed($household->id);
+    
+            $membership = HouseholdMember::where('household_id', $household->id)
+                ->where('user_id', Auth::id())
+                ->where('status', 'active')
+                ->first();
+    
+            return [$household, $membership];        });
 
         return response()->json([
             'success' => true,
