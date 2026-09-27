@@ -391,6 +391,20 @@ class MembersController extends Controller
 
         if ($otherMembership) {
             $otherHousehold = Household::find($otherMembership->household_id);
+
+            // A household can be closed immediately before this invitation is
+            // accepted. If the database does not cascade household_members, the
+            // user's old membership can briefly remain and point at a household
+            // that no longer exists. Treat that row as stale, remove it, and
+            // continue the invitation flow instead of dereferencing null.
+            if (!$otherHousehold) {
+                $otherMembership->delete();
+                $otherMembership = null;
+            }
+        }
+
+        if ($otherMembership) {
+            $otherHousehold = Household::find($otherMembership->household_id);
             $isCreator = $otherHousehold && $otherHousehold->created_by_user_id === $user->id;
             $isAdmin = $otherMembership->role === 'admin';
 
