@@ -671,25 +671,43 @@ class HouseholdController extends Controller
         // subscriber_user_id, transaction IDs, app_account_token, product,
         // billing period, expiry, auto-renew, or payment history here.
         DB::transaction(function () use ($household, $id, $user, $newOwnerId) {
-            // B78: make the role hand-off deterministic at database level. There must
-            // be exactly one active Coordinator after a transfer: the selected member.
-            // This changes household authority only; subscription/payer fields are untouched.
-            DB::table('household_members')
-                ->where('household_id', $id)
+            // Lock the two memberships involved in the hand-off. Do not demote every
+            // household member: only the current Coordinator and selected successor
+            // are allowed to change here. Subscription/payer fields remain untouched.
+            $currentCoordinator = HouseholdMember::where('household_id', $id)
+                ->where('user_id', $user->id)
                 ->where('status', 'active')
-                ->update(['role' => 'member', 'updated_at' => now()]);
-
-            $promoted = DB::table('household_members')
-                ->where('household_id', $id)
+                ->lockForUpdate()
+                ->first();
+            $newCoordinator = HouseholdMember::where('household_id', $id)
                 ->where('user_id', $newOwnerId)
                 ->where('status', 'active')
-                ->update(['role' => 'admin', 'updated_at' => now()]);
+                ->lockForUpdate()
+                ->first();
 
-            if ($promoted !== 1) {
+            if (!$currentCoordinator || !$newCoordinator) {
                 throw new \RuntimeException('Coordinator role transfer could not be completed.');
             }
 
-            $household->update(['created_by_user_id' => $newOwnerId]);
+            // Promote first, then move household authority, then demote the former
+            // Coordinator. All three writes are in one transaction, so a failure rolls
+            // everything back and can never intentionally leave the household leaderless.
+            $newCoordinator->role = 'admin';
+            $newCoordinator->save();
+
+            $household->created_by_user_id = $newOwnerId;
+            $household->save();
+
+            $currentCoordinator->role = 'member';
+            $currentCoordinator->save();
+
+            // Guard against any legacy duplicate-admin state without touching ordinary
+            // members. The selected successor is the sole active Coordinator afterwards.
+            HouseholdMember::where('household_id', $id)
+                ->where('status', 'active')
+                ->where('user_id', '!=', $newOwnerId)
+                ->where('role', 'admin')
+                ->update(['role' => 'member']);
         });
 
         $household->refresh();
