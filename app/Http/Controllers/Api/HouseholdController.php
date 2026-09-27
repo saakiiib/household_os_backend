@@ -670,16 +670,52 @@ class HouseholdController extends Controller
         // in the household as an ordinary member. Never rewrite subscription
         // subscriber_user_id, transaction IDs, app_account_token, product,
         // billing period, expiry, auto-renew, or payment history here.
-        DB::transaction(function () use ($household, $id, $user, $newOwnerMember, $newOwnerId) {
-            $newOwnerMember->update(['role' => 'admin']);
-
-            HouseholdMember::where('household_id', $id)
-                ->where('user_id', $user->id)
+        DB::transaction(function () use ($household, $id, $user, $newOwnerId) {
+            // B78: make the role hand-off deterministic at database level. There must
+            // be exactly one active Coordinator after a transfer: the selected member.
+            // This changes household authority only; subscription/payer fields are untouched.
+            DB::table('household_members')
+                ->where('household_id', $id)
                 ->where('status', 'active')
-                ->update(['role' => 'member']);
+                ->update(['role' => 'member', 'updated_at' => now()]);
+
+            $promoted = DB::table('household_members')
+                ->where('household_id', $id)
+                ->where('user_id', $newOwnerId)
+                ->where('status', 'active')
+                ->update(['role' => 'admin', 'updated_at' => now()]);
+
+            if ($promoted !== 1) {
+                throw new \RuntimeException('Coordinator role transfer could not be completed.');
+            }
 
             $household->update(['created_by_user_id' => $newOwnerId]);
         });
+
+        $household->refresh();
+        $newOwnerRole = HouseholdMember::where('household_id', $id)
+            ->where('user_id', $newOwnerId)
+            ->where('status', 'active')
+            ->value('role');
+        $formerOwnerRole = HouseholdMember::where('household_id', $id)
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->value('role');
+
+        if ($household->created_by_user_id !== $newOwnerId || $newOwnerRole !== 'admin' || $formerOwnerRole !== 'member') {
+            \Log::error('Coordinator transfer verification failed', [
+                'household_id' => $id,
+                'former_owner_user_id' => $user->id,
+                'new_owner_user_id' => $newOwnerId,
+                'created_by_user_id' => $household->created_by_user_id,
+                'new_owner_role' => $newOwnerRole,
+                'former_owner_role' => $formerOwnerRole,
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Coordinator transfer could not be verified. Please try again.',
+            ], 500);
+        }
 
         return response()->json([
             'success' => true,
@@ -687,6 +723,8 @@ class HouseholdController extends Controller
             'data' => [
                 'household_id' => $household->id,
                 'new_owner_user_id' => $newOwnerId,
+                'new_owner_role' => $newOwnerRole,
+                'former_owner_role' => $formerOwnerRole,
             ]
         ]);
     }

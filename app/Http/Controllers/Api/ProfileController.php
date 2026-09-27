@@ -14,6 +14,7 @@ use App\Models\RenewalVehicleService;
 use App\Models\Vehicle;
 use App\Models\Category;
 use App\Models\Subscription;
+use App\Models\SocialIdentity;
 use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -227,6 +228,12 @@ class ProfileController extends Controller
             $user->tokens()->each(function ($token) {
                 $token->delete();
             });
+
+            // B78: explicitly remove linked Google/Apple identities before deleting
+            // the HouseholdOS user. The FK also cascades, but doing this explicitly
+            // keeps account deletion correct even if a test/reset environment has
+            // inconsistent FK enforcement. This does not affect store billing identity.
+            SocialIdentity::where('user_id', $user->id)->delete();
 
             // Delete user
             $user->delete();

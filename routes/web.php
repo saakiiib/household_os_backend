@@ -52,7 +52,7 @@ Route::get('/clean-db', function () {
             'invitations', 'notifications', 'payments', 'renewals',
             'renewal_vehicle_services', 'sessions', 'subscriptions',
             'subscription_transactions', 'apple_notification_logs', 'tasks',
-            'users', 'vehicles', 'device_tokens',
+            'social_identities', 'users', 'vehicles', 'device_tokens',
             'oauth_access_tokens', 'oauth_refresh_tokens',
             'oauth_auth_codes', 'oauth_device_codes',
         ];
