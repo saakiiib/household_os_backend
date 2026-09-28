@@ -81,7 +81,7 @@ Route::middleware(['auth:api', 'throttle:120,1,api:'])->group(function () {
     Route::get('invitations/pending', [AuthController::class, 'pendingInvitations']);
 
     // Profile
-    Route::match(['put', 'post'], 'profile', [ProfileController::class, 'update']);
+    Route::match(['put', 'post', 'patch'], 'profile', [ProfileController::class, 'update']);
     Route::put('profile/password', [ProfileController::class, 'changePassword']);
     Route::delete('profile', [ProfileController::class, 'destroy']);
 
