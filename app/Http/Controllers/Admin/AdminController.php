@@ -52,6 +52,38 @@ class AdminController extends Controller
         ]);
     }
 
+    public function profile()
+    {
+        $admin = auth()->user();
+
+        return view('admin.pages.profile', compact('admin'));
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $admin = auth()->user();
+
+        $data = $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email,' . $admin->id,
+            'password' => 'nullable|string|min:6|confirmed',
+        ]);
+
+        $admin->update([
+            'first_name' => $data['first_name'],
+            'last_name' => $data['last_name'],
+            'email' => $data['email'],
+        ]);
+
+        if (!empty($data['password'])) {
+            $admin->update(['password' => $data['password']]);
+        }
+
+        return redirect()->route('admin.profile')
+            ->with('success', 'Profile updated successfully.');
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([

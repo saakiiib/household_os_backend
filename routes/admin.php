@@ -38,6 +38,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('/users/{user}', [UserController::class, 'show'])->name('admin.users.show');
     Route::patch('/users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('admin.users.toggleStatus');
 
+    // Logged-in admin profile
+    Route::get('/profile', [AdminController::class, 'profile'])->name('admin.profile');
+    Route::put('/profile', [AdminController::class, 'updateProfile'])->name('admin.profile.update');
+
     // Admin Users (admin role)
     Route::get('/admins', [AdminController::class, 'index'])->name('admin.admins.index');
     Route::get('/admins/{user}', [AdminController::class, 'show'])->name('admin.admins.show');
