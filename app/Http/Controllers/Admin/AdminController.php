@@ -90,14 +90,14 @@ class AdminController extends Controller
     {
         $data = $request->validate([
             'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'last_name' => 'nullable|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:6',
         ]);
 
         User::create([
             'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
+            'last_name' => $data['last_name'] ?? '',
             'email' => $data['email'],
             'password' => $data['password'],
             'is_admin' => true,

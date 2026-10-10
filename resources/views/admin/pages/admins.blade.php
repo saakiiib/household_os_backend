@@ -27,8 +27,8 @@
                                 <input type="text" class="form-control" id="first_name" placeholder="First name" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Last Name <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="last_name" placeholder="Last name" required>
+                                <label class="form-label">Last Name</label>
+                                <input type="text" class="form-control" id="last_name" placeholder="Last name">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Email <span class="text-danger">*</span></label>
