@@ -20,12 +20,14 @@ class AdminController extends Controller
                 ->addColumn('added', fn($u) => $u->created_at->format('d M Y'))
                 ->addColumn('status', fn($u) => '<span class="badge bg-soft-success text-success">Admin</span>')
                 ->addColumn('action', function ($u) {
+                    $edit = '<button type="button" class="btn btn-sm btn-soft-primary edit-btn" '
+                        . 'data-url="' . route('admin.admins.show', $u->id) . '">Edit</button>';
+
                     if ($u->id === auth()->id()) {
-                        return '<span class="text-muted">—</span>';
+                        return $edit;
                     }
 
-                    return '<button type="button" class="btn btn-sm btn-soft-primary edit-btn" '
-                        . 'data-url="' . route('admin.admins.show', $u->id) . '">Edit</button> '
+                    return $edit . ' '
                         . '<button type="button" class="btn btn-sm btn-soft-danger deleteBtn" '
                         . 'data-delete-url="' . route('admin.admins.destroy', $u->id) . '" '
                         . 'data-table="#admins-table">Remove</button>';
@@ -118,14 +120,14 @@ class AdminController extends Controller
     {
         $data = $request->validate([
             'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'last_name' => 'nullable|string|max:255',
             'email' => 'required|email|unique:users,email,' . $user->id,
             'password' => 'nullable|string|min:6',
         ]);
 
         $updateData = [
             'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
+            'last_name' => $data['last_name'] ?? '',
             'email' => $data['email'],
         ];
 
