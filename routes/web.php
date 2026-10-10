@@ -1,14 +1,15 @@
 <?php
 
 use App\Http\Controllers\Admin\LoginController;
+use App\Http\Controllers\Web\AccountController;
 use App\Http\Controllers\Web\BillingController;
 use App\Http\Controllers\Web\LoginController as WebLoginController;
 use App\Http\Controllers\Web\RegisterController;
 use App\Http\Controllers\Web\VerifyEmailController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\RateLimiter;
-use Database\Seeders\UserSeeder;
+// use Illuminate\Support\Facades\DB; // clean-db only (disabled)
+// use Illuminate\Support\Facades\RateLimiter; // clean-db only (disabled)
+// use Database\Seeders\UserSeeder; // clean-db only (disabled)
 
 Route::get('/', function () {
     if (auth()->check()) {
@@ -27,8 +28,9 @@ Route::match(['get', 'post'], '/logout', function () {
     return redirect()->route('login');
 })->name('logout');
 
-// Destructive reset is available only to authenticated test administrators.
-// APP_ENV=local is deliberately insufficient: deployed logs currently use local.
+// DISABLED IN PRODUCTION: destructive database reset route (was GET /clean-db).
+// The whole block is commented out so /clean-db returns 404. Re-enable only in testing.
+/*
 Route::get('/clean-db', function () {
     abort_unless(app()->environment(['testing', 'local']), 403, 'Database reset is disabled outside testing.');
 
@@ -79,6 +81,7 @@ Route::get('/clean-db', function () {
         ['Content-Type' => 'text/html']
     );
 });
+*/
 
 // Public website registration + subscription (linked from householdosapp.com).
 // Guests can register; everything after registration requires the session.
@@ -99,6 +102,9 @@ Route::middleware(['auth', 'web.verified'])->group(function () {
     Route::post('/subscribe', [BillingController::class, 'subscribe'])->name('billing.subscribe')->middleware('throttle:10,1');
     Route::get('/billing/success', [BillingController::class, 'success'])->name('billing.success');
     Route::get('/billing/cancel', [BillingController::class, 'cancel'])->name('billing.cancel');
+    Route::get('/account', [AccountController::class, 'show'])->name('account.show');
+    Route::post('/account/profile', [AccountController::class, 'updateProfile'])->name('account.profile');
+    Route::post('/account/password', [AccountController::class, 'updatePassword'])->name('account.password')->middleware('throttle:10,1');
 });
 
 require __DIR__.'/admin.php';

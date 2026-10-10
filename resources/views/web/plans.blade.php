@@ -17,7 +17,7 @@
     <div class="hos-container">
         <span class="hos-kicker">Simple, flexible pricing</span>
         <h1>Everything Your Household Needs, in One Plan</h1>
-        <p>Subscribing for {{ $household?->name ?? 'your household' }} ({{ auth()->user()->email }}). One subscription covers the whole household.</p>
+        <p>Subscribing for {{ $household?->name ?? 'your household' }} ({{ auth()->user()->email }}). One subscription covers the whole household. <a href="{{ route('account.show') }}" style="color:var(--hos-blue);font-weight:700;">My account</a></p>
     </div>
 </section>
 
