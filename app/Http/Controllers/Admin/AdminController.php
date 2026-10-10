@@ -65,14 +65,14 @@ class AdminController extends Controller
 
         $data = $request->validate([
             'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'last_name' => 'nullable|string|max:255',
             'email' => 'required|email|unique:users,email,' . $admin->id,
             'password' => 'nullable|string|min:6|confirmed',
         ]);
 
         $admin->update([
             'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'],
+            'last_name' => $data['last_name'] ?? null,
             'email' => $data['email'],
         ]);
 

@@ -48,8 +48,8 @@
                                 @enderror
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Last Name <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control @error('last_name') is-invalid @enderror" name="last_name" value="{{ old('last_name', $admin->last_name) }}" placeholder="Last name" required>
+                                <label class="form-label">Last Name</label>
+                                <input type="text" class="form-control @error('last_name') is-invalid @enderror" name="last_name" value="{{ old('last_name', $admin->last_name) }}" placeholder="Last name">
                                 @error('last_name')
                                     <div class="invalid-feedback">{{ $message }}</div>
                                 @enderror
