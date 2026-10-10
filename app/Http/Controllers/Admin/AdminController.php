@@ -72,7 +72,7 @@ class AdminController extends Controller
 
         $admin->update([
             'first_name' => $data['first_name'],
-            'last_name' => $data['last_name'] ?? null,
+            'last_name' => $data['last_name'] ?? '',
             'email' => $data['email'],
         ]);
 
