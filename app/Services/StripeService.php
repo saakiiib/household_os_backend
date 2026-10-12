@@ -68,25 +68,33 @@ class StripeService
 
         $interval = $paymentType === 'annual' ? 'year' : 'month';
 
+        // Prefer pre-created Stripe Price IDs (stable, Dashboard-managed).
+        // Falls back to inline price_data when IDs are not yet configured.
+        $priceId = $paymentType === 'annual'
+            ? ($plan->stripe_price_annual ?? null)
+            : ($plan->stripe_price_monthly ?? null);
+
+        $lineItem = $priceId
+            ? ['price' => $priceId, 'quantity' => 1]
+            : [
+                'price_data' => [
+                    'currency' => 'gbp',
+                    'product_data' => [
+                        'name' => $plan->name . ' (' . ucfirst($paymentType) . ')',
+                        'description' => $plan->description,
+                    ],
+                    'unit_amount' => $priceAmount,
+                    'recurring' => [
+                        'interval' => $interval,
+                    ],
+                ],
+                'quantity' => 1,
+            ];
+
         $session = CheckoutSession::create([
             'customer' => $customer->id,
             'payment_method_types' => ['card'],
-            'line_items' => [
-                [
-                    'price_data' => [
-                        'currency' => 'gbp',
-                        'product_data' => [
-                            'name' => $plan->name . ' (' . ucfirst($paymentType) . ')',
-                            'description' => $plan->description,
-                        ],
-                        'unit_amount' => $priceAmount,
-                        'recurring' => [
-                            'interval' => $interval,
-                        ],
-                    ],
-                    'quantity' => 1,
-                ],
-            ],
+            'line_items' => [$lineItem],
             'mode' => 'subscription',
             'success_url' => $successUrl ?? config('app.frontend_url', 'http://192.168.0.103:8000') . '/api/subscription/stripe/success?session_id={CHECKOUT_SESSION_ID}',
             'cancel_url' => $cancelUrl ?? config('app.frontend_url', 'http://192.168.0.103:8000') . '/api/subscription/stripe/cancel',

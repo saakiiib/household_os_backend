@@ -176,5 +176,24 @@ class SubscriptionPlanSeeder extends Seeder
                 'updated_at' => now(),
             ]);
         }
+
+        $stripeProducts = config('stripe_products.stripe_products', []);
+        foreach ($stripeProducts as $priceId => $cfg) {
+            $plan = SubscriptionPlan::where('code', $cfg['plan'])->first();
+            if (!$plan) {
+                continue;
+            }
+            DB::table('product_plans')->insert([
+                'plan_id' => $plan->id,
+                'provider' => 'stripe',
+                'product_id' => $priceId,
+                'billing_period' => $cfg['billing_period'],
+                'level' => $cfg['level'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $column = $cfg['billing_period'] === 'annual' ? 'stripe_price_annual' : 'stripe_price_monthly';
+            $plan->update([$column => $priceId]);
+        }
     }
 }

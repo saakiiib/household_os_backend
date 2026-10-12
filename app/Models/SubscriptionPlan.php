@@ -12,6 +12,8 @@ class SubscriptionPlan extends Model
         'code',
         'apple_product_id',
         'google_product_id',
+        'stripe_price_monthly',
+        'stripe_price_annual',
         'description',
         'monthly_price',
         'annual_price',
