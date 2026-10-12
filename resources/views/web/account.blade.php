@@ -240,7 +240,7 @@
                             <div class="hos-field-row">
                                 <div class="hos-field">
                                     <label for="password">New password</label>
-                                    <input id="password" type="password" name="password" placeholder="Min 6 characters" required autocomplete="new-password">
+                                    <input id="password" type="password" name="password" placeholder="Minimum 8 characters" required autocomplete="new-password">
                                     @error('password')<div class="hos-error">{{ $message }}</div>@enderror
                                 </div>
                                 <div class="hos-field">
