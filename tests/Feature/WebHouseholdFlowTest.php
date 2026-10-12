@@ -34,7 +34,7 @@ class WebHouseholdFlowTest extends TestCase
         $response = $this->post(route('web.register.store'), [
             'first_name' => 'Jane',
             'last_name' => 'Doe',
-            'email' => 'jane@example.com',
+            'email' => 'jane.doe.household.test@gmail.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ]);
@@ -42,7 +42,7 @@ class WebHouseholdFlowTest extends TestCase
         $response->assertRedirect(route('verification.notice'));
         $this->assertAuthenticated();
 
-        $user = User::where('email', 'jane@example.com')->firstOrFail();
+        $user = User::where('email', 'jane.doe.household.test@gmail.com')->firstOrFail();
         $this->assertSame(0, HouseholdMember::where('user_id', $user->id)->count());
         $this->assertSame(0, Subscription::where('user_id', $user->id)->count());
     }
@@ -106,7 +106,7 @@ class WebHouseholdFlowTest extends TestCase
 
         // A pinned id the user is not a member of must fall back to the
         // user's own household, never display the stranger's one.
-        $stranger = Household::create(['name' => 'Bhuyain', 'created_by_user_id' => 999999, 'status' => 'active']);
+        $stranger = Household::create(['name' => 'Bhuyain', 'created_by_user_id' => $user->id, 'status' => 'active']);
 
         $this->actingAs($user)
             ->withSession(['web_household_id' => $stranger->id])
