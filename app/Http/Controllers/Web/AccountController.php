@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Web\Concerns\ResolvesWebHousehold;
 use App\Models\SocialIdentity;
 use App\Services\EntitlementService;
 use Illuminate\Http\Request;
@@ -10,10 +11,12 @@ use Illuminate\Support\Facades\Hash;
 
 class AccountController extends Controller
 {
+    use ResolvesWebHousehold;
+
     public function show(Request $request)
     {
         $user = $request->user();
-        $household = $user->activeHousehold()->first();
+        $household = $this->webHousehold($request);
         $subscription = $household?->subscription;
         $usage = $household ? (new EntitlementService())->summary($household) : null;
         $linkedProviders = SocialIdentity::where('user_id', $user->id)->pluck('provider')->all();

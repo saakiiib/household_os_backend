@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Web\Concerns\ResolvesWebHousehold;
 use App\Models\SubscriptionPlan;
 use App\Services\StripeService;
 use Illuminate\Http\Request;
@@ -10,15 +11,23 @@ use Illuminate\Support\Facades\Log;
 
 class BillingController extends Controller
 {
-    public function plans()
+    use ResolvesWebHousehold;
+
+    public function plans(Request $request)
     {
+        // One pinned household for the whole payment flow: the plans
+        // page, the Stripe session and the success page always agree.
+        $household = $this->webHousehold($request);
+        if (!$household) {
+            return redirect()->route('household.create');
+        }
+
         $plans = SubscriptionPlan::where('is_active', true)
             ->where('monthly_price', '>', 0)
             ->orderBy('sort_order')
             ->get();
 
-        $household = auth()->user()->activeHousehold()->first();
-        $subscription = $household?->subscription;
+        $subscription = $household->subscription;
 
         return view('web.plans', [
             'plans' => $plans,
@@ -38,8 +47,19 @@ class BillingController extends Controller
         ]);
 
         $user = $request->user();
-        if (!$user->activeHousehold()->exists()) {
-            return back()->withErrors(['plan' => 'You must be a member of a household to subscribe.']);
+        $household = $this->webHousehold($request);
+        if (!$household) {
+            return redirect()->route('household.create');
+        }
+
+        // The Stripe session is built from the user's active household,
+        // so it must be the same household shown on the plans page.
+        // Never guess when an account holds more than one membership.
+        $activeHousehold = $user->activeHousehold();
+        if (!$activeHousehold || $activeHousehold->id !== $household->id) {
+            Log::error('Web subscribe household mismatch', ['user_id' => $user->id, 'web_household_id' => $household->id, 'active_household_id' => $activeHousehold?->id]);
+
+            return back()->withErrors(['plan' => 'Your household could not be confirmed. Please contact support before paying.']);
         }
 
         $plan = SubscriptionPlan::where('is_active', true)->findOrFail($validated['plan_id']);
@@ -72,7 +92,7 @@ class BillingController extends Controller
         $request->validate(['session_id' => 'required|string']);
 
         $user = $request->user();
-        $household = $user->activeHousehold()->first();
+        $household = $this->webHousehold($request);
 
         $viewData = [
             'email' => $user->email,

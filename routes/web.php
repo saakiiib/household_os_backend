@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\LoginController;
 use App\Http\Controllers\Web\AccountController;
 use App\Http\Controllers\Web\BillingController;
+use App\Http\Controllers\Web\HouseholdController;
 use App\Http\Controllers\Web\LoginController as WebLoginController;
 use App\Http\Controllers\Web\RegisterController;
 use App\Http\Controllers\Web\VerifyEmailController;
@@ -102,6 +103,8 @@ Route::middleware(['auth', 'web.verified'])->group(function () {
     Route::post('/subscribe', [BillingController::class, 'subscribe'])->name('billing.subscribe')->middleware('throttle:10,1');
     Route::get('/billing/success', [BillingController::class, 'success'])->name('billing.success');
     Route::get('/billing/cancel', [BillingController::class, 'cancel'])->name('billing.cancel');
+    Route::get('/household/create', [HouseholdController::class, 'show'])->name('household.create');
+    Route::post('/household', [HouseholdController::class, 'store'])->name('household.store')->middleware('throttle:10,1');
     Route::get('/account', [AccountController::class, 'show'])->name('account.show');
     Route::post('/account/profile', [AccountController::class, 'updateProfile'])->name('account.profile');
     Route::post('/account/password', [AccountController::class, 'updatePassword'])->name('account.password')->middleware('throttle:10,1');

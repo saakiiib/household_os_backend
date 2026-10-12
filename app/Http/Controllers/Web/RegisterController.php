@@ -3,8 +3,6 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\Household;
-use App\Models\HouseholdMember;
 use App\Models\User;
 use App\Notifications\VerifyEmail;
 use Illuminate\Http\Request;
@@ -24,9 +22,10 @@ class RegisterController extends Controller
     }
 
     /**
-     * Register a web subscriber. Mirrors the mobile API registration
-     * (same validation rules) and additionally provisions the household,
-     * because a household is required before a subscription can be bought.
+     * Register a web subscriber. Creates the user only (same as the
+     * mobile API registration). The household is created on the next
+     * step, before any plan can be bought, so registration can never
+     * attach payment to the wrong household.
      */
     public function store(Request $request)
     {
@@ -39,7 +38,6 @@ class RegisterController extends Controller
             'password' => 'required|string|min:8|max:128|confirmed',
             'first_name' => 'required|string|min:2|max:100|alpha',
             'last_name' => 'required|string|min:2|max:100|alpha',
-            'household_name' => 'required|string|min:2|max:100',
         ]);
 
         $user = User::create([
@@ -48,20 +46,6 @@ class RegisterController extends Controller
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
             'status' => 'active',
-        ]);
-
-        $household = Household::create([
-            'name' => $validated['household_name'],
-            'created_by_user_id' => $user->id,
-            'status' => 'active',
-        ]);
-
-        HouseholdMember::create([
-            'household_id' => $household->id,
-            'user_id' => $user->id,
-            'role' => 'admin',
-            'status' => 'active',
-            'joined_at' => now(),
         ]);
 
         try {

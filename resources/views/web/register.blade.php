@@ -29,11 +29,6 @@
                     @error('email')<div class="hos-error">{{ $message }}</div>@enderror
                 </div>
                 <div class="hos-field">
-                    <label for="household_name">Household name</label>
-                    <input id="household_name" type="text" name="household_name" value="{{ old('household_name') }}" placeholder="The Doe Family" required>
-                    @error('household_name')<div class="hos-error">{{ $message }}</div>@enderror
-                </div>
-                <div class="hos-field">
                     <label for="password">Password</label>
                     <input id="password" type="password" name="password" placeholder="Minimum 8 characters" required>
                     @error('password')<div class="hos-error">{{ $message }}</div>@enderror
