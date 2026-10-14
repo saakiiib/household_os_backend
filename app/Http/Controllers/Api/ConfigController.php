@@ -18,8 +18,23 @@ class ConfigController extends Controller
             'apple_client_id' => config('services.apple.client_id'),
             'company_name' => Setting::get('company_name', 'Household OS'),
             'logo_url' => $logoUrl,
-            'app_store_url' => Setting::get('app_store_url'),
-            'play_store_url' => Setting::get('play_store_url'),
+            'app_store_url' => $this->storeUrl('app_store_url', (string) config('app_update.ios.store_url', '')),
+            'play_store_url' => $this->storeUrl('play_store_url', (string) config('app_update.android.store_url', '')),
         ]);
+    }
+
+    private function storeUrl(string $key, string $fallback): ?string
+    {
+        $value = trim((string) (Setting::get($key) ?? ''));
+        if ($value !== '' && !str_contains($value, 'XXXXXX') && !str_contains($value, '000000000') && !str_contains($value, 'com.householdos.app')) {
+            return $value;
+        }
+
+        $fallback = trim($fallback);
+        if ($fallback !== '' && str_starts_with($fallback, 'https://')) {
+            return $fallback;
+        }
+
+        return $value !== '' ? $value : null;
     }
 }
